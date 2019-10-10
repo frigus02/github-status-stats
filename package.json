@@ -1,0 +1,14 @@
+{
+  "name": "github-status-stats",
+  "version": "1.0.0",
+  "main": "index.js",
+  "private": true,
+  "dependencies": {
+    "dotenv": "^8.1.0",
+    "node-fetch": "^2.6.0",
+    "parse-link-header": "^1.0.1"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  }
+}

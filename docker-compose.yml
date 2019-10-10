@@ -1,0 +1,24 @@
+version: "3.7"
+services:
+  db:
+    image: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      INFLUXDB_DB: db0
+      INFLUXDB_USER: user
+      INFLUXDB_USER_PASSWORD: password
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_SERVER_ROOT_URL: http://localhost:3000
+      GF_SERVER_ENABLE_GZIP: "true"
+      GF_ALERTING_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
