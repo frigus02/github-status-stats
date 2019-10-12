@@ -2,26 +2,34 @@ require("dotenv").config();
 
 const { readFile } = require("fs").promises;
 const { loadCommits, loadStatuses } = require("./github");
-const { toInfluxTimestamp, writeToInfluxDB } = require("./influxdb");
+const {
+  dropMeasurement,
+  toInfluxTimestamp,
+  write: writeToInfluxDB
+} = require("./influxdb");
+const { transformBuildName } = require("./transform");
 
 const accumulateBuilds = statuses =>
   statuses
-    .filter(s => s.state !== "pending")
-    .reduce((acc, status) => {
-      const context = status.context;
-      if (!acc[context]) {
-        acc[context] = {
-          attempts: 0,
-          first_attempted_at: Number.MAX_VALUE
+    .filter(status => status.state !== "pending")
+    .reduce((builds, status) => {
+      const name = transformBuildName(status.context);
+      const createdAt = toInfluxTimestamp(status.created_at);
+      const successful = status.state === "success";
+      if (!builds[name]) {
+        builds[name] = {
+          attempts: 1,
+          first_attempt_successful: successful,
+          first_attempted_at: createdAt
         };
+      } else {
+        builds[name].attempts++;
+        if (createdAt < builds[name].first_attempted_at) {
+          builds[name].first_attempt_successful = successful;
+          builds[name].first_attempted_at = createdAt;
+        }
       }
-
-      acc[context].attempts++;
-      acc[context].first_attempted_at = Math.min(
-        acc[context].first_attempted_at,
-        toInfluxTimestamp(status.created_at)
-      );
-      return acc;
+      return builds;
     }, {});
 
 const main = async () => {
@@ -37,6 +45,7 @@ const main = async () => {
   }
 
   const commitsCount = commits.length;
+  const influxRows = [];
   for (const [i, commit] of commits.entries()) {
     console.log(`Commit ${i + 1}/${commitsCount}`);
 
@@ -55,16 +64,20 @@ const main = async () => {
 
     const builds = accumulateBuilds(statuses);
 
-    const data = Array.from(Object.entries(builds))
-      .map(
+    influxRows.push(
+      ...Array.from(Object.entries(builds)).map(
         ([build, data]) =>
           `build,name=${build},commit=${commit.sha} attempts=${
             data.attempts
+          },first_attempt_successful=${
+            data.first_attempt_successful ? 1 : 0
           } ${toInfluxTimestamp(commit.commit.committer.date)}`
       )
-      .join("\n");
-    await writeToInfluxDB(data);
+    );
   }
+
+  await dropMeasurement("build");
+  await writeToInfluxDB(influxRows.join("\n"));
 };
 
 main().catch(err => {

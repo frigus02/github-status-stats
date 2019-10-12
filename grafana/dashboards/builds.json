@@ -77,7 +77,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT max(attempts) FROM build WHERE $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT max(attempts) FROM build WHERE $timeFilter GROUP BY time($__interval),\"name\"",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -152,7 +152,7 @@
       ],
       "fontSize": "100%",
       "gridPos": {
-        "h": 15,
+        "h": 9,
         "w": 12,
         "x": 12,
         "y": 0
@@ -208,6 +208,8 @@
           "measurement": "build",
           "orderByTime": "ASC",
           "policy": "default",
+          "query": "SELECT mean(\"attempts\") FROM \"build\" WHERE $timeFilter GROUP BY time($__interval), \"name\"",
+          "rawQuery": false,
           "refId": "A",
           "resultFormat": "time_series",
           "select": [
@@ -232,6 +234,98 @@
       "title": "Attempts by pipeline",
       "transform": "timeseries_aggregations",
       "type": "table"
+    },
+    {
+      "columns": [
+        {
+          "text": "Avg",
+          "value": "avg"
+        }
+      ],
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 5,
+      "options": {},
+      "pageSize": null,
+      "pluginVersion": "6.3.6",
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": 1,
+        "desc": false
+      },
+      "styles": [
+        {
+          "alias": "Time",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "pattern": "Time",
+          "type": "date"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "decimals": 2,
+          "pattern": "Avg",
+          "thresholds": [],
+          "type": "number",
+          "unit": "short"
+        }
+      ],
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "name"
+              ],
+              "type": "tag"
+            }
+          ],
+          "measurement": "build",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"attempts\"), mean(\"first_attempt_successful\") FROM \"build\" WHERE $timeFilter GROUP BY time($__interval), \"name\"",
+          "rawQuery": false,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "first_attempt_successful"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Success rate on first attempt by pipeline",
+      "transform": "timeseries_aggregations",
+      "type": "table"
     }
   ],
   "refresh": false,
@@ -242,8 +336,8 @@
     "list": []
   },
   "time": {
-    "from": "2019-09-30T23:00:00.000Z",
-    "to": "2019-10-01T23:00:00.000Z"
+    "from": "2019-09-17T11:02:30.000Z",
+    "to": "2019-09-22T11:01:30.000Z"
   },
   "timepicker": {
     "refresh_intervals": [
