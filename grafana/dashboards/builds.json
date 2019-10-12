@@ -15,6 +15,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
+  "iteration": 1570907355514,
   "links": [],
   "panels": [
     {
@@ -77,7 +78,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT max(attempts) FROM build WHERE $timeFilter GROUP BY time($__interval),\"name\"",
+          "query": "SELECT max(attempts) FROM build WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval),\"name\"",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -208,8 +209,8 @@
           "measurement": "build",
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"attempts\") FROM \"build\" WHERE $timeFilter GROUP BY time($__interval), \"name\"",
-          "rawQuery": false,
+          "query": "SELECT mean(\"attempts\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
+          "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
           "select": [
@@ -300,8 +301,8 @@
           "measurement": "build",
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"attempts\"), mean(\"first_attempt_successful\") FROM \"build\" WHERE $timeFilter GROUP BY time($__interval), \"name\"",
-          "rawQuery": false,
+          "query": "SELECT mean(\"first_attempt_successful\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
+          "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
           "select": [
@@ -333,7 +334,35 @@
   "style": "dark",
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": "InfluxDB",
+        "definition": "SHOW TAG VALUES WITH KEY = \"name\"",
+        "hide": 0,
+        "includeAll": true,
+        "label": null,
+        "multi": true,
+        "name": "build",
+        "options": [],
+        "query": "SHOW TAG VALUES WITH KEY = \"name\"",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 5,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      }
+    ]
   },
   "time": {
     "from": "2019-09-17T11:02:30.000Z",
