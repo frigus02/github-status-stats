@@ -1,11 +1,7 @@
 import "dotenv/config";
 import { promises as fsPromises } from "fs";
 import { loadCommits, loadStatuses, CommitStatus, Commit } from "./github";
-import {
-  dropMeasurement,
-  toInfluxTimestamp,
-  write as writeToInfluxDB
-} from "./influxdb";
+import { toInfluxTimestamp, write as writeToInfluxDB } from "./influxdb";
 import { transformBuildName } from "./transform";
 
 const { readFile } = fsPromises;
@@ -97,7 +93,7 @@ const main = async () => {
     );
   }
 
-  await dropMeasurement("build");
+  // await dropMeasurement("build");
   await writeToInfluxDB(influxRows.join("\n"));
 };
 
