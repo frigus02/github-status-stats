@@ -1,10 +1,7 @@
 import "dotenv/config";
-import { promises as fsPromises } from "fs";
-import { loadCommits, loadStatuses, CommitStatus, Commit } from "./github";
+import { loadCommits, loadStatuses, CommitStatus } from "./github";
 import { toInfluxTimestamp, write as writeToInfluxDB } from "./influxdb";
 import { transformBuildName } from "./transform";
-
-const { readFile } = fsPromises;
 
 interface Build {
   name: string;
@@ -50,35 +47,13 @@ const accumulateBuilds = (statuses: CommitStatus[]): BuildAggregate =>
     );
 
 const main = async () => {
-  let commits: Commit[];
-  try {
-    commits = JSON.parse(await readFile("data/commits.json", "utf8"));
-  } catch (err) {
-    if (err.code === "ENOENT") {
-      commits = await loadCommits();
-    } else {
-      throw err;
-    }
-  }
-
+  const commits = await loadCommits();
   const commitsCount = commits.length;
   const influxRows: string[] = [];
   for (const [i, commit] of commits.entries()) {
     console.log(`Commit ${i + 1}/${commitsCount}`);
 
-    let statuses: CommitStatus[];
-    try {
-      statuses = JSON.parse(
-        await readFile(`data/statuses-${commit.sha}.json`, "utf8")
-      );
-    } catch (err) {
-      if (err.code === "ENOENT") {
-        statuses = await loadStatuses(commit);
-      } else {
-        throw err;
-      }
-    }
-
+    const statuses = await loadStatuses(commit);
     const builds = accumulateBuilds(statuses);
 
     influxRows.push(

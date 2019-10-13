@@ -5,10 +5,12 @@
   "private": true,
   "dependencies": {
     "dotenv": "^8.1.0",
+    "luxon": "^1.19.3",
     "node-fetch": "^2.6.0",
     "parse-link-header": "^1.0.1"
   },
   "devDependencies": {
+    "@types/luxon": "^1.15.2",
     "@types/node": "^12.7.12",
     "@types/node-fetch": "^2.5.2",
     "@types/parse-link-header": "^1.0.0",
