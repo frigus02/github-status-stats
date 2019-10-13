@@ -1,9 +1,34 @@
-const { writeFile } = require("fs").promises;
-const fetch = require("node-fetch");
-const parseLinkHeader = require("parse-link-header");
-const env = require("./env");
+import { promises as fsPromises } from "fs";
+import fetch, { RequestInit } from "node-fetch";
+import * as parseLinkHeader from "parse-link-header";
+import { env } from "./env";
 
-const callGitHub = async (pathOrUrl, options = {}) => {
+export interface CommitPerson {
+  name: string;
+  email: string;
+  date: string;
+}
+
+export interface Commit {
+  sha: string;
+  commit: {
+    author: CommitPerson;
+    committer: CommitPerson;
+    message: string;
+  };
+}
+
+export interface CommitStatus {
+  state: "pending" | "success" | "failure";
+  description: string;
+  context: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const { writeFile } = fsPromises;
+
+const callGitHub = async (pathOrUrl: string, options: RequestInit = {}) => {
   const url = pathOrUrl.startsWith("https://")
     ? pathOrUrl
     : `https://api.github.com${pathOrUrl}`;
@@ -30,19 +55,19 @@ const callGitHub = async (pathOrUrl, options = {}) => {
   return result;
 };
 
-const getCommits = () =>
+const getCommits = (): Promise<Commit[]> =>
   callGitHub(
     `/repos/${env("GH_OWNER")}/${env("GH_REPO")}/commits?since=${env(
       "GH_COMMITS_SINCE"
     )}&until=${env("GH_COMMITS_UNTIL")}`
   );
 
-const getStatuses = ref =>
+const getStatuses = (ref: string): Promise<CommitStatus[]> =>
   callGitHub(
     `/repos/${env("GH_OWNER")}/${env("GH_REPO")}/commits/${ref}/statuses`
   );
 
-const loadCommits = async () => {
+export const loadCommits = async () => {
   const commits = await getCommits();
   await writeFile(
     "data/commits.json",
@@ -52,7 +77,7 @@ const loadCommits = async () => {
   return commits;
 };
 
-const loadStatuses = async commit => {
+export const loadStatuses = async (commit: Commit) => {
   const statuses = await getStatuses(commit.sha);
   await writeFile(
     `data/statuses-${commit.sha}.json`,
@@ -60,9 +85,4 @@ const loadStatuses = async commit => {
     "utf8"
   );
   return statuses;
-};
-
-module.exports = {
-  loadCommits,
-  loadStatuses
 };

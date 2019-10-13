@@ -8,7 +8,14 @@
     "node-fetch": "^2.6.0",
     "parse-link-header": "^1.0.1"
   },
+  "devDependencies": {
+    "@types/node": "^12.7.12",
+    "@types/node-fetch": "^2.5.2",
+    "@types/parse-link-header": "^1.0.0",
+    "typescript": "^3.6.4"
+  },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node build/index.js",
+    "compile": "tsc"
   }
 }

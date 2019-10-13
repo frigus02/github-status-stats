@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+import fetch, { RequestInit } from "node-fetch";
 
 const baseUrl = "http://localhost:8086";
 const db = "db0";
@@ -6,7 +6,7 @@ const user = "user";
 const password = "password";
 const auth = Buffer.from(`${user}:${password}`).toString("base64");
 
-const callInflux = async (path, options = {}) => {
+const callInflux = async (path: string, options: RequestInit = {}) => {
   const url = `${baseUrl}${path}?db=${db}`;
   const optionsWithAuth = {
     ...options,
@@ -22,7 +22,7 @@ const callInflux = async (path, options = {}) => {
   }
 };
 
-const dropMeasurement = measurement =>
+export const dropMeasurement = (measurement: string) =>
   callInflux(`/query`, {
     method: "POST",
     headers: {
@@ -31,16 +31,11 @@ const dropMeasurement = measurement =>
     body: `q=DROP MEASUREMENT ${measurement}`
   });
 
-const write = data =>
+export const write = (data: string) =>
   callInflux("/write", {
     method: "POST",
     body: data
   });
 
-const toInfluxTimestamp = isoDate => new Date(isoDate).getTime() * 1000 * 1000;
-
-module.exports = {
-  dropMeasurement,
-  write,
-  toInfluxTimestamp
-};
+export const toInfluxTimestamp = (isoDate: string) =>
+  new Date(isoDate).getTime() * 1000 * 1000;

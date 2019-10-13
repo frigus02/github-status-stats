@@ -30,20 +30,21 @@ On first run this will download the status information from GitHub and store in 
 
 Setup local `.env` file with the following keys:
 
-| Key                    | Value                                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------------------- |
-| `GH_TOKEN`             | Personal access token for GitHub API. Needs permissions to read repo information.            |
-| `GH_OWNER`             | GitHub repo owner                                                                            |
-| `GH_REPO`              | GitHub repo name                                                                             |
-| `GH_COMMITS_SINCE`     | Timestamp from which to download status information, e.g. `2019-08-01T00:00:00Z`             |
-| `GH_COMMITS_UNTIL`     | Timestamp until which to download status information, e.g. `2019-10-10T00:00:00Z`            |
-| `BUILD_NAME_TRANSFORM` | Optional expression to transform build names (`status.context`). Format: `s/SEARCH/REPLACE/` |
+| Key                    | Value                                                                                                                                                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GH_TOKEN`             | Personal access token for GitHub API. Needs permissions to read repo information.                                                                                                                                |
+| `GH_OWNER`             | GitHub repo owner                                                                                                                                                                                                |
+| `GH_REPO`              | GitHub repo name                                                                                                                                                                                                 |
+| `GH_COMMITS_SINCE`     | Timestamp from which to download status information, e.g. `2019-08-01T00:00:00Z`                                                                                                                                 |
+| `GH_COMMITS_UNTIL`     | Timestamp until which to download status information, e.g. `2019-10-10T00:00:00Z`                                                                                                                                |
+| `BUILD_NAME_TRANSFORM` | Optional expression to transform build names (`status.context`). Format: `s/SEARCH/REPLACE/`. Spaces and slashes inside seach and replace have to be escaped. Can include multiple space separated instructions. |
 
 Then install dependencies and run the script:
 
 ```
 yarn
-node src/index.js
+yarn compile
+node build/index.js
 ```
 
 ### Look at dashboard
