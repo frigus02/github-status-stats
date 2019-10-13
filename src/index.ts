@@ -1,19 +1,24 @@
 import "dotenv/config";
 import { loadCommits, loadStatuses, CommitStatus } from "./github";
-import { toInfluxTimestamp, write as writeToInfluxDB } from "./influxdb";
+import {
+  toInfluxTimestamp,
+  write as writeToInfluxDB,
+  Point,
+  Timestamp
+} from "./influxdb";
 import { transformBuildName } from "./transform";
 
 interface Build {
   name: string;
   successful: boolean;
-  date: number;
+  date: Timestamp;
 }
 
 interface BuildAggregate {
   [name: string]: {
     attempts: number;
     first_attempt_successful: boolean;
-    first_attempted_at: number;
+    first_attempted_at: Timestamp;
   };
 }
 
@@ -49,27 +54,28 @@ const accumulateBuilds = (statuses: CommitStatus[]): BuildAggregate =>
 const main = async () => {
   const commits = await loadCommits();
   const commitsCount = commits.length;
-  const influxRows: string[] = [];
+  const influxPoints: Point[] = [];
   for (const [i, commit] of commits.entries()) {
     console.log(`Commit ${i + 1}/${commitsCount}`);
 
     const statuses = await loadStatuses(commit);
     const builds = accumulateBuilds(statuses);
 
-    influxRows.push(
-      ...Array.from(Object.entries(builds)).map(
-        x =>
-          `build,name=${x[0]},commit=${commit.sha} attempts=${
-            x[1].attempts
-          },first_attempt_successful=${
-            x[1].first_attempt_successful ? 1 : 0
-          } ${toInfluxTimestamp(commit.commit.committer.date)}`
-      )
+    influxPoints.push(
+      ...Array.from(Object.entries(builds)).map(x => ({
+        measurement: "build",
+        tags: new Map([["name", x[0]], ["commit", commit.sha]]),
+        fields: new Map([
+          ["attempts", x[1].attempts],
+          ["first_attempt_successful", x[1].first_attempt_successful ? 1 : 0]
+        ]),
+        timestamp: toInfluxTimestamp(commit.commit.committer.date)
+      }))
     );
   }
 
   // await dropMeasurement("build");
-  await writeToInfluxDB(influxRows.join("\n"));
+  await writeToInfluxDB(influxPoints);
 };
 
 main().catch(err => {
