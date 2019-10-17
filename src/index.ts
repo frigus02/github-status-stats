@@ -1,55 +1,85 @@
 import "dotenv/config";
+import { DateTime } from "luxon";
 import { loadCommits, loadStatuses, CommitStatus } from "./github";
 import {
   toInfluxTimestamp,
   write as writeToInfluxDB,
   Point,
-  Timestamp
+  dropMeasurement
 } from "./influxdb";
 import { transformBuildName } from "./transform";
 
 interface Build {
   name: string;
   successful: boolean;
-  date: Timestamp;
+  duration_ms: number;
+  created_at: string;
 }
 
 interface BuildAggregate {
   [name: string]: {
     attempts: number;
     first_attempt_successful: boolean;
-    first_attempted_at: Timestamp;
   };
 }
 
-const accumulateBuilds = (statuses: CommitStatus[]): BuildAggregate =>
+const toBuilds = (statuses: CommitStatus[]): Build[] =>
   statuses
-    .filter(status => status.state !== "pending")
-    .map(status => ({
-      name: transformBuildName(status.context),
-      successful: status.state === "success",
-      date: toInfluxTimestamp(status.created_at)
-    }))
+    .sort(
+      (a, b) =>
+        DateTime.fromISO(a.created_at).toMillis() -
+        DateTime.fromISO(b.created_at).toMillis()
+    )
     .reduce(
-      (builds, build: Build) => {
-        const existingBuild = builds[build.name];
-        if (!existingBuild) {
-          builds[build.name] = {
-            attempts: 1,
-            first_attempt_successful: build.successful,
-            first_attempted_at: build.date
-          };
+      (groups, currStatus) => {
+        const group = groups.find(group =>
+          group.every(
+            status =>
+              status.context === currStatus.context &&
+              status.state === "pending"
+          )
+        );
+        if (group) {
+          group.push(currStatus);
         } else {
-          existingBuild.attempts++;
-          if (build.date < existingBuild.first_attempted_at) {
-            existingBuild.first_attempt_successful = build.successful;
-            existingBuild.first_attempted_at = build.date;
-          }
+          groups.unshift([currStatus]);
         }
-        return builds;
+
+        return groups;
       },
-      <BuildAggregate>{}
-    );
+      <CommitStatus[][]>[]
+    )
+    .reverse()
+    .map(group => {
+      const first = group[0];
+      const last = group[group.length - 1];
+      return {
+        name: transformBuildName(first.context),
+        successful: last.state === "success",
+        duration_ms:
+          DateTime.fromISO(last.created_at).toMillis() -
+          DateTime.fromISO(first.created_at).toMillis(),
+        created_at: first.created_at
+      };
+    });
+
+const accumulateBuilds = (sortedBuilds: Build[]): BuildAggregate =>
+  sortedBuilds.reduce(
+    (builds, build: Build) => {
+      const existingBuild = builds[build.name];
+      if (!existingBuild) {
+        builds[build.name] = {
+          attempts: 1,
+          first_attempt_successful: build.successful
+        };
+      } else {
+        existingBuild.attempts++;
+      }
+
+      return builds;
+    },
+    <BuildAggregate>{}
+  );
 
 const main = async () => {
   const commits = await loadCommits();
@@ -59,11 +89,24 @@ const main = async () => {
     console.log(`Commit ${i + 1}/${commitsCount}`);
 
     const statuses = await loadStatuses(commit);
-    const builds = accumulateBuilds(statuses);
+    const builds = toBuilds(statuses);
+    const accBuilds = accumulateBuilds(builds);
 
     influxPoints.push(
-      ...Array.from(Object.entries(builds)).map(x => ({
+      ...builds.map(x => ({
         measurement: "build",
+        tags: new Map([["name", x.name], ["commit", commit.sha]]),
+        fields: new Map([
+          ["successful", x.successful ? 1 : 0],
+          ["duration_ms", x.duration_ms]
+        ]),
+        timestamp: toInfluxTimestamp(x.created_at)
+      }))
+    );
+
+    influxPoints.push(
+      ...Array.from(Object.entries(accBuilds)).map(x => ({
+        measurement: "build_per_commit",
         tags: new Map([["name", x[0]], ["commit", commit.sha]]),
         fields: new Map([
           ["attempts", x[1].attempts],
@@ -74,7 +117,9 @@ const main = async () => {
     );
   }
 
-  // await dropMeasurement("build");
+  await dropMeasurement("build");
+  await dropMeasurement("build_per_commit");
+  await new Promise(resolve => setTimeout(resolve, 5000));
   await writeToInfluxDB(influxPoints);
 };
 

@@ -15,7 +15,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "iteration": 1570907355514,
+  "iteration": 1571344785941,
   "links": [],
   "panels": [
     {
@@ -78,7 +78,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT max(attempts) FROM build WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval),\"name\"",
+          "query": "SELECT max(attempts) FROM build_per_commit WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval),\"name\"",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -103,7 +103,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Build attempts",
+      "title": "Attempts",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -170,10 +170,14 @@
       },
       "styles": [
         {
-          "alias": "Time",
+          "alias": "Pipeline",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "pattern": "Time",
-          "type": "date"
+          "mappingType": 1,
+          "pattern": "Metric",
+          "preserveFormat": false,
+          "rangeMaps": [],
+          "type": "string",
+          "valueMaps": []
         },
         {
           "alias": "",
@@ -209,7 +213,7 @@
           "measurement": "build",
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"attempts\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
+          "query": "SELECT mean(\"attempts\") FROM \"build_per_commit\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -237,6 +241,128 @@
       "type": "table"
     },
     {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "description": "",
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 7,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "hideZero": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(duration_ms) FROM build WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval),\"name\"",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Duration",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "ms",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "columns": [
         {
           "text": "Avg",
@@ -250,22 +376,25 @@
         "x": 12,
         "y": 9
       },
-      "id": 5,
+      "id": 6,
       "options": {},
       "pageSize": null,
       "pluginVersion": "6.3.6",
       "scroll": true,
       "showHeader": true,
       "sort": {
-        "col": 1,
+        "col": 0,
         "desc": false
       },
       "styles": [
         {
-          "alias": "Time",
+          "alias": "Pipeline",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "pattern": "Time",
-          "type": "date"
+          "link": false,
+          "pattern": "Metric",
+          "preserveFormat": false,
+          "sanitize": false,
+          "type": "string"
         },
         {
           "alias": "",
@@ -301,7 +430,7 @@
           "measurement": "build",
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"first_attempt_successful\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
+          "query": "SELECT mean(\"successful\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -324,7 +453,102 @@
       ],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Success rate on first attempt by pipeline",
+      "title": "Success rate by pipeline",
+      "transform": "timeseries_aggregations",
+      "type": "table"
+    },
+    {
+      "columns": [
+        {
+          "text": "Avg",
+          "value": "avg"
+        }
+      ],
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 8,
+      "options": {},
+      "pageSize": null,
+      "pluginVersion": "6.3.6",
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": 0,
+        "desc": false
+      },
+      "styles": [
+        {
+          "alias": "Pipeline",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "link": false,
+          "pattern": "Metric",
+          "preserveFormat": false,
+          "sanitize": false,
+          "type": "string"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "decimals": 2,
+          "pattern": "Avg",
+          "thresholds": [],
+          "type": "number",
+          "unit": "ms"
+        }
+      ],
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "name"
+              ],
+              "type": "tag"
+            }
+          ],
+          "measurement": "build",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"duration_ms\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "first_attempt_successful"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Duration by pipeline",
       "transform": "timeseries_aggregations",
       "type": "table"
     }

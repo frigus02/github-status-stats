@@ -6,6 +6,7 @@ GitHub stores a history of all commit statuses. If you retry a build on the same
 
 - Show builds with high/low success rate
 - Show attempts needed for a build to pass
+- Show build duration changes over time
 
 We can use this to find flaky builds or prove builds got flakier or less flaky over time.
 
