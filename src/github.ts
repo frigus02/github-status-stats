@@ -36,7 +36,7 @@ const callGitHub = async (pathOrUrl: string, options: RequestInit = {}) => {
   const optionsWithAuth = {
     ...options,
     headers: {
-      authorization: `token ${env("GH_TOKEN")}`,
+      authorization: `token ${env.GH_TOKEN}`,
       ...options.headers
     }
   };
@@ -58,21 +58,17 @@ const callGitHub = async (pathOrUrl: string, options: RequestInit = {}) => {
 
 const getCommits = (since: string, until: string): Promise<Commit[]> =>
   callGitHub(
-    `/repos/${env("GH_OWNER")}/${env(
-      "GH_REPO"
-    )}/commits?since=${since}&until=${until}`
+    `/repos/${env.GH_OWNER}/${env.GH_REPO}/commits?since=${since}&until=${until}`
   );
 
 const getStatuses = (ref: string): Promise<CommitStatus[]> =>
-  callGitHub(
-    `/repos/${env("GH_OWNER")}/${env("GH_REPO")}/commits/${ref}/statuses`
-  );
+  callGitHub(`/repos/${env.GH_OWNER}/${env.GH_REPO}/commits/${ref}/statuses`);
 
 export const loadCommits = async () => {
-  let since = DateTime.fromISO(env("GH_COMMITS_SINCE"), {
+  let since = DateTime.fromISO(env.GH_COMMITS_SINCE, {
     zone: "utc"
   }).startOf("day");
-  const until = DateTime.fromISO(env("GH_COMMITS_UNTIL"), {
+  const until = DateTime.fromISO(env.GH_COMMITS_UNTIL, {
     zone: "utc"
   }).endOf("day");
 

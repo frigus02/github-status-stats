@@ -1,3 +1,4 @@
+import { optionalEnv } from "./env";
 import { parse, TransformInstruction } from "./transform-parser";
 
 const identityTransform = (x: string) => x;
@@ -21,6 +22,6 @@ const createTransform = (transformString: string) => {
     }, x);
 };
 
-export const transformBuildName = process.env.BUILD_NAME_TRANSFORM
-  ? createTransform(process.env.BUILD_NAME_TRANSFORM)
+export const transformBuildName = optionalEnv.BUILD_NAME_TRANSFORM
+  ? createTransform(optionalEnv.BUILD_NAME_TRANSFORM)
   : identityTransform;
