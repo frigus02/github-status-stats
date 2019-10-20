@@ -17,6 +17,8 @@ This repository contains:
 - A Grafana dashboard for these stats.
 - A Docker setup for a local InfluxDB and Grafana container.
 
+![](docs/preview.png)
+
 ## Usage
 
 ### Start InfluxDB and Grafana
@@ -48,6 +50,6 @@ yarn compile
 node build/index.js
 ```
 
-### Look at dashboard
+### Open dashboard
 
 <http://localhost:3000/d/Ff_zt3hWk>
