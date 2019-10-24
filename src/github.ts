@@ -1,4 +1,5 @@
 import { promises as fsPromises } from "fs";
+import { dirname } from "path";
 import { DateTime } from "luxon";
 import fetch, { RequestInit } from "node-fetch";
 import * as parseLinkHeader from "parse-link-header";
@@ -64,48 +65,52 @@ const getCommits = (since: string, until: string): Promise<Commit[]> =>
 const getStatuses = (ref: string): Promise<CommitStatus[]> =>
   callGitHub(`/repos/${env.GH_OWNER}/${env.GH_REPO}/commits/${ref}/statuses`);
 
-export const loadCommits = async () => {
-  let since = DateTime.fromISO(env.GH_COMMITS_SINCE, {
+const daysBetween = function*(since: string, until: string) {
+  let sinceDateTime = DateTime.fromISO(since, {
     zone: "utc"
   }).startOf("day");
-  const until = DateTime.fromISO(env.GH_COMMITS_UNTIL, {
+  const untilDateTime = DateTime.fromISO(until, {
     zone: "utc"
   }).endOf("day");
-
-  const commits = [];
-  while (since < until) {
-    const path = `data/commits/${since.toISO().replace(/[-:.]/g, "")}.json`;
-    let commitsThisDay: Commit[];
-    try {
-      commitsThisDay = JSON.parse(await readFile(path, "utf8"));
-    } catch (err) {
-      if (err.code !== "ENOENT") throw err;
-
-      commitsThisDay = await getCommits(
-        since.toISO(),
-        since.plus({ day: 1 }).toISO()
-      );
-      await mkdir("data/commits/", { recursive: true });
-      await writeFile(path, JSON.stringify(commitsThisDay, null, 4), "utf8");
-    }
-
-    commits.push(...commitsThisDay);
-    since = since.plus({ day: 1 });
+  while (sinceDateTime < untilDateTime) {
+    yield sinceDateTime;
+    sinceDateTime = sinceDateTime.plus({ day: 1 });
   }
-
-  return commits;
 };
 
-export const loadStatuses = async (commit: Commit) => {
-  const path = `data/statuses/${commit.sha}.json`;
+const dataPath = (subPath: string) =>
+  `data/${env.GH_OWNER}/${env.GH_REPO}/${subPath}`;
+
+const readOrFetchAndWrite = async <T>(
+  path: string,
+  fetch: () => Promise<T>
+): Promise<T> => {
   try {
     return JSON.parse(await readFile(path, "utf8"));
   } catch (err) {
     if (err.code !== "ENOENT") throw err;
 
-    const statuses = await getStatuses(commit.sha);
-    await mkdir("data/statuses/", { recursive: true });
-    await writeFile(path, JSON.stringify(statuses, null, 4), "utf8");
-    return statuses;
+    const data = await fetch();
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify(data, null, 4), "utf8");
+    return data;
   }
 };
+
+const loadCommitsForDay = async (day: DateTime): Promise<Commit[]> =>
+  readOrFetchAndWrite(
+    dataPath(`commits/${day.toISO().replace(/[-:.]/g, "")}.json`),
+    () => getCommits(day.toISO(), day.endOf("day").toISO())
+  );
+
+export const loadCommits = async () =>
+  (await Promise.all(
+    Array.from(daysBetween(env.GH_COMMITS_SINCE, env.GH_COMMITS_UNTIL)).map(
+      loadCommitsForDay
+    )
+  )).flat();
+
+export const loadStatuses = async (commit: Commit): Promise<CommitStatus[]> =>
+  readOrFetchAndWrite(dataPath(`statuses/${commit.sha}.json`), () =>
+    getStatuses(commit.sha)
+  );
