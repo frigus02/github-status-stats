@@ -21,7 +21,7 @@ export interface Commit {
 }
 
 export interface CommitStatus {
-  state: "pending" | "success" | "failure";
+  state: "error" | "failure" | "pending" | "success";
   description: string;
   context: string;
   created_at: string;
