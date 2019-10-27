@@ -22,6 +22,6 @@ const createTransform = (transformString: string) => {
     }, x);
 };
 
-export const transformBuildName = optionalEnv.BUILD_NAME_TRANSFORM
-  ? createTransform(optionalEnv.BUILD_NAME_TRANSFORM)
+export const transformStatusContext = optionalEnv.STATUS_CONTEXT_TRANSFORM
+  ? createTransform(optionalEnv.STATUS_CONTEXT_TRANSFORM)
   : identityTransform;

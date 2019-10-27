@@ -4,7 +4,8 @@ const keys = [
   "GH_REPO",
   "GH_COMMITS_SINCE",
   "GH_COMMITS_UNTIL",
-  "BUILD_NAME_TRANSFORM"
+  "STATUS_CONTEXT_TRANSFORM",
+  "BUILD_CANCELED_REGEX"
 ] as const;
 type Keys = typeof keys;
 type Key = Keys[number];

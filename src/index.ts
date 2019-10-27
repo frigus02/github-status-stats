@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { DateTime } from "luxon";
+import { optionalEnv } from "./env";
 import { loadCommits, loadStatuses, CommitStatus } from "./github";
 import {
   toInfluxTimestamp,
@@ -7,11 +8,12 @@ import {
   Point,
   dropMeasurement
 } from "./influxdb";
-import { transformBuildName } from "./transform";
+import { transformStatusContext } from "./transform";
 
 interface Build {
   name: string;
   successful: boolean;
+  canceled: boolean;
   duration_ms: number;
   created_at: string;
 }
@@ -22,6 +24,11 @@ interface BuildAggregate {
     first_attempt_successful: boolean;
   };
 }
+
+const isCanceled = ({ description }: Pick<CommitStatus, "description">) =>
+  optionalEnv.BUILD_CANCELED_REGEX
+    ? new RegExp(optionalEnv.BUILD_CANCELED_REGEX).test(description)
+    : false;
 
 const toBuilds = (statuses: CommitStatus[]): Build[] =>
   statuses
@@ -54,8 +61,9 @@ const toBuilds = (statuses: CommitStatus[]): Build[] =>
       const first = group[0];
       const last = group[group.length - 1];
       return {
-        name: transformBuildName(first.context),
+        name: transformStatusContext(first.context),
         successful: last.state === "success",
+        canceled: isCanceled(last),
         duration_ms:
           DateTime.fromISO(last.created_at).toMillis() -
           DateTime.fromISO(first.created_at).toMillis(),
@@ -98,6 +106,7 @@ const main = async () => {
         tags: new Map([["name", x.name], ["commit", commit.sha]]),
         fields: new Map([
           ["successful", x.successful ? 1 : 0],
+          ["canceled", x.canceled ? 1 : 0],
           ["duration_ms", x.duration_ms]
         ]),
         timestamp: toInfluxTimestamp(x.created_at)
