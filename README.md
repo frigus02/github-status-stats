@@ -34,9 +34,7 @@ docker-compose up
 Create a [configuration](#configuration). Then install dependencies and run the script.
 
 ```
-yarn
-yarn compile
-node build/index.js
+cargo run
 ```
 
 On first run this will download the status information from GitHub and store it in a `data/` folder. Conescutive runs will then work based on the local data.
