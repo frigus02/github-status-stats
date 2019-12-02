@@ -3,7 +3,6 @@ mod influxdb;
 mod transform;
 
 use chrono::{DateTime, FixedOffset};
-use dotenv::dotenv;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -110,7 +109,6 @@ fn accumulate_builds(sorted_builds: &[Build]) -> Vec<BuildAggregate> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv()?;
     let commits = github::load_commits().await?;
     let commits_len = commits.len();
     let mut commits_curr: usize = 0;
