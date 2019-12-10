@@ -31,12 +31,14 @@ docker-compose up
 
 ### Download data and write to InfluxDB
 
-Create a [configuration](#configuration). Then install dependencies and run the script.
+Create a [configuration](#configuration). Then run the tool:
 
+```sh
+./scripts/dotenv.sh cargo run
 ```
-yarn
-yarn compile
-node build/index.js
+
+```posh
+.\scripts\dotenv.ps1 cargo run
 ```
 
 On first run this will download the status information from GitHub and store it in a `data/` folder. Conescutive runs will then work based on the local data.
