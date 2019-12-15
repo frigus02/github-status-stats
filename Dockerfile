@@ -30,7 +30,8 @@ ENV PKG_CONFIG_ALLOW_CROSS 1
 # Configure target for static linking
 RUN rustup target add x86_64-unknown-linux-musl && \
     mkdir .cargo && \
-    echo "[build]\ntarget = \"x86_64-unknown-linux-musl\"\n" > .cargo/config
+    echo "[build]\ntarget = \"x86_64-unknown-linux-musl\"\n" > .cargo/config && \
+    rustup component add clippy-preview
 
 # Download and build dependencies
 RUN USER=root cargo new --bin github-status-stats
@@ -41,7 +42,8 @@ RUN cargo build --release && \
 
 # Build application
 COPY src ./src
-RUN cargo build --release
+RUN cargo clippy --release --frozen -- -Dwarnings && \
+    cargo build --release
 
 # Create tiny image
 FROM scratch
