@@ -8,10 +8,10 @@ use futures::future::join_all;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
 use tokio::fs;
-use tokio::future::Future;
 
 const BASE_URL: &str = "https://api.github.com";
 const USER_AGENT: &str = concat!("github-status-stats/", env!("CARGO_PKG_VERSION"));

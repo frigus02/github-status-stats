@@ -171,7 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     influxdb::drop_measurement("build").await?;
     influxdb::drop_measurement("build_per_commit").await?;
-    tokio::timer::delay_for(std::time::Duration::from_secs(5)).await;
+    tokio::time::delay_for(std::time::Duration::from_secs(5)).await;
     influxdb::write(influx_points).await?;
 
     Ok(())
