@@ -3,7 +3,7 @@ datasources:
   - name: InfluxDB
     type: influxdb
     access: proxy
-    url: http://db:8086
+    url: http://ghss-influxdb
     user: user
     database: db0
     isDefault: true

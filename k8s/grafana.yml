@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghss-grafana
+spec:
+  selector:
+    matchLabels:
+      app: ghss-grafana
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ghss-grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Admin
+            - name: GF_SERVER_ROOT_URL
+              value: http://localhost:3000
+            - name: GF_SERVER_ENABLE_GZIP
+              value: "true"
+            - name: GF_ALERTING_ENABLED
+              value: "false"
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 3000
+          volumeMounts:
+            - name: provisioning-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: provisioning-dashboards
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+      volumes:
+        - name: provisioning-datasources
+          configMap:
+            name: grafana-provisioning-datasources
+        - name: provisioning-dashboards
+          configMap:
+            name: grafana-provisioning-dashboards
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ghss-grafana
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3000
+  selector:
+    app: ghss-grafana
