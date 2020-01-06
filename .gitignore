@@ -1,4 +1,5 @@
-/data
-/target
+/importer/data
+/importer/target
+/website/target
 .env
 **/*.rs.bk

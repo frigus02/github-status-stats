@@ -1,9 +1,0 @@
-data/
-docs/
-grafana/
-target/
-.env
-.env.example
-.gitignore
-docker-compose.yml
-README.md

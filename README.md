@@ -55,6 +55,23 @@ Configuration works through environment variables. Create a `.env` file with the
 | `GH_COMMITS_SINCE`         | The tool will download commits and their statuses bewteen this and `GH_COMMITS_UNTIL`, e.g. `2019-08-01T00:00:00Z`                                                                                                                                                                                                                                                                             | Yes              |
 | `GH_COMMITS_UNTIL`         | The tool will download commits and their statuses between `GH_COMMITS_SINCE` and this, e.g. `2019-10-10T00:00:00Z`                                                                                                                                                                                                                                                                             | Yes              |
 | `STATUS_CONTEXT_TRANSFORM` | Expression to transform [status context](https://developer.github.com/v3/repos/statuses/), which is reported as the build name. Can be used to remove common prefixes, normalize names when they changed over time and more. Syntax is similar to sed: `s/SEARCH/REPLACE/`. Spaces and slashes inside seach and replace have to be escaped. Can include multiple space separated instructions. | No               |
-| `BUILD_CANCELED_REGEX`    | Expression to determine if a build has been cancelled. It's a regular expression matched against the [status description](https://developer.github.com/v3/repos/statuses/).                                                                                                                                                                                                                    | No               |
+| `BUILD_CANCELED_REGEX`     | Expression to determine if a build has been cancelled. It's a regular expression matched against the [status description](https://developer.github.com/v3/repos/statuses/).                                                                                                                                                                                                                    | No               |
 
 1. Commits and their statuses are cached locally in a `data/` folder. GitHub repo information and access token are only required if the commits inside the specified range don't already exist locally.
+
+## Development
+
+### Website
+
+Install helpers
+
+```
+cargo install systemfd cargo-watch
+```
+
+Then start
+
+```
+cd website/
+systemfd --no-pid -s http::8888 -- cargo watch -x run
+```

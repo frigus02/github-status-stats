@@ -34,11 +34,11 @@ RUN rustup target add x86_64-unknown-linux-musl && \
     rustup component add clippy-preview
 
 # Download and build dependencies
-RUN USER=root cargo new --bin github-status-stats
-WORKDIR /github-status-stats
+RUN USER=root cargo new --bin importer
+WORKDIR /importer
 COPY Cargo.toml Cargo.lock ./
 RUN cargo build --release && \
-    rm target/x86_64-unknown-linux-musl/release/deps/github_status_stats*
+    rm target/x86_64-unknown-linux-musl/release/deps/importer*
 
 # Build application
 COPY src ./src
@@ -48,7 +48,7 @@ RUN cargo clippy --release --frozen -- -Dwarnings && \
 # Create tiny image
 FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=build /github-status-stats/target/x86_64-unknown-linux-musl/release/github-status-stats /
+COPY --from=build /importer/target/x86_64-unknown-linux-musl/release/importer /
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV SSL_CERT_DIR=/etc/ssl/certs
-CMD ["/github-status-stats"]
+CMD ["/importer"]
