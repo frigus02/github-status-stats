@@ -1,6 +1,20 @@
 use actix_web::HttpRequest;
 use bytes::Bytes;
+use hmac::{Hmac, Mac};
+use once_cell::sync::Lazy;
+use secstr::SecStr;
 use serde::Deserialize;
+use sha1::Sha1;
+
+static WEBHOOK_SECRET: Lazy<SecStr> =
+    Lazy::new(|| SecStr::from(std::env::var("GH_WEBHOOK_SECRET").unwrap()));
+
+#[derive(Debug)]
+pub enum Payload {
+    Ping(PingPayload),
+    Status(StatusPayload),
+    GitHubAppAuthorization(GitHubAppAuthorizationPayload),
+}
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
@@ -43,7 +57,7 @@ pub struct User {
     pub repos_url: String,
     pub events_url: String,
     pub received_events_url: String,
-    pub type: String,
+    pub r#type: String,
     pub site_admin: bool,
 }
 
@@ -123,12 +137,6 @@ pub struct Repository {
     pub open_issues: i32,
     pub watchers: i32,
     pub default_branch: String,
-}
-
-#[derive(Debug)]
-pub enum Payload {
-    Ping(PingPayload),
-    Status(StatusPayload),
 }
 
 #[derive(Debug, Deserialize)]
@@ -229,18 +237,34 @@ pub struct GitHubAppAuthorizationPayload {
     pub sender: User,
 }
 
-pub fn deserialize(req: HttpRequest, body: Bytes) -> Result<Payload, String> {
-    let header_name = "X-GitHub-Event";
-    let event = req
-        .headers()
+fn header_as_string<'a>(req: &'a HttpRequest, header_name: &str) -> Result<&'a str, String> {
+    req.headers()
         .get(header_name)
         .ok_or(format!("Header {} missing", header_name))
         .and_then(|header| {
             header
                 .to_str()
                 .map_err(|err| format!("Header {} not readable: {}", header_name, err))
-        })?;
+        })
+}
 
+fn validate_signature(req: &HttpRequest, body: &Bytes) -> Result<(), String> {
+    let signature = SecStr::from(header_as_string(req, "X-Hub-Signature")?);
+    let mut mac = Hmac::<Sha1>::new_varkey(&*WEBHOOK_SECRET.unsecure())
+        .expect("HMAC can take key of any size");
+    mac.input(body);
+    let result = SecStr::from(format!("sha1={:x}", mac.result().code()));
+    if result == signature {
+        Ok(())
+    } else {
+        Err(format!("Signature doesn't match"))
+    }
+}
+
+pub fn deserialize(req: HttpRequest, body: Bytes) -> Result<Payload, String> {
+    validate_signature(&req, &body)?;
+
+    let event = header_as_string(&req, "X-GitHub-Event")?;
     match event {
         "ping" => serde_json::from_slice::<PingPayload>(&body)
             .map(|data| Payload::Ping(data))
