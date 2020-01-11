@@ -3,12 +3,39 @@ mod github;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use bytes::Bytes;
 use listenfd::ListenFd;
+use once_cell::sync::Lazy;
+use secstr::SecStr;
+use serde::Deserialize;
+
+static CLIENT_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_CLIENT_ID").unwrap());
+#[allow(dead_code)]
+static CLIENT_SECRET: Lazy<SecStr> =
+    Lazy::new(|| SecStr::from(std::env::var("GH_CLIENT_SECRET").unwrap()));
 
 async fn index() -> impl Responder {
-    HttpResponse::Ok().body("INDEX")
+    HttpResponse::Ok().body(format!(
+        "<!DOCTYPE html>
+        <html>
+        <head>
+        <title>Status Stats</title>
+        </head>
+        <body>
+        <a href=\"https://github.com/login/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}\">Login</a>
+        </body>
+        </html>",
+        client_id = *CLIENT_ID,
+        redirect_uri = "https://fceac1a3.ngrok.io/setup/authorized",
+    ))
 }
 
-async fn setup_authorized() -> impl Responder {
+#[derive(Deserialize)]
+struct AuthorizationInfo {
+    code: String,
+    state: Option<String>,
+}
+
+async fn setup_authorized(info: web::Query<AuthorizationInfo>) -> impl Responder {
+    println!("Code: {}; State: {:?}", info.code, info.state);
     HttpResponse::Ok().body("Setup: Authorized")
 }
 

@@ -73,5 +73,5 @@ Then start
 
 ```
 cd website/
-GH_WEBHOOK_SECRET=b87fbe05bfbb51deebf739229449c3ab704d485f systemfd --no-pid -s http::8888 -- cargo watch -x run
+systemfd --no-pid -s http::8888 -- cargo watch -x run
 ```
