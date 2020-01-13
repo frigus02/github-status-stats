@@ -6,26 +6,38 @@ use listenfd::ListenFd;
 use once_cell::sync::Lazy;
 use secstr::SecStr;
 use serde::Deserialize;
+use typed_html::dom::DOMTree;
+use typed_html::html;
+use url::Url;
 
 static CLIENT_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_CLIENT_ID").unwrap());
 #[allow(dead_code)]
 static CLIENT_SECRET: Lazy<SecStr> =
     Lazy::new(|| SecStr::from(std::env::var("GH_CLIENT_SECRET").unwrap()));
 
+static LOGIN_URL: Lazy<Url> = Lazy::new(|| {
+    Url::parse_with_params(
+        "https://github.com/login/oauth/authorize",
+        &[
+            ("client_id", &*CLIENT_ID.as_str()),
+            ("redirect_uri", "https://fceac1a3.ngrok.io/setup/authorized"),
+        ],
+    )
+    .unwrap()
+});
+
 async fn index() -> impl Responder {
-    HttpResponse::Ok().body(format!(
-        "<!DOCTYPE html>
+    let doc: DOMTree<String> = html!(
         <html>
-        <head>
-        <title>Status Stats</title>
-        </head>
-        <body>
-        <a href=\"https://github.com/login/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}\">Login</a>
-        </body>
-        </html>",
-        client_id = *CLIENT_ID,
-        redirect_uri = "https://fceac1a3.ngrok.io/setup/authorized",
-    ))
+            <head>
+                <title>"Status Stats"</title>
+            </head>
+            <body>
+                <a href={LOGIN_URL.as_str()}>"Login"</a>
+            </body>
+        </html>
+    );
+    HttpResponse::Ok().body(doc.to_string())
 }
 
 #[derive(Deserialize)]
