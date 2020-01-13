@@ -1,82 +1,45 @@
-mod call;
-mod datetime;
-mod days_between;
-mod page_links;
-
-use chrono::{DateTime, FixedOffset, SecondsFormat};
+use chrono::{Date, DateTime, FixedOffset, SecondsFormat};
 use futures::future::join_all;
+use github_client::{Client, Commit, CommitStatus};
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
 use tokio::fs;
-
-const BASE_URL: &str = "https://api.github.com";
-const USER_AGENT: &str = concat!("github-status-stats/", env!("CARGO_PKG_VERSION"));
 
 static TOKEN: Lazy<String> = Lazy::new(|| std::env::var("GH_TOKEN").unwrap());
 static OWNER: Lazy<String> = Lazy::new(|| std::env::var("GH_OWNER").unwrap());
 static REPO: Lazy<String> = Lazy::new(|| std::env::var("GH_REPO").unwrap());
 static COMMITS_SINCE: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_SINCE").unwrap());
 static COMMITS_UNTIL: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_UNTIL").unwrap());
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        reqwest::header::USER_AGENT,
-        reqwest::header::HeaderValue::from_static(USER_AGENT),
-    );
-    headers.insert(
-        reqwest::header::AUTHORIZATION,
-        format!("token {}", *TOKEN).parse().unwrap(),
-    );
+static CLIENT: Lazy<Client> =
+    Lazy::new(|| Client::new((*OWNER).clone(), (*REPO).clone(), (*TOKEN).clone()).unwrap());
 
-    reqwest::Client::builder()
-        .default_headers(headers)
-        .build()
-        .unwrap()
-});
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CommitPerson {
-    pub name: String,
-    pub email: String,
-    #[serde(with = "datetime")]
-    pub date: DateTime<FixedOffset>,
+pub struct DaysBetween {
+    curr: Date<FixedOffset>,
+    until: Date<FixedOffset>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CommitCommit {
-    pub author: CommitPerson,
-    pub committer: CommitPerson,
-    pub message: String,
+impl Iterator for DaysBetween {
+    type Item = Date<FixedOffset>;
+
+    fn next(&mut self) -> Option<Date<FixedOffset>> {
+        if self.curr <= self.until {
+            let result = self.curr;
+            self.curr = self.curr.succ();
+            Some(result)
+        } else {
+            None
+        }
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Commit {
-    pub sha: String,
-    pub commit: CommitCommit,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum CommitStatusState {
-    Pending,
-    Error,
-    Failure,
-    Success,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CommitStatus {
-    pub state: CommitStatusState,
-    pub description: String,
-    pub context: String,
-    #[serde(with = "datetime")]
-    pub created_at: DateTime<FixedOffset>,
-    #[serde(with = "datetime")]
-    pub updated_at: DateTime<FixedOffset>,
+pub fn days_between(since: &str, until: &str) -> Result<DaysBetween, chrono::ParseError> {
+    let since = DateTime::parse_from_rfc3339(since)?.date();
+    let until = DateTime::parse_from_rfc3339(until)?.date();
+    Ok(DaysBetween { curr: since, until })
 }
 
 async fn read_or_fetch_and_write<T, F>(path: PathBuf, fetch: F) -> Result<T, String>
@@ -115,36 +78,8 @@ where
     result
 }
 
-async fn get_commits(
-    since: String,
-    until: String,
-) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
-    let raw_url = format!(
-        "{base}/repos/{owner}/{repo}/commits",
-        base = BASE_URL,
-        owner = *OWNER,
-        repo = *REPO
-    );
-    let url = reqwest::Url::parse_with_params(&raw_url, &[("since", since), ("until", until)])?;
-    let commits = call::call_api_paged(&*CLIENT, url).await?;
-    Ok(commits)
-}
-
-async fn get_statuses(git_ref: String) -> Result<Vec<CommitStatus>, Box<dyn std::error::Error>> {
-    let raw_url = format!(
-        "{base}/repos/{owner}/{repo}/commits/{git_ref}/statuses",
-        base = BASE_URL,
-        owner = *OWNER,
-        repo = *REPO,
-        git_ref = git_ref
-    );
-    let url = reqwest::Url::parse(&raw_url)?;
-    let statuses = call::call_api_paged(&*CLIENT, url).await?;
-    Ok(statuses)
-}
-
 pub async fn load_commits() -> Result<Vec<Commit>, String> {
-    let days = days_between::days_between(&*COMMITS_SINCE, &*COMMITS_UNTIL).map_err(|err| {
+    let days = days_between(&*COMMITS_SINCE, &*COMMITS_UNTIL).map_err(|err| {
         format!(
             "Error parsing GH_COMMITS_SINCE/GH_COMMITS_UNTIL: {:#?}",
             err
@@ -167,7 +102,7 @@ pub async fn load_commits() -> Result<Vec<Commit>, String> {
                 .replace(".", ""),
         );
         read_or_fetch_and_write(PathBuf::from(path), || {
-            Box::pin(get_commits(start_of_day, end_of_day))
+            Box::pin(CLIENT.get_commits(start_of_day, end_of_day))
         })
     }))
     .await;
@@ -188,5 +123,8 @@ pub async fn load_statuses(git_ref: String) -> Result<Vec<CommitStatus>, String>
         repo = *REPO,
         commit_sha = git_ref,
     );
-    read_or_fetch_and_write(PathBuf::from(path), || Box::pin(get_statuses(git_ref))).await
+    read_or_fetch_and_write(PathBuf::from(path), || {
+        Box::pin(CLIENT.get_statuses(git_ref))
+    })
+    .await
 }

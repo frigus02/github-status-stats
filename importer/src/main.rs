@@ -32,14 +32,14 @@ struct BuildAggregate {
     first_attempt_successful: bool,
 }
 
-fn is_cancelled(status: &github::CommitStatus) -> bool {
+fn is_cancelled(status: &github_client::CommitStatus) -> bool {
     match &*RE_BUILD_CANCELED {
         Some(re) => re.is_match(&status.description),
         None => false,
     }
 }
 
-fn to_builds(mut statuses: Vec<github::CommitStatus>) -> Vec<Build> {
+fn to_builds(mut statuses: Vec<github_client::CommitStatus>) -> Vec<Build> {
     let t = &*TRANSFORM_STATUS_CONTEXT;
 
     statuses.sort_by(|a, b| {
@@ -51,7 +51,7 @@ fn to_builds(mut statuses: Vec<github::CommitStatus>) -> Vec<Build> {
     statuses
         .into_iter()
         .fold(
-            Vec::<Vec<github::CommitStatus>>::new(),
+            Vec::<Vec<github_client::CommitStatus>>::new(),
             |mut groups, curr_status| {
                 let index = groups
                     .iter()
@@ -59,7 +59,7 @@ fn to_builds(mut statuses: Vec<github::CommitStatus>) -> Vec<Build> {
                     .find(|group| {
                         group.1.iter().all(|status| {
                             status.context == curr_status.context
-                                && status.state == github::CommitStatusState::Pending
+                                && status.state == github_client::CommitStatusState::Pending
                         })
                     })
                     .map(|group| group.0);
@@ -82,7 +82,7 @@ fn to_builds(mut statuses: Vec<github::CommitStatus>) -> Vec<Build> {
             let last_millis = last.created_at.timestamp_millis();
             Build {
                 name,
-                successful: last.state == github::CommitStatusState::Success,
+                successful: last.state == github_client::CommitStatusState::Success,
                 canceled: is_cancelled(&last),
                 duration_ms: last_millis - first_millis,
                 created_at,

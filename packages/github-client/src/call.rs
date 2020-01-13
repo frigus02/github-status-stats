@@ -10,8 +10,6 @@ async fn call_api<T: DeserializeOwned>(
     client: &reqwest::Client,
     url: reqwest::Url,
 ) -> Result<Response<T>, Box<dyn std::error::Error>> {
-    println!("Calling {:#?}", url);
-
     let res = client.get(url).send().await?.error_for_status()?;
     let next_page_url = match res.headers().get(reqwest::header::LINK) {
         Some(value) => {
