@@ -72,6 +72,7 @@ cargo install systemfd cargo-watch
 Then start
 
 ```
+ngrok http 8888 &
 cd website/
 systemfd --no-pid -s http::8888 -- cargo watch -x run
 ```

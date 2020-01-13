@@ -14,8 +14,7 @@ static OWNER: Lazy<String> = Lazy::new(|| std::env::var("GH_OWNER").unwrap());
 static REPO: Lazy<String> = Lazy::new(|| std::env::var("GH_REPO").unwrap());
 static COMMITS_SINCE: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_SINCE").unwrap());
 static COMMITS_UNTIL: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_UNTIL").unwrap());
-static CLIENT: Lazy<Client> =
-    Lazy::new(|| Client::new((*OWNER).clone(), (*REPO).clone(), (*TOKEN).clone()).unwrap());
+static CLIENT: Lazy<Client> = Lazy::new(|| Client::new(&*TOKEN).unwrap());
 
 pub struct DaysBetween {
     curr: Date<FixedOffset>,
@@ -102,7 +101,7 @@ pub async fn load_commits() -> Result<Vec<Commit>, String> {
                 .replace(".", ""),
         );
         read_or_fetch_and_write(PathBuf::from(path), || {
-            Box::pin(CLIENT.get_commits(start_of_day, end_of_day))
+            Box::pin(CLIENT.get_commits(&*OWNER, &*REPO, start_of_day, end_of_day))
         })
     }))
     .await;
@@ -124,7 +123,7 @@ pub async fn load_statuses(git_ref: String) -> Result<Vec<CommitStatus>, String>
         commit_sha = git_ref,
     );
     read_or_fetch_and_write(PathBuf::from(path), || {
-        Box::pin(CLIENT.get_statuses(git_ref))
+        Box::pin(CLIENT.get_statuses(&*OWNER, &*REPO, git_ref))
     })
     .await
 }

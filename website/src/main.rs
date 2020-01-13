@@ -1,54 +1,64 @@
 mod github;
+mod web_utils;
 
-use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::cookie::{Cookie, SameSite};
+use actix_web::{web, App, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder};
 use bytes::Bytes;
 use listenfd::ListenFd;
-use once_cell::sync::Lazy;
-use secstr::SecStr;
-use serde::Deserialize;
 use typed_html::dom::DOMTree;
-use typed_html::html;
-use url::Url;
+use typed_html::{html, text};
 
-static CLIENT_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_CLIENT_ID").unwrap());
-#[allow(dead_code)]
-static CLIENT_SECRET: Lazy<SecStr> =
-    Lazy::new(|| SecStr::from(std::env::var("GH_CLIENT_SECRET").unwrap()));
+async fn index(req: HttpRequest) -> actix_web::Result<HttpResponse> {
+    let user = if let Some(token) = req.cookie("token") {
+        let client = github_client::Client::new(token.value())
+            .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
+        Some(
+            client
+                .get_user()
+                .await
+                .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?,
+        )
+    } else {
+        None
+    };
 
-static LOGIN_URL: Lazy<Url> = Lazy::new(|| {
-    Url::parse_with_params(
-        "https://github.com/login/oauth/authorize",
-        &[
-            ("client_id", &*CLIENT_ID.as_str()),
-            ("redirect_uri", "https://fceac1a3.ngrok.io/setup/authorized"),
-        ],
-    )
-    .unwrap()
-});
-
-async fn index() -> impl Responder {
     let doc: DOMTree<String> = html!(
         <html>
             <head>
                 <title>"Status Stats"</title>
             </head>
             <body>
-                <a href={LOGIN_URL.as_str()}>"Login"</a>
+            { if let Some(user) = user {
+                html!(<div><pre>{text!("{:?}", user)}</pre></div>)
+            } else {
+                html!(<div><a href={github::auth::LOGIN_URL.as_str()}>"Login"</a></div>)
+            } }
             </body>
         </html>
     );
-    HttpResponse::Ok().body(doc.to_string())
+    Ok(HttpResponse::Ok()
+        .content_type("text/html")
+        .body(doc.to_string()))
 }
 
-#[derive(Deserialize)]
-struct AuthorizationInfo {
-    code: String,
-    state: Option<String>,
-}
+async fn setup_authorized(
+    info: web::Query<github::auth::AuthCode>,
+) -> actix_web::Result<HttpResponse> {
+    let token = github::auth::exchange_code(info.into_inner())
+        .await
+        .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
 
-async fn setup_authorized(info: web::Query<AuthorizationInfo>) -> impl Responder {
-    println!("Code: {}; State: {:?}", info.code, info.state);
-    HttpResponse::Ok().body("Setup: Authorized")
+    Ok(HttpResponse::TemporaryRedirect()
+        .header("Location", "/")
+        .cookie(
+            Cookie::build("token", token.access_token)
+                .path("/")
+                .secure(true)
+                .http_only(true)
+                .same_site(SameSite::Strict)
+                .finish(),
+        )
+        .finish())
 }
 
 async fn setup_installed() -> impl Responder {

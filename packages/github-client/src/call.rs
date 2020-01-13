@@ -29,6 +29,14 @@ async fn call_api<T: DeserializeOwned>(
     })
 }
 
+pub async fn call_api_single<T: DeserializeOwned>(
+    client: &reqwest::Client,
+    url: reqwest::Url,
+) -> Result<T, Box<dyn std::error::Error>> {
+    let result = call_api::<T>(client, url).await?;
+    Ok(result.data)
+}
+
 pub async fn call_api_paged<T: DeserializeOwned>(
     client: &reqwest::Client,
     url: reqwest::Url,
