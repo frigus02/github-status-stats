@@ -95,26 +95,6 @@ struct Query {
     q: String,
 }
 
-pub async fn drop_measurement(measurement: &str) -> Result<(), String> {
-    let raw_url = format!("{base}/query", base = BASE_URL);
-    let url = reqwest::Url::parse_with_params(&raw_url, &[("db", DB)])
-        .map_err(|err| format!("Error parsing URL: {:#?}", err))?;
-
-    println!("Calling {:#?}", url);
-    (*CLIENT)
-        .post(url)
-        .form(&Query {
-            q: format!("DROP MEASUREMENT {}", measurement),
-        })
-        .send()
-        .await
-        .map_err(|err| format!("Error sending request: {:#?}", err))?
-        .error_for_status()
-        .map_err(|err| format!("Call to InfluxDB returned: {:#?}", err))?;
-
-    Ok(())
-}
-
 pub async fn write(points: Vec<Point>) -> Result<(), String> {
     let raw_url = format!("{base}/write", base = BASE_URL);
     let url = reqwest::Url::parse_with_params(&raw_url, &[("db", DB)])

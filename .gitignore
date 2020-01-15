@@ -1,6 +1,3 @@
-/importer/data
-/importer/target
-/website/target
 /target
 .env
 .env.ps1

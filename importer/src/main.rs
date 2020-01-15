@@ -1,47 +1,23 @@
-mod github;
 mod influxdb;
-mod transform;
 
 use chrono::{DateTime, FixedOffset};
-use itertools::Itertools;
+use github_client::{Client, CommitStatus, CommitStatusState};
 use once_cell::sync::Lazy;
-use regex::Regex;
 use std::collections::HashMap;
-use std::convert::TryInto;
 
-static RE_BUILD_CANCELED: Lazy<Option<Regex>> = Lazy::new(|| {
-    std::env::var("BUILD_CANCELED_REGEX")
-        .ok()
-        .map(|var| Regex::new(&var).unwrap())
-});
-
-static TRANSFORM_STATUS_CONTEXT: Lazy<transform::Transform> =
-    Lazy::new(|| transform::create_transform_from_env("STATUS_CONTEXT_TRANSFORM").unwrap());
+static APP_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_APP_ID").unwrap());
+static PRIVATE_KEY: Lazy<String> = Lazy::new(|| std::env::var("GH_PRIVATE_KEY").unwrap());
+static COMMITS_SINCE: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_SINCE").unwrap());
+static COMMITS_UNTIL: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_UNTIL").unwrap());
 
 struct Build {
     name: String,
     successful: bool,
-    canceled: bool,
     duration_ms: i64,
     created_at: DateTime<FixedOffset>,
 }
 
-struct BuildAggregate {
-    name: String,
-    attempts: usize,
-    first_attempt_successful: bool,
-}
-
-fn is_cancelled(status: &github_client::CommitStatus) -> bool {
-    match &*RE_BUILD_CANCELED {
-        Some(re) => re.is_match(&status.description),
-        None => false,
-    }
-}
-
-fn to_builds(mut statuses: Vec<github_client::CommitStatus>) -> Vec<Build> {
-    let t = &*TRANSFORM_STATUS_CONTEXT;
-
+fn to_builds(mut statuses: Vec<CommitStatus>) -> Vec<Build> {
     statuses.sort_by(|a, b| {
         a.created_at
             .timestamp_millis()
@@ -51,7 +27,7 @@ fn to_builds(mut statuses: Vec<github_client::CommitStatus>) -> Vec<Build> {
     statuses
         .into_iter()
         .fold(
-            Vec::<Vec<github_client::CommitStatus>>::new(),
+            Vec::<Vec<CommitStatus>>::new(),
             |mut groups, curr_status| {
                 let index = groups
                     .iter()
@@ -59,7 +35,7 @@ fn to_builds(mut statuses: Vec<github_client::CommitStatus>) -> Vec<Build> {
                     .find(|group| {
                         group.1.iter().all(|status| {
                             status.context == curr_status.context
-                                && status.state == github_client::CommitStatusState::Pending
+                                && status.state == CommitStatusState::Pending
                         })
                     })
                     .map(|group| group.0);
@@ -77,13 +53,12 @@ fn to_builds(mut statuses: Vec<github_client::CommitStatus>) -> Vec<Build> {
             let first = iter.next().unwrap();
             let first_millis = first.created_at.timestamp_millis();
             let created_at = first.created_at;
-            let name = t.transform(first.context.clone());
+            let name = first.context.clone();
             let last = iter.last().unwrap_or(first);
             let last_millis = last.created_at.timestamp_millis();
             Build {
                 name,
-                successful: last.state == github_client::CommitStatusState::Success,
-                canceled: is_cancelled(&last),
+                successful: last.state == CommitStatusState::Success,
                 duration_ms: last_millis - first_millis,
                 created_at,
             }
@@ -91,88 +66,66 @@ fn to_builds(mut statuses: Vec<github_client::CommitStatus>) -> Vec<Build> {
         .collect()
 }
 
-fn accumulate_builds(sorted_builds: &[Build]) -> Vec<BuildAggregate> {
-    sorted_builds
-        .iter()
-        .group_by(|build| &build.name)
-        .into_iter()
-        .map(|(key, mut group)| {
-            let first_attempt_successful = group.next().unwrap().successful;
-            BuildAggregate {
-                name: key.clone(),
-                attempts: 1 + group.count(),
-                first_attempt_successful,
-            }
-        })
-        .collect()
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let commits = github::load_commits().await?;
-    let commits_len = commits.len();
-    let mut commits_curr: usize = 0;
-    let mut influx_points = Vec::new();
-    for commit in commits {
-        commits_curr += 1;
-        println!("Commit {}/{}", commits_curr, commits_len);
+    let client = Client::new_app_auth(&*APP_ID, &*PRIVATE_KEY)?;
+    let installations = client.get_app_installations().await?;
+    for installation in installations {
+        println!("Installation {}", installation.id);
+        let token = client
+            .create_app_installation_access_token(installation.id)
+            .await?;
+        let client = Client::new(&token.token)?;
+        let repositories = client.get_installation_repositories().await?;
+        for repository in repositories {
+            println!("Repository {}", repository.full_name);
+            let commits = client
+                .get_commits(
+                    &repository.owner.login,
+                    &repository.name,
+                    &*COMMITS_SINCE,
+                    &*COMMITS_UNTIL,
+                )
+                .await?;
+            let commits_len = commits.len();
+            let mut commits_curr: usize = 0;
+            let mut influx_points = Vec::new();
+            for commit in commits {
+                commits_curr += 1;
+                println!("Commit {}/{}", commits_curr, commits_len);
 
-        let statuses = github::load_statuses(commit.sha.clone()).await?;
-        let builds = to_builds(statuses);
-        let acc_builds = accumulate_builds(&builds);
+                let statuses = client
+                    .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
+                    .await?;
+                let builds = to_builds(statuses);
 
-        for build in builds {
-            let mut tags = HashMap::new();
-            tags.insert("name", build.name);
-            tags.insert("commit", commit.sha.clone());
+                for build in builds {
+                    let mut tags = HashMap::new();
+                    tags.insert("name", build.name);
+                    tags.insert("commit", commit.sha.clone());
 
-            let mut fields = HashMap::new();
-            fields.insert(
-                "successful",
-                influxdb::FieldValue::Boolean(build.successful),
-            );
-            fields.insert("canceled", influxdb::FieldValue::Boolean(build.canceled));
-            fields.insert(
-                "duration_ms",
-                influxdb::FieldValue::Integer(build.duration_ms),
-            );
+                    let mut fields = HashMap::new();
+                    fields.insert(
+                        "successful",
+                        influxdb::FieldValue::Boolean(build.successful),
+                    );
+                    fields.insert(
+                        "duration_ms",
+                        influxdb::FieldValue::Integer(build.duration_ms),
+                    );
 
-            influx_points.push(influxdb::Point {
-                measurement: "build",
-                tags,
-                fields,
-                timestamp: influxdb::Timestamp::new(&build.created_at),
-            });
-        }
+                    influx_points.push(influxdb::Point {
+                        measurement: "build",
+                        tags,
+                        fields,
+                        timestamp: influxdb::Timestamp::new(&build.created_at),
+                    });
+                }
+            }
 
-        for build in acc_builds {
-            let mut tags = HashMap::new();
-            tags.insert("name", build.name);
-            tags.insert("commit", commit.sha.clone());
-
-            let mut fields = HashMap::new();
-            fields.insert(
-                "attempts",
-                influxdb::FieldValue::Integer(build.attempts.try_into().unwrap()),
-            );
-            fields.insert(
-                "first_attempt_successful",
-                influxdb::FieldValue::Boolean(build.first_attempt_successful),
-            );
-
-            influx_points.push(influxdb::Point {
-                measurement: "build_per_commit",
-                tags,
-                fields,
-                timestamp: influxdb::Timestamp::new(&commit.commit.committer.date),
-            });
+            influxdb::write(influx_points).await?;
         }
     }
-
-    influxdb::drop_measurement("build").await?;
-    influxdb::drop_measurement("build_per_commit").await?;
-    tokio::time::delay_for(std::time::Duration::from_secs(5)).await;
-    influxdb::write(influx_points).await?;
 
     Ok(())
 }
