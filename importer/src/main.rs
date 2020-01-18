@@ -1,14 +1,17 @@
-mod influxdb;
-
 use chrono::{DateTime, FixedOffset};
 use github_client::{Client, CommitStatus, CommitStatusState};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-static APP_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_APP_ID").unwrap());
-static PRIVATE_KEY: Lazy<String> = Lazy::new(|| std::env::var("GH_PRIVATE_KEY").unwrap());
-static COMMITS_SINCE: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_SINCE").unwrap());
-static COMMITS_UNTIL: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_UNTIL").unwrap());
+static GH_APP_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_APP_ID").unwrap());
+static GH_PRIVATE_KEY: Lazy<String> = Lazy::new(|| std::env::var("GH_PRIVATE_KEY").unwrap());
+static GH_COMMITS_SINCE: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_SINCE").unwrap());
+static GH_COMMITS_UNTIL: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_UNTIL").unwrap());
+
+static INFLUXDB_BASE_URL: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_BASE_URL").unwrap());
+static INFLUXDB_DB: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_DB").unwrap());
+static INFLUXDB_USERNAME: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_USERNAME").unwrap());
+static INFLUXDB_PASSWORD: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_PASSWORD").unwrap());
 
 struct Build {
     name: String,
@@ -68,7 +71,14 @@ fn to_builds(mut statuses: Vec<CommitStatus>) -> Vec<Build> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new_app_auth(&*APP_ID, &*PRIVATE_KEY)?;
+    let influxclient = influxdb_client::Client::new(
+        &*INFLUXDB_BASE_URL,
+        &*INFLUXDB_DB,
+        &*INFLUXDB_USERNAME,
+        &*INFLUXDB_PASSWORD,
+    )?;
+
+    let client = Client::new_app_auth(&*GH_APP_ID, &*GH_PRIVATE_KEY)?;
     let installations = client.get_app_installations().await?;
     for installation in installations {
         println!("Installation {}", installation.id);
@@ -83,8 +93,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .get_commits(
                     &repository.owner.login,
                     &repository.name,
-                    &*COMMITS_SINCE,
-                    &*COMMITS_UNTIL,
+                    &*GH_COMMITS_SINCE,
+                    &*GH_COMMITS_UNTIL,
                 )
                 .await?;
             let commits_len = commits.len();
@@ -107,23 +117,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut fields = HashMap::new();
                     fields.insert(
                         "successful",
-                        influxdb::FieldValue::Boolean(build.successful),
+                        influxdb_client::FieldValue::Boolean(build.successful),
                     );
                     fields.insert(
                         "duration_ms",
-                        influxdb::FieldValue::Integer(build.duration_ms),
+                        influxdb_client::FieldValue::Integer(build.duration_ms),
                     );
 
-                    influx_points.push(influxdb::Point {
+                    influx_points.push(influxdb_client::Point {
                         measurement: "build",
                         tags,
                         fields,
-                        timestamp: influxdb::Timestamp::new(&build.created_at),
+                        timestamp: influxdb_client::Timestamp::new(&build.created_at),
                     });
                 }
             }
 
-            influxdb::write(influx_points).await?;
+            influxclient.write(influx_points).await?;
         }
     }
 

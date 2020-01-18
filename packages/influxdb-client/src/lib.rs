@@ -1,31 +1,10 @@
 use chrono::{DateTime, FixedOffset};
-use once_cell::sync::Lazy;
-use serde::Serialize;
+use reqwest::Url;
 use std::collections::HashMap;
 
-const BASE_URL: &str = "http://localhost:8086";
-const USER_AGENT: &str = concat!("github-status-stats/", env!("CARGO_PKG_VERSION"));
-const DB: &str = "db0";
-const USER: &str = "user";
-const PASSWORD: &str = "password";
+pub const USER_AGENT: &str = concat!("github-status-stats/", env!("CARGO_PKG_VERSION"));
 
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        reqwest::header::USER_AGENT,
-        reqwest::header::HeaderValue::from_static(USER_AGENT),
-    );
-    let auth = format!("{}:{}", USER, PASSWORD);
-    headers.insert(
-        reqwest::header::AUTHORIZATION,
-        format!("Basic {}", base64::encode(&auth)).parse().unwrap(),
-    );
-
-    reqwest::Client::builder()
-        .default_headers(headers)
-        .build()
-        .unwrap()
-});
+type BoxError = Box<dyn std::error::Error>;
 
 #[derive(Debug)]
 pub struct Timestamp {
@@ -90,30 +69,56 @@ impl Point {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct Query {
-    q: String,
+pub struct Client<'a> {
+    client: reqwest::Client,
+    base_url: &'a str,
+    db: &'a str,
 }
 
-pub async fn write(points: Vec<Point>) -> Result<(), String> {
-    let raw_url = format!("{base}/write", base = BASE_URL);
-    let url = reqwest::Url::parse_with_params(&raw_url, &[("db", DB)])
-        .map_err(|err| format!("Error parsing URL: {:#?}", err))?;
-    let body = points
-        .into_iter()
-        .map(|point| point.to_line())
-        .collect::<Vec<String>>()
-        .join("\n");
+impl Client<'_> {
+    pub fn new<'a>(
+        base_url: &'a str,
+        db: &'a str,
+        username: &str,
+        password: &str,
+    ) -> Result<Client<'a>, BoxError> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::USER_AGENT,
+            reqwest::header::HeaderValue::from_static(USER_AGENT),
+        );
+        let auth = format!("{}:{}", username, password);
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            format!("Basic {}", base64::encode(&auth)).parse()?,
+        );
 
-    println!("Calling {:#?}", url);
-    (*CLIENT)
-        .post(url)
-        .body(body)
-        .send()
-        .await
-        .map_err(|err| format!("Error sending request: {:#?}", err))?
-        .error_for_status()
-        .map_err(|err| format!("Call to InfluxDB returned: {:#?}", err))?;
+        let client = reqwest::Client::builder()
+            .default_headers(headers)
+            .build()?;
 
-    Ok(())
+        Ok(Client {
+            client,
+            base_url,
+            db,
+        })
+    }
+
+    pub async fn write(&self, points: Vec<Point>) -> Result<(), BoxError> {
+        let raw_url = format!("{base}/write", base = &self.base_url);
+        let url = Url::parse_with_params(&raw_url, &[("db", &self.db)])?;
+        let body = points
+            .into_iter()
+            .map(|point| point.to_line())
+            .collect::<Vec<String>>()
+            .join("\n");
+        &self
+            .client
+            .post(url)
+            .body(body)
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
+    }
 }

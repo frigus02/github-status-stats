@@ -2,5 +2,6 @@
 members = [
     "importer",
     "packages/github-client",
+    "packages/influxdb-client",
     "website",
 ]

@@ -1,8 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - k8s/grafana/deployment.yml
-  - k8s/influxdb/deployment.yml
+  - grafana/deployment.yml
+  - influxdb/deployment.yml
   - k8s/ingress.yml
 commonLabels:
   group: github-status-stats
