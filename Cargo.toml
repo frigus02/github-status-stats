@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "importer",
-    "packages/github-client",
-    "packages/influxdb-client",
+    "packages/github_client",
+    "packages/influxdb_client",
     "website",
 ]

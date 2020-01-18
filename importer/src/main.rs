@@ -3,6 +3,8 @@ use github_client::{Client, CommitStatus, CommitStatusState};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
+type BoxError = Box<dyn std::error::Error>;
+
 static GH_APP_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_APP_ID").unwrap());
 static GH_PRIVATE_KEY: Lazy<String> = Lazy::new(|| std::env::var("GH_PRIVATE_KEY").unwrap());
 static GH_COMMITS_SINCE: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_SINCE").unwrap());
@@ -69,8 +71,64 @@ fn to_builds(mut statuses: Vec<CommitStatus>) -> Vec<Build> {
         .collect()
 }
 
+fn new_build_point(build: Build, commit_sha: String) -> influxdb_client::Point {
+    let mut tags = HashMap::new();
+    tags.insert("name", build.name);
+    tags.insert("commit", commit_sha);
+
+    let mut fields = HashMap::new();
+    fields.insert(
+        "successful",
+        influxdb_client::FieldValue::Boolean(build.successful),
+    );
+    fields.insert(
+        "duration_ms",
+        influxdb_client::FieldValue::Integer(build.duration_ms),
+    );
+
+    influxdb_client::Point {
+        measurement: "build",
+        tags,
+        fields,
+        timestamp: influxdb_client::Timestamp::new(&build.created_at),
+    }
+}
+
+async fn get_builds(client: &Client) -> Result<Vec<influxdb_client::Point>, BoxError> {
+    let mut points = Vec::new();
+    let repositories = client.get_installation_repositories().await?;
+    for repository in repositories {
+        println!("Repository {}", repository.full_name);
+        let commits = client
+            .get_commits(
+                &repository.owner.login,
+                &repository.name,
+                &*GH_COMMITS_SINCE,
+                &*GH_COMMITS_UNTIL,
+            )
+            .await?;
+        let commits_len = commits.len();
+        let mut commits_curr: usize = 0;
+        for commit in commits {
+            commits_curr += 1;
+            println!("Commit {}/{}", commits_curr, commits_len);
+
+            let statuses = client
+                .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
+                .await?;
+            let builds = to_builds(statuses);
+
+            for build in builds {
+                points.push(new_build_point(build, commit.sha.clone()));
+            }
+        }
+    }
+
+    Ok(points)
+}
+
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), BoxError> {
     let influxclient = influxdb_client::Client::new(
         &*INFLUXDB_BASE_URL,
         &*INFLUXDB_DB,
@@ -78,63 +136,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &*INFLUXDB_PASSWORD,
     )?;
 
-    let client = Client::new_app_auth(&*GH_APP_ID, &*GH_PRIVATE_KEY)?;
-    let installations = client.get_app_installations().await?;
+    let gh_app_client = Client::new_app_auth(&*GH_APP_ID, &*GH_PRIVATE_KEY)?;
+    let installations = gh_app_client.get_app_installations().await?;
     for installation in installations {
         println!("Installation {}", installation.id);
-        let token = client
+        let token = gh_app_client
             .create_app_installation_access_token(installation.id)
             .await?;
-        let client = Client::new(&token.token)?;
-        let repositories = client.get_installation_repositories().await?;
-        for repository in repositories {
-            println!("Repository {}", repository.full_name);
-            let commits = client
-                .get_commits(
-                    &repository.owner.login,
-                    &repository.name,
-                    &*GH_COMMITS_SINCE,
-                    &*GH_COMMITS_UNTIL,
-                )
-                .await?;
-            let commits_len = commits.len();
-            let mut commits_curr: usize = 0;
-            let mut influx_points = Vec::new();
-            for commit in commits {
-                commits_curr += 1;
-                println!("Commit {}/{}", commits_curr, commits_len);
-
-                let statuses = client
-                    .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
-                    .await?;
-                let builds = to_builds(statuses);
-
-                for build in builds {
-                    let mut tags = HashMap::new();
-                    tags.insert("name", build.name);
-                    tags.insert("commit", commit.sha.clone());
-
-                    let mut fields = HashMap::new();
-                    fields.insert(
-                        "successful",
-                        influxdb_client::FieldValue::Boolean(build.successful),
-                    );
-                    fields.insert(
-                        "duration_ms",
-                        influxdb_client::FieldValue::Integer(build.duration_ms),
-                    );
-
-                    influx_points.push(influxdb_client::Point {
-                        measurement: "build",
-                        tags,
-                        fields,
-                        timestamp: influxdb_client::Timestamp::new(&build.created_at),
-                    });
-                }
-            }
-
-            influxclient.write(influx_points).await?;
-        }
+        let gh_inst_client = Client::new(&token.token)?;
+        let points = get_builds(&gh_inst_client).await?;
+        influxclient.write(points).await?;
     }
 
     Ok(())

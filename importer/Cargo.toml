@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 chrono = "0.4.10"
-github-client = { path = "../packages/github-client" }
-influxdb-client = { path = "../packages/influxdb-client" }
+github_client = { path = "../packages/github_client" }
+influxdb_client = { path = "../packages/influxdb_client" }
 once_cell = "1.3.1"
 tokio = { version = "0.2.9", features = ["fs", "macros", "time"] }
