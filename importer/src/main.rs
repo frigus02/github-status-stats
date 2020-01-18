@@ -1,5 +1,5 @@
 use chrono::{DateTime, FixedOffset};
-use github_client::{Client, CommitStatus, CommitStatusState};
+use github_client::{CheckRun, CheckRunConclusion, Client, CommitStatus, CommitStatusState};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
@@ -22,7 +22,7 @@ struct Build {
     created_at: DateTime<FixedOffset>,
 }
 
-fn to_builds(mut statuses: Vec<CommitStatus>) -> Vec<Build> {
+fn statuses_to_builds(mut statuses: Vec<CommitStatus>) -> Vec<Build> {
     statuses.sort_by(|a, b| {
         a.created_at
             .timestamp_millis()
@@ -67,6 +67,26 @@ fn to_builds(mut statuses: Vec<CommitStatus>) -> Vec<Build> {
                 duration_ms: last_millis - first_millis,
                 created_at,
             }
+        })
+        .collect()
+}
+
+fn check_runs_to_builds(check_runs: Vec<CheckRun>) -> Vec<Build> {
+    check_runs
+        .into_iter()
+        .map(|check_run| Build {
+            name: check_run.name,
+            successful: match check_run.conclusion {
+                Some(conclusion) => conclusion == CheckRunConclusion::Success,
+                None => false,
+            },
+            duration_ms: match check_run.completed_at {
+                Some(completed_at) => {
+                    check_run.started_at.timestamp_millis() - completed_at.timestamp_millis()
+                }
+                None => 0,
+            },
+            created_at: check_run.started_at,
         })
         .collect()
 }
@@ -116,8 +136,15 @@ async fn get_builds(client: &Client) -> Result<Vec<influxdb_client::Point>, BoxE
             let statuses = client
                 .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
                 .await?;
-            let builds = to_builds(statuses);
+            let builds = statuses_to_builds(statuses);
+            for build in builds {
+                points.push(new_build_point(build, commit.sha.clone()));
+            }
 
+            let check_runs = client
+                .get_check_runs(&repository.owner.login, &repository.name, &commit.sha)
+                .await?;
+            let builds = check_runs_to_builds(check_runs);
             for build in builds {
                 points.push(new_build_point(build, commit.sha.clone()));
             }

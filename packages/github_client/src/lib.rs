@@ -1,6 +1,5 @@
 mod apps;
 mod call;
-mod datetime;
 mod page_links;
 
 use chrono::{DateTime, FixedOffset};
@@ -163,9 +162,7 @@ pub struct Installation {
     pub target_type: String,
     pub permissions: AppPermissions,
     pub events: Vec<AppWebhookEvent>,
-    #[serde(with = "datetime")]
     pub created_at: DateTime<FixedOffset>,
-    #[serde(with = "datetime")]
     pub updated_at: DateTime<FixedOffset>,
     pub single_file_name: Option<String>,
 }
@@ -173,7 +170,6 @@ pub struct Installation {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InstallationAccessToken {
     pub token: String,
-    #[serde(with = "datetime")]
     pub expires_at: DateTime<FixedOffset>,
     pub permissions: AppPermissions,
     pub repository_selection: String,
@@ -210,9 +206,7 @@ pub struct User {
     pub public_gists: i32,
     pub followers: i32,
     pub following: i32,
-    #[serde(with = "datetime")]
     pub created_at: DateTime<FixedOffset>,
-    #[serde(with = "datetime")]
     pub updated_at: DateTime<FixedOffset>,
 }
 
@@ -228,7 +222,6 @@ pub struct UserPlan {
 pub struct CommitPerson {
     pub name: String,
     pub email: String,
-    #[serde(with = "datetime")]
     pub date: DateTime<FixedOffset>,
 }
 
@@ -259,9 +252,7 @@ pub struct CommitStatus {
     pub state: CommitStatusState,
     pub description: String,
     pub context: String,
-    #[serde(with = "datetime")]
     pub created_at: DateTime<FixedOffset>,
-    #[serde(with = "datetime")]
     pub updated_at: DateTime<FixedOffset>,
 }
 
@@ -322,11 +313,8 @@ pub struct Repository {
     pub labels_url: String,
     pub releases_url: String,
     pub deployments_url: String,
-    #[serde(with = "datetime")]
     pub created_at: DateTime<FixedOffset>,
-    #[serde(with = "datetime")]
     pub updated_at: DateTime<FixedOffset>,
-    #[serde(with = "datetime")]
     pub pushed_at: DateTime<FixedOffset>,
     pub git_url: String,
     pub ssh_url: String,
@@ -362,6 +350,60 @@ pub struct RepositoryList {
     pub repositories: Vec<Repository>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CheckRunOutput {
+    pub title: String,
+    pub summary: String,
+    pub text: String,
+    pub annotations_count: i32,
+    pub annotations_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CheckRunStatus {
+    Queued,
+    InProgress,
+    Completed,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CheckRunConclusion {
+    Success,
+    Failure,
+    Neutral,
+    Cancelled,
+    TimedOut,
+    ActionRequired,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CheckRun {
+    pub id: i32,
+    pub head_sha: String,
+    pub node_id: String,
+    pub external_id: String,
+    pub url: String,
+    pub html_url: String,
+    pub details_url: String,
+    pub status: CheckRunStatus,
+    pub conclusion: Option<CheckRunConclusion>,
+    pub started_at: DateTime<FixedOffset>,
+    pub completed_at: Option<DateTime<FixedOffset>>,
+    pub output: CheckRunOutput,
+    pub name: String,
+    // "check_suite": { "id": 5 },
+    // "app": { ... },
+    // "pull_requests": [ { ... } ]
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CheckRunList {
+    pub total_count: i32,
+    pub check_runs: Vec<CheckRun>,
+}
+
 pub struct Client {
     client: reqwest::Client,
 }
@@ -394,7 +436,8 @@ impl Client {
     pub async fn get_app_installations(&self) -> Result<Vec<Installation>, BoxError> {
         let raw_url = format!("{base}/app/installations", base = BASE_URL);
         let url = reqwest::Url::parse(&raw_url)?;
-        let lists: Vec<Vec<Installation>> = call::get_paged_preview(&self.client, url).await?;
+        let lists: Vec<Vec<Installation>> =
+            call::get_paged_preview(&self.client, url, call::MACHINE_MAN_PREVIEW).await?;
         let installations = lists.into_iter().flatten().collect();
         Ok(installations)
     }
@@ -409,14 +452,15 @@ impl Client {
             installation_id = installation_id,
         );
         let url = reqwest::Url::parse(&raw_url)?;
-        let access_token = call::post_preview(&self.client, url).await?;
+        let access_token = call::post_preview(&self.client, url, call::MACHINE_MAN_PREVIEW).await?;
         Ok(access_token)
     }
 
     pub async fn get_installation_repositories(&self) -> Result<Vec<Repository>, BoxError> {
         let raw_url = format!("{base}/installation/repositories", base = BASE_URL);
         let url = reqwest::Url::parse(&raw_url)?;
-        let lists: Vec<RepositoryList> = call::get_paged_preview(&self.client, url).await?;
+        let lists: Vec<RepositoryList> =
+            call::get_paged_preview(&self.client, url, call::MACHINE_MAN_PREVIEW).await?;
         let repositories = lists
             .into_iter()
             .flat_map(|list| list.repositories)
@@ -467,5 +511,25 @@ impl Client {
         let lists: Vec<Vec<CommitStatus>> = call::get_paged(&self.client, url).await?;
         let statuses = lists.into_iter().flatten().collect();
         Ok(statuses)
+    }
+
+    pub async fn get_check_runs(
+        &self,
+        owner: &str,
+        repo: &str,
+        git_ref: &str,
+    ) -> Result<Vec<CheckRun>, BoxError> {
+        let raw_url = format!(
+            "{base}/repos/{owner}/{repo}/commits/{git_ref}/check-runs",
+            base = BASE_URL,
+            owner = owner,
+            repo = repo,
+            git_ref = git_ref
+        );
+        let url = reqwest::Url::parse(&raw_url)?;
+        let lists: Vec<CheckRunList> =
+            call::get_paged_preview(&self.client, url, call::ANTIOPE_PREVIEW).await?;
+        let check_runs = lists.into_iter().flat_map(|list| list.check_runs).collect();
+        Ok(check_runs)
     }
 }
