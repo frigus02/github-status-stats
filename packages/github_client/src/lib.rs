@@ -480,7 +480,6 @@ impl Client {
         owner: &str,
         repo: &str,
         since: &str,
-        until: &str,
     ) -> Result<Vec<Commit>, BoxError> {
         let raw_url = format!(
             "{base}/repos/{owner}/{repo}/commits",
@@ -488,7 +487,7 @@ impl Client {
             owner = owner,
             repo = repo
         );
-        let url = reqwest::Url::parse_with_params(&raw_url, &[("since", since), ("until", until)])?;
+        let url = reqwest::Url::parse_with_params(&raw_url, &[("since", since)])?;
         let lists: Vec<Vec<Commit>> = call::get_paged(&self.client, url).await?;
         let commits = lists.into_iter().flatten().collect();
         Ok(commits)

@@ -1,5 +1,7 @@
-use chrono::{DateTime, FixedOffset};
-use github_client::{CheckRun, CheckRunConclusion, Client, CommitStatus, CommitStatusState};
+use chrono::{DateTime, Duration, FixedOffset, Utc};
+use github_client::{
+    CheckRun, CheckRunConclusion, Client, CommitStatus, CommitStatusState, Repository,
+};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
@@ -7,11 +9,8 @@ type BoxError = Box<dyn std::error::Error>;
 
 static GH_APP_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_APP_ID").unwrap());
 static GH_PRIVATE_KEY: Lazy<String> = Lazy::new(|| std::env::var("GH_PRIVATE_KEY").unwrap());
-static GH_COMMITS_SINCE: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_SINCE").unwrap());
-static GH_COMMITS_UNTIL: Lazy<String> = Lazy::new(|| std::env::var("GH_COMMITS_UNTIL").unwrap());
 
 static INFLUXDB_BASE_URL: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_BASE_URL").unwrap());
-static INFLUXDB_DB: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_DB").unwrap());
 static INFLUXDB_USERNAME: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_USERNAME").unwrap());
 static INFLUXDB_PASSWORD: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_PASSWORD").unwrap());
 
@@ -114,40 +113,39 @@ fn new_build_point(build: Build, commit_sha: String) -> influxdb_client::Point {
     }
 }
 
-async fn get_builds(client: &Client) -> Result<Vec<influxdb_client::Point>, BoxError> {
+async fn get_builds(
+    client: &Client,
+    repository: Repository,
+    commits_since: DateTime<Utc>,
+) -> Result<Vec<influxdb_client::Point>, BoxError> {
     let mut points = Vec::new();
-    let repositories = client.get_installation_repositories().await?;
-    for repository in repositories {
-        println!("Repository {}", repository.full_name);
-        let commits = client
-            .get_commits(
-                &repository.owner.login,
-                &repository.name,
-                &*GH_COMMITS_SINCE,
-                &*GH_COMMITS_UNTIL,
-            )
+    let commits = client
+        .get_commits(
+            &repository.owner.login,
+            &repository.name,
+            &commits_since.to_rfc3339(),
+        )
+        .await?;
+    let commits_len = commits.len();
+    let mut commits_curr: usize = 0;
+    for commit in commits {
+        commits_curr += 1;
+        println!("Commit {}/{}", commits_curr, commits_len);
+
+        let statuses = client
+            .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
             .await?;
-        let commits_len = commits.len();
-        let mut commits_curr: usize = 0;
-        for commit in commits {
-            commits_curr += 1;
-            println!("Commit {}/{}", commits_curr, commits_len);
+        let builds = statuses_to_builds(statuses);
+        for build in builds {
+            points.push(new_build_point(build, commit.sha.clone()));
+        }
 
-            let statuses = client
-                .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
-                .await?;
-            let builds = statuses_to_builds(statuses);
-            for build in builds {
-                points.push(new_build_point(build, commit.sha.clone()));
-            }
-
-            let check_runs = client
-                .get_check_runs(&repository.owner.login, &repository.name, &commit.sha)
-                .await?;
-            let builds = check_runs_to_builds(check_runs);
-            for build in builds {
-                points.push(new_build_point(build, commit.sha.clone()));
-            }
+        let check_runs = client
+            .get_check_runs(&repository.owner.login, &repository.name, &commit.sha)
+            .await?;
+        let builds = check_runs_to_builds(check_runs);
+        for build in builds {
+            points.push(new_build_point(build, commit.sha.clone()));
         }
     }
 
@@ -156,13 +154,6 @@ async fn get_builds(client: &Client) -> Result<Vec<influxdb_client::Point>, BoxE
 
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
-    let influxclient = influxdb_client::Client::new(
-        &*INFLUXDB_BASE_URL,
-        &*INFLUXDB_DB,
-        &*INFLUXDB_USERNAME,
-        &*INFLUXDB_PASSWORD,
-    )?;
-
     let gh_app_client = Client::new_app_auth(&*GH_APP_ID, &*GH_PRIVATE_KEY)?;
     let installations = gh_app_client.get_app_installations().await?;
     for installation in installations {
@@ -171,14 +162,48 @@ async fn main() -> Result<(), BoxError> {
             .create_app_installation_access_token(installation.id)
             .await?;
         let gh_inst_client = Client::new(&token.token)?;
-        let points = get_builds(&gh_inst_client).await?;
+        let repositories = gh_inst_client.get_installation_repositories().await?;
+        for repository in repositories {
+            println!("Repository {}", repository.full_name);
 
-        println!(
-            "Writing {} points for installation {}",
-            points.len(),
-            installation.id
-        );
-        influxclient.write(points).await?;
+            let influxdb_db = format!("r{}", repository.id);
+            let influxdb_client = influxdb_client::Client::new(
+                &*INFLUXDB_BASE_URL,
+                &influxdb_db,
+                &*INFLUXDB_USERNAME,
+                &*INFLUXDB_PASSWORD,
+            )?;
+
+            let is_new = influxdb_client
+                .query("SHOW MEASUREMENTS")
+                .await?
+                .results
+                .first()
+                .ok_or_else(|| {
+                    format!(
+                        "InfluxDB returned no result for SHOW MEASUREMENTS query for repository {}",
+                        repository.id
+                    )
+                })?
+                .series
+                .is_none();
+            if is_new {
+                influxdb_client
+                    .query(&format!("CREATE DATABASE {}", influxdb_db))
+                    .await?;
+            }
+
+            let commits_since = if is_new {
+                Utc::now() - Duration::weeks(1)
+            } else {
+                Utc::now() - Duration::hours(2)
+            };
+
+            let points = get_builds(&gh_inst_client, repository, commits_since).await?;
+            if !points.is_empty() {
+                influxdb_client.write(points).await?;
+            }
+        }
     }
 
     Ok(())

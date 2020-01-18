@@ -20,14 +20,8 @@ spec:
                     secretKeyRef:
                       name: ghss-github
                       key: PRIVATE_KEY
-                - name: GH_COMMITS_SINCE
-                  value: "2019-08-01T00:00:00Z"
-                - name: GH_COMMITS_UNTIL
-                  value: "2019-10-10T00:00:00Z"
                 - name: INFLUXDB_BASE_URL
                   value: http://ghss-influxdb
-                - name: INFLUXDB_DB
-                  value: db0
                 - name: INFLUXDB_USERNAME
                   valueFrom:
                     secretKeyRef:

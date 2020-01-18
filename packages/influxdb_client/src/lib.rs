@@ -1,5 +1,9 @@
+mod field_value;
+
 use chrono::{DateTime, FixedOffset};
+pub use field_value::FieldValue;
 use reqwest::Url;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub const USER_AGENT: &str = concat!("github-status-stats/", env!("CARGO_PKG_VERSION"));
@@ -17,16 +21,6 @@ impl Timestamp {
             nanos: datetime.timestamp_nanos(),
         }
     }
-}
-
-#[derive(Debug)]
-pub enum FieldValue {
-    #[allow(dead_code)]
-    String(String),
-    #[allow(dead_code)]
-    Float(f32),
-    Integer(i64),
-    Boolean(bool),
 }
 
 #[derive(Debug)]
@@ -93,6 +87,29 @@ impl Point {
     }
 }
 
+#[derive(Debug, Serialize)]
+struct Query<'a> {
+    q: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct QuerySeries {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub values: Vec<Vec<FieldValue>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct QueryResult {
+    pub statement_id: i32,
+    pub series: Option<Vec<QuerySeries>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct QueryResponse {
+    pub results: Vec<QueryResult>,
+}
+
 pub struct Client<'a> {
     client: reqwest::Client,
     base_url: &'a str,
@@ -126,6 +143,21 @@ impl Client<'_> {
             base_url,
             db,
         })
+    }
+
+    pub async fn query(&self, q: &str) -> Result<QueryResponse, BoxError> {
+        let raw_url = format!("{base}/query", base = &self.base_url);
+        let url = Url::parse_with_params(&raw_url, &[("db", &self.db)])?;
+        let result = self
+            .client
+            .post(url)
+            .form(&Query { q })
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(result)
     }
 
     pub async fn write(&self, points: Vec<Point>) -> Result<(), BoxError> {
