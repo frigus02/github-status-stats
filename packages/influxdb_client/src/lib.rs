@@ -112,8 +112,7 @@ impl Client<'_> {
             .map(|point| point.to_line())
             .collect::<Vec<String>>()
             .join("\n");
-        &self
-            .client
+        self.client
             .post(url)
             .body(body)
             .send()

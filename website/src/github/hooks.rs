@@ -12,9 +12,9 @@ static WEBHOOK_SECRET: Lazy<SecStr> =
 
 #[derive(Debug)]
 pub enum Payload {
-    Ping(PingPayload),
-    Status(StatusPayload),
-    GitHubAppAuthorization(GitHubAppAuthorizationPayload),
+    Ping(Box<PingPayload>),
+    Status(Box<StatusPayload>),
+    GitHubAppAuthorization(Box<GitHubAppAuthorizationPayload>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -247,7 +247,7 @@ fn validate_signature(req: &HttpRequest, body: &Bytes) -> Result<(), String> {
     if result == signature {
         Ok(())
     } else {
-        Err(format!("Signature doesn't match"))
+        Err("Signature doesn't match".to_string())
     }
 }
 
@@ -257,14 +257,14 @@ pub fn deserialize(req: HttpRequest, body: Bytes) -> Result<Payload, String> {
     let event = header_as_string(&req, "X-GitHub-Event")?;
     match event {
         "ping" => serde_json::from_slice::<PingPayload>(&body)
-            .map(|data| Payload::Ping(data))
+            .map(|data| Payload::Ping(Box::new(data)))
             .map_err(|err| format!("Failed to deserialize ping event: {}", err)),
         "status" => serde_json::from_slice::<StatusPayload>(&body)
-            .map(|data| Payload::Status(data))
+            .map(|data| Payload::Status(Box::new(data)))
             .map_err(|err| format!("Failed to deserialize status event: {}", err)),
         "github_app_authorization" => {
             serde_json::from_slice::<GitHubAppAuthorizationPayload>(&body)
-                .map(|data| Payload::GitHubAppAuthorization(data))
+                .map(|data| Payload::GitHubAppAuthorization(Box::new(data)))
                 .map_err(|err| {
                     format!(
                         "Failed to deserialize github_app_authorization event: {}",
