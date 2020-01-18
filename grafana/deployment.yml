@@ -49,13 +49,13 @@ spec:
       volumes:
         - name: provisioning-datasources
           configMap:
-            name: grafana-provisioning-datasources
+            name: ghss-grafana-provisioning-datasources
         - name: provisioning-dashboards
           configMap:
-            name: grafana-provisioning-dashboards
+            name: ghss-grafana-provisioning-dashboards
         - name: dashboards
           configMap:
-            name: grafana-dashboards
+            name: ghss-grafana-dashboards
 ---
 apiVersion: v1
 kind: Service

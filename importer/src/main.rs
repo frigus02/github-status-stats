@@ -145,6 +145,12 @@ async fn main() -> Result<(), BoxError> {
             .await?;
         let gh_inst_client = Client::new(&token.token)?;
         let points = get_builds(&gh_inst_client).await?;
+
+        println!(
+            "Writing {} points for installation {}",
+            points.len(),
+            installation.id
+        );
         influxclient.write(points).await?;
     }
 

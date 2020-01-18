@@ -1,20 +1,30 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - grafana/deployment.yml
+  # - grafana/deployment.yml
+  - importer/cronjob.yml
   - influxdb/deployment.yml
-  - k8s/ingress.yml
+  - influxdb/secret.yml
+  # - k8s/ingress.yml
+  # - website/deployment.yml
 commonLabels:
   group: github-status-stats
-configMapGenerator:
-  - name: grafana-dashboards
+# configMapGenerator:
+#   - name: ghss-grafana-dashboards
+#     files:
+#       - grafana/dashboards/builds.json
+#   - name: ghss-grafana-provisioning-dashboards
+#     files:
+#       - grafana/provisioning/dashboards/files.yml
+#   - name: ghss-grafana-provisioning-datasources
+#     files:
+#       - grafana/provisioning/datasources/influxdb.yml
+secretGenerator:
+  - name: ghss-github
+    type: Opaque
+    envs:
+      - k8s/.env.github
     files:
-      - grafana/dashboards/builds.json
-  - name: grafana-provisioning-dashboards
-    files:
-      - grafana/provisioning/dashboards/files.yml
-  - name: grafana-provisioning-datasources
-    files:
-      - grafana/provisioning/datasources/influxdb.yml
+      - PRIVATE_KEY=k8s/.env.github-private-key
 generatorOptions:
   disableNameSuffixHash: true

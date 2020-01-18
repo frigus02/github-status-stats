@@ -1,4 +1,4 @@
 /target
-.env
-.env.ps1
+.env*
+!.env.example*
 **/*.rs.bk

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghss-website
+spec:
+  selector:
+    matchLabels:
+      app: ghss-website
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ghss-website
+    spec:
+      containers:
+        - name: website
+          image: frigus02/github-status-stats-website
+          env:
+            - name: GH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-github
+                  key: CLIENT_ID
+            - name: GH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-github
+                  key: CLIENT_SECRET
+            - name: GH_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-github
+                  key: WEBHOOK_SECRET
+          ports:
+            - containerPort: 8888
+          # resources:
+          #   limits:
+          #     cpu: 100m
+          #     memory: 100Mi
+          #   requests:
+          #     cpu: 100m
+          #     memory: 100Mi
+          # readinessProbe:
+          #   httpGet:
+          #     path: /login
+          #     port: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ghss-website
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8888
+  selector:
+    app: ghss-website

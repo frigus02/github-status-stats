@@ -1,7 +1,7 @@
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: hello
+  name: ghss-importer
 spec:
   schedule: "0 * * * *"
   jobTemplate:
@@ -9,10 +9,33 @@ spec:
       template:
         spec:
           containers:
-            - name: hello
-              image: busybox
-              args:
-                - /bin/sh
-                - -c
-                - date; echo Hello from the Kubernetes cluster
+            - name: importer
+              image: frigus02/github-status-stats-importer
+              imagePullPolicy: Always
+              env:
+                - name: GH_APP_ID
+                  value: "50487"
+                - name: GH_PRIVATE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-github
+                      key: PRIVATE_KEY
+                - name: GH_COMMITS_SINCE
+                  value: "2019-08-01T00:00:00Z"
+                - name: GH_COMMITS_UNTIL
+                  value: "2019-10-10T00:00:00Z"
+                - name: INFLUXDB_BASE_URL
+                  value: http://ghss-influxdb
+                - name: INFLUXDB_DB
+                  value: db0
+                - name: INFLUXDB_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-influxdb
+                      key: username
+                - name: INFLUXDB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-influxdb
+                      key: password
           restartPolicy: OnFailure
