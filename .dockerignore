@@ -1,0 +1,7 @@
+docs/
+grafana/
+influxdb/
+target/
+.env
+.env.example
+.env.ps1
