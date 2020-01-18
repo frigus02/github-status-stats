@@ -37,12 +37,33 @@ pub struct Point {
     pub timestamp: Timestamp,
 }
 
+fn escape_string_field_value(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn escape_tags_or_field_key(value: &str) -> String {
+    value
+        .replace(',', "\\,")
+        .replace('=', "\\=")
+        .replace(' ', "\\ ")
+}
+
+fn escape_measurement(value: &str) -> String {
+    value.replace(',', "\\,").replace(' ', "\\ ")
+}
+
 impl Point {
     fn to_line(&self) -> String {
         let tags = self
             .tags
             .iter()
-            .map(|(key, value)| format!(",{}={}", key, value))
+            .map(|(key, value)| {
+                format!(
+                    ",{}={}",
+                    escape_tags_or_field_key(key),
+                    escape_tags_or_field_key(value)
+                )
+            })
             .collect::<Vec<String>>()
             .join("");
         let fields = self
@@ -51,9 +72,9 @@ impl Point {
             .map(|(key, value)| {
                 format!(
                     "{}={}",
-                    key,
+                    escape_tags_or_field_key(key),
                     match value {
-                        FieldValue::String(s) => s.clone(),
+                        FieldValue::String(s) => format!("\"{}\"", escape_string_field_value(s)),
                         FieldValue::Float(f) => f.to_string(),
                         FieldValue::Integer(i) => i.to_string(),
                         FieldValue::Boolean(b) => b.to_string(),
@@ -64,7 +85,10 @@ impl Point {
             .join(",");
         format!(
             "{}{} {} {}",
-            self.measurement, tags, fields, self.timestamp.nanos
+            escape_measurement(self.measurement),
+            tags,
+            fields,
+            self.timestamp.nanos
         )
     }
 }
