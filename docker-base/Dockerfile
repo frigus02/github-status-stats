@@ -52,5 +52,5 @@ RUN cargo build --release && \
 
 # Build
 COPY . .
-RUN cargo clippy --workspace --release --frozen -- -Dwarnings && \
-    cargo build --release
+# RUN cargo clippy --workspace --release --frozen -- -Dwarnings && \
+RUN cargo build --release

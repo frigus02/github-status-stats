@@ -66,6 +66,7 @@ async fn setup_installed() -> impl Responder {
 }
 
 async fn hooks(req: HttpRequest, body: Bytes) -> impl Responder {
+    // TODO: Handle status and check_run hooks
     match github::hooks::deserialize(req, body) {
         Ok(payload) => {
             println!("Hook: {:?}", payload);

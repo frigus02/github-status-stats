@@ -1,6 +1,6 @@
 mod field_value;
 
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, TimeZone};
 pub use field_value::FieldValue;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
-    pub fn new(datetime: &DateTime<FixedOffset>) -> Timestamp {
+    pub fn new<Tz: TimeZone>(datetime: &DateTime<Tz>) -> Timestamp {
         Timestamp {
             nanos: datetime.timestamp_nanos(),
         }

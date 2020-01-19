@@ -76,3 +76,33 @@ ngrok http 8888 &
 cd website/
 systemfd --no-pid -s http::8888 -- cargo watch -x run
 ```
+
+### Data model
+
+#### Build
+
+- Measurement: `build`
+- Tags:
+  - `name`: `status.context` or `check_run.name`
+  - `commit`: commit SHA
+- Fields:
+  - `successful`: `true` or `false`
+  - `duration_ms`
+- Timestamp: `status.created_at` or `check_run.started_at`
+
+#### Import
+
+- Measurement: `import`
+- Fields:
+  - `commits_since`: unix timestamp
+- Timestamp: import date
+
+#### Hook
+
+- Measurement: `hook`
+- Tags:
+  - `type`: `status` or `check_run`
+  - `commit`: commit SHA
+- Fields:
+  - `commits_since`: unix timestamp
+- Timestamp: hook date
