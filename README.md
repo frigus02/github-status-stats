@@ -93,6 +93,8 @@ systemfd --no-pid -s http::8888 -- cargo watch -x run
 #### Import
 
 - Measurement: `import`
+- Fields:
+  - `points`: count of points
 - Timestamp: import date
 
 #### Hook
@@ -101,4 +103,6 @@ systemfd --no-pid -s http::8888 -- cargo watch -x run
 - Tags:
   - `type`: `status` or `check_run`
   - `commit`: commit SHA
+- Fields:
+  - `dummy`: `true`
 - Timestamp: hook date

@@ -1,0 +1,26 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ghss
+spec:
+  rules:
+    - host: kubernetes.docker.internal
+      http:
+        paths:
+          - backend:
+              serviceName: ghss-website
+              servicePort: 80
+    - host: kubernetes.docker.internal
+      http:
+        paths:
+          - path: /query
+            backend:
+              serviceName: ghss-influxdb
+              servicePort: 80
+    - host: kubernetes.docker.internal
+      http:
+        paths:
+          - path: /write
+            backend:
+              serviceName: ghss-influxdb
+              servicePort: 80

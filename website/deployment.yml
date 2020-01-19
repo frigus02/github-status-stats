@@ -15,6 +15,7 @@ spec:
       containers:
         - name: website
           image: frigus02/github-status-stats-website
+          imagePullPolicy: Always
           env:
             - name: GH_CLIENT_ID
               valueFrom:
@@ -32,7 +33,7 @@ spec:
                   name: ghss-github
                   key: WEBHOOK_SECRET
             - name: INFLUXDB_BASE_URL
-                  value: http://ghss-influxdb
+              value: http://ghss-influxdb
             - name: INFLUXDB_USERNAME
               valueFrom:
                 secretKeyRef:

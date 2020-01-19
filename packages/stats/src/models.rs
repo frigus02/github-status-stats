@@ -56,7 +56,8 @@ impl Hook {
         );
         tags.insert("commit", self.commit_sha);
 
-        let fields = HashMap::new();
+        let mut fields = HashMap::new();
+        fields.insert("dummy", FieldValue::Boolean(true));
 
         Point {
             measurement: "import",
@@ -70,12 +71,15 @@ impl Hook {
 #[derive(Debug)]
 pub struct Import {
     pub time: DateTime<Utc>,
+    pub points: i64,
 }
 
 impl Import {
     pub fn into_point(self) -> Point {
         let tags = HashMap::new();
-        let fields = HashMap::new();
+
+        let mut fields = HashMap::new();
+        fields.insert("points", FieldValue::Integer(self.points));
 
         Point {
             measurement: "import",
