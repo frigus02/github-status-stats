@@ -10,13 +10,13 @@ fi
 
 BASE=$PREFIX-base
 docker pull $BASE
-docker build -t $BASE -f docker-base/Dockerfile .
+docker build --cache-from=$BASE -t $BASE -f docker-base/Dockerfile .
 
 IMPORTER=$PREFIX-importer
-docker build -t "$IMPORTER:$TAG" -f importer/Dockerfile .
+docker build --cache-from=$BASE -t "$IMPORTER:$TAG" -f importer/Dockerfile .
 
 WEBSITE=$PREFIX-website
-docker build -t "$WEBSITE:$TAG" -f website/Dockerfile .
+docker build --cache-from=$BASE -t "$WEBSITE:$TAG" -f website/Dockerfile .
 
 if [ "$TAG" != "dev" ]; then
     docker login -u frigus02 -p "$DOCKER_PASSWORD"
