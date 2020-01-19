@@ -13,6 +13,8 @@ spec:
               image: frigus02/github-status-stats-importer
               imagePullPolicy: Always
               env:
+                - name: RUST_LOG
+                  value: info,importer=debug,github_client=debug,influxdb_client=debug
                 - name: GH_APP_ID
                   value: "50487"
                 - name: GH_PRIVATE_KEY

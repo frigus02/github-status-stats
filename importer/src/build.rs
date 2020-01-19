@@ -1,5 +1,6 @@
 use chrono::{DateTime, TimeZone};
 use github_client::{CheckRun, Client, CommitStatus, CommitStatusState, Repository};
+use log::info;
 use stats::{build_from_check_run, build_from_statuses, Build};
 
 type BoxError = Box<dyn std::error::Error>;
@@ -74,7 +75,7 @@ pub async fn get_builds(
     let mut commits_curr: usize = 0;
     for commit_sha in commit_shas {
         commits_curr += 1;
-        println!("Commit {}/{}", commits_curr, commits_len);
+        info!("Commit {}/{}", commits_curr, commits_len);
 
         let statuses = client
             .get_statuses(&repository.owner.login, &repository.name, &commit_sha)

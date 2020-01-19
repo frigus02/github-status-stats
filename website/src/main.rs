@@ -5,6 +5,7 @@ use actix_web::cookie::{Cookie, SameSite};
 use actix_web::{web, App, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder};
 use bytes::Bytes;
 use listenfd::ListenFd;
+use log::info;
 use once_cell::sync::Lazy;
 use stats::influxdb_name;
 use typed_html::dom::DOMTree;
@@ -74,7 +75,7 @@ async fn setup_installed() -> impl Responder {
 async fn hooks(req: HttpRequest, body: Bytes) -> actix_web::Result<HttpResponse> {
     match github::hooks::deserialize(req, body) {
         Ok(payload) => {
-            println!("Hook: {:?}", payload);
+            info!("Hook: {:?}", payload);
             match payload {
                 github::hooks::Payload::CheckRun(check_run) => {
                     let influxdb_db = influxdb_name(&check_run.repository);
@@ -123,7 +124,7 @@ async fn hooks(req: HttpRequest, body: Bytes) -> actix_web::Result<HttpResponse>
             Ok(HttpResponse::Ok().finish())
         }
         Err(err) => {
-            println!("Error reading hook: {:?}", err);
+            info!("Error reading hook: {:?}", err);
             Ok(HttpResponse::BadRequest().finish())
         }
     }
@@ -131,6 +132,8 @@ async fn hooks(req: HttpRequest, body: Bytes) -> actix_web::Result<HttpResponse>
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
+    env_logger::init();
+
     let mut listenfd = ListenFd::from_env();
     let mut server = HttpServer::new(|| {
         App::new()

@@ -7,6 +7,7 @@ use chrono::{Duration, Utc};
 use github_client::Client;
 use hook::get_status_hook_commits_since;
 use import::get_last_import;
+use log::info;
 use once_cell::sync::Lazy;
 use stats::{influxdb_name, Import};
 
@@ -23,6 +24,7 @@ async fn import(
     influxdb_client: &influxdb_client::Client<'_>,
     mut points: Vec<influxdb_client::Point>,
 ) -> Result<(), BoxError> {
+    info!("Import {} points", points.len());
     points.push(
         Import {
             time: Utc::now(),
@@ -35,17 +37,19 @@ async fn import(
 
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
+    env_logger::init();
+
     let gh_app_client = Client::new_app_auth(&*GH_APP_ID, &*GH_PRIVATE_KEY)?;
     let installations = gh_app_client.get_app_installations().await?;
     for installation in installations {
-        println!("Installation {}", installation.id);
+        info!("Installation {}", installation.id);
         let token = gh_app_client
             .create_app_installation_access_token(installation.id)
             .await?;
         let gh_inst_client = Client::new(&token.token)?;
         let repositories = gh_inst_client.get_installation_repositories().await?;
         for repository in repositories {
-            println!("Repository {}", repository.full_name);
+            info!("Repository {}", repository.full_name);
 
             let influxdb_db = influxdb_name(&repository);
             let influxdb_client = influxdb_client::Client::new(
