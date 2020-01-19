@@ -18,7 +18,7 @@ pub async fn get_status_hook_commits_since(
         .and_then(|result| result.series)
         .and_then(|mut series| series.pop())
         .map(|series| series.values)
-        .unwrap_or_else(|| Vec::new())
+        .unwrap_or_else(Vec::new)
         .into_iter()
         .filter_map(|mut row| row.pop())
         .filter_map(|value| match value {

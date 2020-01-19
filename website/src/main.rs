@@ -88,12 +88,12 @@ async fn hooks(req: HttpRequest, body: Bytes) -> actix_web::Result<HttpResponse>
                     client
                         .write(vec![
                             stats::Hook {
-                                time: check_run.check_run.started_at.clone(),
+                                time: check_run.check_run.started_at,
                                 r#type: stats::HookType::CheckRun,
                                 commit_sha: check_run.check_run.head_sha.clone(),
                             }
-                            .to_point(),
-                            stats::build_from_check_run(check_run.check_run).to_point(),
+                            .into_point(),
+                            stats::build_from_check_run(check_run.check_run).into_point(),
                         ])
                         .await
                         .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
@@ -115,7 +115,7 @@ async fn hooks(req: HttpRequest, body: Bytes) -> actix_web::Result<HttpResponse>
                             r#type: stats::HookType::Status,
                             commit_sha: status.sha,
                         }
-                        .to_point()])
+                        .into_point()])
                         .await
                         .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
                 }

@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use influxdb_client::{FieldValue, Point, Timestamp};
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn to_point(self) -> Point {
+    pub fn into_point(self) -> Point {
         let mut tags = HashMap::new();
         tags.insert("name", self.name);
         tags.insert("commit", self.commit_sha);
@@ -44,7 +44,7 @@ pub struct Hook {
 }
 
 impl Hook {
-    pub fn to_point(self) -> Point {
+    pub fn into_point(self) -> Point {
         let mut tags = HashMap::new();
         tags.insert(
             "type",
@@ -73,7 +73,7 @@ pub struct Import {
 }
 
 impl Import {
-    pub fn to_point(self) -> Point {
+    pub fn into_point(self) -> Point {
         let tags = HashMap::new();
         let fields = HashMap::new();
 

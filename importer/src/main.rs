@@ -23,7 +23,7 @@ async fn import(
     influxdb_client: &influxdb_client::Client<'_>,
     mut points: Vec<influxdb_client::Point>,
 ) -> Result<(), BoxError> {
-    points.push(Import { time: Utc::now() }.to_point());
+    points.push(Import { time: Utc::now() }.into_point());
     influxdb_client.write(points).await
 }
 

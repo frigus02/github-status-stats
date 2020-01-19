@@ -81,7 +81,7 @@ pub async fn get_builds(
             .await?;
         let builds = statuses_to_builds(statuses, &commit_sha);
         for build in builds {
-            points.push(build.to_point());
+            points.push(build.into_point());
         }
 
         let check_runs = client
@@ -89,7 +89,7 @@ pub async fn get_builds(
             .await?;
         let builds = check_runs_to_builds(check_runs);
         for build in builds {
-            points.push(build.to_point());
+            points.push(build.into_point());
         }
     }
 
