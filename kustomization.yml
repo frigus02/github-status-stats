@@ -6,7 +6,7 @@ resources:
   - influxdb/deployment.yml
   - influxdb/secret.yml
   # - k8s/ingress.yml
-  # - website/deployment.yml
+  - website/deployment.yml
 commonLabels:
   group: github-status-stats
 # configMapGenerator:
