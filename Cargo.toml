@@ -3,5 +3,6 @@ members = [
     "importer",
     "packages/github_client",
     "packages/influxdb_client",
+    "packages/stats",
     "website",
 ]

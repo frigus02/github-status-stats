@@ -103,6 +103,4 @@ systemfd --no-pid -s http::8888 -- cargo watch -x run
 - Tags:
   - `type`: `status` or `check_run`
   - `commit`: commit SHA
-- Fields:
-  - `commits_since`: unix timestamp
 - Timestamp: hook date

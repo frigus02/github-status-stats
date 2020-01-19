@@ -1,48 +1,8 @@
-use chrono::{DateTime, FixedOffset, Utc};
-use influxdb_client::{Client, FieldValue, Point, Timestamp};
-use std::collections::HashMap;
+use chrono::{DateTime, FixedOffset};
+use influxdb_client::{Client, FieldValue};
+use stats::HookType;
 
 type BoxError = Box<dyn std::error::Error>;
-
-pub enum HookType {
-    Status,
-    CheckRun,
-}
-
-pub struct Hook {
-    pub time: DateTime<Utc>,
-    pub r#type: HookType,
-    pub commit_sha: String,
-    pub commits_since: DateTime<Utc>,
-}
-
-impl Hook {
-    pub fn to_point(self) -> Point {
-        let mut tags = HashMap::new();
-        tags.insert(
-            "type",
-            match self.r#type {
-                HookType::Status => "status",
-                HookType::CheckRun => "check_run",
-            }
-            .to_string(),
-        );
-        tags.insert("commit", self.commit_sha);
-
-        let mut fields = HashMap::new();
-        fields.insert(
-            "commits_since",
-            FieldValue::Integer(self.commits_since.timestamp()),
-        );
-
-        Point {
-            measurement: "import",
-            tags,
-            fields,
-            timestamp: Timestamp::new(&self.time),
-        }
-    }
-}
 
 pub async fn get_hook_types_since(
     client: &Client<'_>,

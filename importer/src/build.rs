@@ -1,77 +1,10 @@
-use chrono::{DateTime, FixedOffset, TimeZone};
-use github_client::{
-    CheckRun, CheckRunConclusion, Client, CommitStatus, CommitStatusState, Repository,
-};
-use std::collections::HashMap;
+use chrono::{DateTime, TimeZone};
+use github_client::{CheckRun, Client, CommitStatus, CommitStatusState, Repository};
+use stats::{build_from_check_run, build_from_statuses, Build};
 
 type BoxError = Box<dyn std::error::Error>;
 
-struct Build {
-    name: String,
-    successful: bool,
-    duration_ms: i64,
-    created_at: DateTime<FixedOffset>,
-}
-
-impl Build {
-    fn from_statuses(statuses: Vec<CommitStatus>) -> Build {
-        let mut iter = statuses.into_iter();
-        let first = iter.next().unwrap();
-        let first_millis = first.created_at.timestamp_millis();
-        let created_at = first.created_at;
-        let name = first.context.clone();
-        let last = iter.last().unwrap_or(first);
-        let last_millis = last.created_at.timestamp_millis();
-        Build {
-            name,
-            successful: last.state == CommitStatusState::Success,
-            duration_ms: last_millis - first_millis,
-            created_at,
-        }
-    }
-
-    fn from_check_run(check_run: CheckRun) -> Build {
-        Build {
-            name: check_run.name,
-            successful: match check_run.conclusion {
-                Some(conclusion) => conclusion == CheckRunConclusion::Success,
-                None => false,
-            },
-            duration_ms: match check_run.completed_at {
-                Some(completed_at) => {
-                    check_run.started_at.timestamp_millis() - completed_at.timestamp_millis()
-                }
-                None => 0,
-            },
-            created_at: check_run.started_at,
-        }
-    }
-
-    fn to_point(self, commit_sha: String) -> influxdb_client::Point {
-        let mut tags = HashMap::new();
-        tags.insert("name", self.name);
-        tags.insert("commit", commit_sha);
-
-        let mut fields = HashMap::new();
-        fields.insert(
-            "successful",
-            influxdb_client::FieldValue::Boolean(self.successful),
-        );
-        fields.insert(
-            "duration_ms",
-            influxdb_client::FieldValue::Integer(self.duration_ms),
-        );
-
-        influxdb_client::Point {
-            measurement: "build",
-            tags,
-            fields,
-            timestamp: influxdb_client::Timestamp::new(&self.created_at),
-        }
-    }
-}
-
-fn statuses_to_builds(mut statuses: Vec<CommitStatus>) -> Vec<Build> {
+fn statuses_to_builds(mut statuses: Vec<CommitStatus>, commit_sha: &str) -> Vec<Build> {
     statuses.sort_by(|a, b| {
         a.created_at
             .timestamp_millis()
@@ -102,12 +35,12 @@ fn statuses_to_builds(mut statuses: Vec<CommitStatus>) -> Vec<Build> {
         )
         .into_iter()
         .rev()
-        .map(Build::from_statuses)
+        .map(|statuses| build_from_statuses(statuses, commit_sha.to_owned()))
         .collect()
 }
 
 fn check_runs_to_builds(check_runs: Vec<CheckRun>) -> Vec<Build> {
-    check_runs.into_iter().map(Build::from_check_run).collect()
+    check_runs.into_iter().map(build_from_check_run).collect()
 }
 
 pub async fn get_builds<Tz: TimeZone>(
@@ -135,9 +68,9 @@ where
         let statuses = client
             .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
             .await?;
-        let builds = statuses_to_builds(statuses);
+        let builds = statuses_to_builds(statuses, &commit.sha);
         for build in builds {
-            points.push(build.to_point(commit.sha.clone()));
+            points.push(build.to_point());
         }
 
         let check_runs = client
@@ -145,7 +78,7 @@ where
             .await?;
         let builds = check_runs_to_builds(check_runs);
         for build in builds {
-            points.push(build.to_point(commit.sha.clone()));
+            points.push(build.to_point());
         }
     }
 

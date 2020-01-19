@@ -6,8 +6,9 @@ use build::get_builds;
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use github_client::Client;
 use hook::get_hook_types_since;
-use import::{get_last_import, Import};
+use import::get_last_import;
 use once_cell::sync::Lazy;
+use stats::{influxdb_name, HookType, Import};
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -54,7 +55,7 @@ async fn main() -> Result<(), BoxError> {
         for repository in repositories {
             println!("Repository {}", repository.full_name);
 
-            let influxdb_db = format!("r{}", repository.id);
+            let influxdb_db = influxdb_name(&repository);
             let influxdb_client = influxdb_client::Client::new(
                 &*INFLUXDB_BASE_URL,
                 &influxdb_db,
@@ -66,7 +67,7 @@ async fn main() -> Result<(), BoxError> {
             if let Some(last_import) = last_import {
                 // TODO: Fetch hook commits instead and import from them instead of using a time range.
                 let hook_types = get_hook_types_since(&influxdb_client, &last_import).await?;
-                if !hook_types.is_empty() {
+                if hook_types.contains(&HookType::Status) {
                     import(&gh_inst_client, &influxdb_client, &repository, last_import).await?;
                 }
             } else {

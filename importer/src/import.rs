@@ -1,32 +1,7 @@
-use chrono::{DateTime, FixedOffset, TimeZone, Utc};
-use influxdb_client::{Client, FieldValue, Point, Timestamp};
-use std::collections::HashMap;
+use chrono::{DateTime, FixedOffset};
+use influxdb_client::{Client, FieldValue};
 
 type BoxError = Box<dyn std::error::Error>;
-
-pub struct Import<Tz: TimeZone> {
-    pub time: DateTime<Utc>,
-    pub commits_since: DateTime<Tz>,
-}
-
-impl<Tz: TimeZone> Import<Tz> {
-    pub fn to_point(self) -> Point {
-        let tags = HashMap::new();
-
-        let mut fields = HashMap::new();
-        fields.insert(
-            "commits_since",
-            FieldValue::Integer(self.commits_since.timestamp()),
-        );
-
-        Point {
-            measurement: "import",
-            tags,
-            fields,
-            timestamp: Timestamp::new(&self.time),
-        }
-    }
-}
 
 pub async fn get_last_import(
     client: &Client<'_>,

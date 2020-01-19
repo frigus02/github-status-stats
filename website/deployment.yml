@@ -31,6 +31,18 @@ spec:
                 secretKeyRef:
                   name: ghss-github
                   key: WEBHOOK_SECRET
+            - name: INFLUXDB_BASE_URL
+                  value: http://ghss-influxdb
+            - name: INFLUXDB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-influxdb
+                  key: username
+            - name: INFLUXDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-influxdb
+                  key: password
           ports:
             - containerPort: 8888
           # resources:

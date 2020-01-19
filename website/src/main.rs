@@ -5,8 +5,14 @@ use actix_web::cookie::{Cookie, SameSite};
 use actix_web::{web, App, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder};
 use bytes::Bytes;
 use listenfd::ListenFd;
+use once_cell::sync::Lazy;
+use stats::influxdb_name;
 use typed_html::dom::DOMTree;
 use typed_html::{html, text};
+
+static INFLUXDB_BASE_URL: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_BASE_URL").unwrap());
+static INFLUXDB_USERNAME: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_USERNAME").unwrap());
+static INFLUXDB_PASSWORD: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_PASSWORD").unwrap());
 
 async fn index(req: HttpRequest) -> actix_web::Result<HttpResponse> {
     let user = if let Some(token) = req.cookie("token") {
@@ -65,16 +71,60 @@ async fn setup_installed() -> impl Responder {
     HttpResponse::Ok().body("Setup: Installed")
 }
 
-async fn hooks(req: HttpRequest, body: Bytes) -> impl Responder {
-    // TODO: Handle status and check_run hooks
+async fn hooks(req: HttpRequest, body: Bytes) -> actix_web::Result<HttpResponse> {
     match github::hooks::deserialize(req, body) {
         Ok(payload) => {
             println!("Hook: {:?}", payload);
-            HttpResponse::Ok()
+            match payload {
+                github::hooks::Payload::CheckRun(check_run) => {
+                    let influxdb_db = influxdb_name(&check_run.repository);
+                    let client = influxdb_client::Client::new(
+                        &*INFLUXDB_BASE_URL,
+                        &influxdb_db,
+                        &*INFLUXDB_USERNAME,
+                        &*INFLUXDB_PASSWORD,
+                    )
+                    .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
+                    client
+                        .write(vec![
+                            stats::Hook {
+                                time: check_run.check_run.started_at.clone(),
+                                r#type: stats::HookType::CheckRun,
+                                commit_sha: check_run.check_run.head_sha.clone(),
+                            }
+                            .to_point(),
+                            stats::build_from_check_run(check_run.check_run).to_point(),
+                        ])
+                        .await
+                        .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
+                }
+                github::hooks::Payload::GitHubAppAuthorization(_auth) => {}
+                github::hooks::Payload::Ping(_ping) => {}
+                github::hooks::Payload::Status(status) => {
+                    let influxdb_db = influxdb_name(&status.repository);
+                    let client = influxdb_client::Client::new(
+                        &*INFLUXDB_BASE_URL,
+                        &influxdb_db,
+                        &*INFLUXDB_USERNAME,
+                        &*INFLUXDB_PASSWORD,
+                    )
+                    .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
+                    client
+                        .write(vec![stats::Hook {
+                            time: status.created_at,
+                            r#type: stats::HookType::Status,
+                            commit_sha: status.sha,
+                        }
+                        .to_point()])
+                        .await
+                        .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
+                }
+            };
+            Ok(HttpResponse::Ok().finish())
         }
         Err(err) => {
             println!("Error reading hook: {:?}", err);
-            HttpResponse::BadRequest()
+            Ok(HttpResponse::BadRequest().finish())
         }
     }
 }
