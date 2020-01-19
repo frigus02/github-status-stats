@@ -68,20 +68,14 @@ impl Hook {
 }
 
 #[derive(Debug)]
-pub struct Import<Tz: TimeZone> {
+pub struct Import {
     pub time: DateTime<Utc>,
-    pub commits_since: DateTime<Tz>,
 }
 
-impl<Tz: TimeZone> Import<Tz> {
+impl Import {
     pub fn to_point(self) -> Point {
         let tags = HashMap::new();
-
-        let mut fields = HashMap::new();
-        fields.insert(
-            "commits_since",
-            FieldValue::Integer(self.commits_since.timestamp()),
-        );
+        let fields = HashMap::new();
 
         Point {
             measurement: "import",

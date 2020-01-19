@@ -93,8 +93,6 @@ systemfd --no-pid -s http::8888 -- cargo watch -x run
 #### Import
 
 - Measurement: `import`
-- Fields:
-  - `commits_since`: unix timestamp
 - Timestamp: import date
 
 #### Hook

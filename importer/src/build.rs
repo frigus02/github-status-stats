@@ -43,7 +43,7 @@ fn check_runs_to_builds(check_runs: Vec<CheckRun>) -> Vec<Build> {
     check_runs.into_iter().map(build_from_check_run).collect()
 }
 
-pub async fn get_builds<Tz: TimeZone>(
+pub async fn get_builds_since<Tz: TimeZone>(
     client: &Client,
     repository: &Repository,
     commits_since: &DateTime<Tz>,
@@ -51,30 +51,41 @@ pub async fn get_builds<Tz: TimeZone>(
 where
     Tz::Offset: std::fmt::Display,
 {
-    let mut points = Vec::new();
-    let commits = client
+    let commit_shas = client
         .get_commits(
             &repository.owner.login,
             &repository.name,
             &commits_since.to_rfc3339(),
         )
-        .await?;
-    let commits_len = commits.len();
+        .await?
+        .into_iter()
+        .map(|commit| commit.sha)
+        .collect();
+    get_builds(client, repository, commit_shas).await
+}
+
+pub async fn get_builds(
+    client: &Client,
+    repository: &Repository,
+    commit_shas: Vec<String>,
+) -> Result<Vec<influxdb_client::Point>, BoxError> {
+    let mut points = Vec::new();
+    let commits_len = commit_shas.len();
     let mut commits_curr: usize = 0;
-    for commit in commits {
+    for commit_sha in commit_shas {
         commits_curr += 1;
         println!("Commit {}/{}", commits_curr, commits_len);
 
         let statuses = client
-            .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
+            .get_statuses(&repository.owner.login, &repository.name, &commit_sha)
             .await?;
-        let builds = statuses_to_builds(statuses, &commit.sha);
+        let builds = statuses_to_builds(statuses, &commit_sha);
         for build in builds {
             points.push(build.to_point());
         }
 
         let check_runs = client
-            .get_check_runs(&repository.owner.login, &repository.name, &commit.sha)
+            .get_check_runs(&repository.owner.login, &repository.name, &commit_sha)
             .await?;
         let builds = check_runs_to_builds(check_runs);
         for build in builds {

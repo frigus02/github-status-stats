@@ -2,13 +2,13 @@ mod build;
 mod hook;
 mod import;
 
-use build::get_builds;
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use build::{get_builds, get_builds_since};
+use chrono::{Duration, Utc};
 use github_client::Client;
-use hook::get_hook_types_since;
+use hook::get_status_hook_commits_since;
 use import::get_last_import;
 use once_cell::sync::Lazy;
-use stats::{influxdb_name, HookType, Import};
+use stats::{influxdb_name, Import};
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -19,26 +19,12 @@ static INFLUXDB_BASE_URL: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_BA
 static INFLUXDB_USERNAME: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_USERNAME").unwrap());
 static INFLUXDB_PASSWORD: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_PASSWORD").unwrap());
 
-async fn import<Tz: TimeZone>(
-    gh_inst_client: &Client,
+async fn import(
     influxdb_client: &influxdb_client::Client<'_>,
-    repository: &github_client::Repository,
-    commits_since: DateTime<Tz>,
-) -> Result<(), BoxError>
-where
-    Tz::Offset: std::fmt::Display,
-{
-    let now = Utc::now();
-    let mut points = get_builds(&gh_inst_client, &repository, &commits_since).await?;
-    points.push(
-        Import {
-            time: now,
-            commits_since,
-        }
-        .to_point(),
-    );
-    influxdb_client.write(points).await?;
-    Ok(())
+    mut points: Vec<influxdb_client::Point>,
+) -> Result<(), BoxError> {
+    points.push(Import { time: Utc::now() }.to_point());
+    influxdb_client.write(points).await
 }
 
 #[tokio::main]
@@ -65,22 +51,23 @@ async fn main() -> Result<(), BoxError> {
 
             let last_import = get_last_import(&influxdb_client).await?;
             if let Some(last_import) = last_import {
-                // TODO: Fetch hook commits instead and import from them instead of using a time range.
-                let hook_types = get_hook_types_since(&influxdb_client, &last_import).await?;
-                if hook_types.contains(&HookType::Status) {
-                    import(&gh_inst_client, &influxdb_client, &repository, last_import).await?;
+                let commit_shas =
+                    get_status_hook_commits_since(&influxdb_client, &last_import).await?;
+                if !commit_shas.is_empty() {
+                    let points = get_builds(&gh_inst_client, &repository, commit_shas).await?;
+                    import(&influxdb_client, points).await?;
                 }
             } else {
                 influxdb_client
                     .query(&format!("CREATE DATABASE {}", influxdb_db))
                     .await?;
-                import(
+                let points = get_builds_since(
                     &gh_inst_client,
-                    &influxdb_client,
                     &repository,
-                    Utc::now() - Duration::weeks(1),
+                    &(Utc::now() - Duration::weeks(1)),
                 )
                 .await?;
+                import(&influxdb_client, points).await?;
             }
         }
     }

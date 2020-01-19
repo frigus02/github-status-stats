@@ -1,16 +1,15 @@
 use chrono::{DateTime, FixedOffset};
 use influxdb_client::{Client, FieldValue};
-use stats::HookType;
 
 type BoxError = Box<dyn std::error::Error>;
 
-pub async fn get_hook_types_since(
+pub async fn get_status_hook_commits_since(
     client: &Client<'_>,
     since: &DateTime<FixedOffset>,
-) -> Result<Vec<HookType>, BoxError> {
+) -> Result<Vec<String>, BoxError> {
     Ok(client
         .query(&format!(
-            "SELECT DISTINCT(type) FROM hook WHERE time >= \"{}\"",
+            "SELECT DISTINCT(commit) FROM hook WHERE type = \"status\" AND time >= \"{}\"",
             since.to_rfc3339()
         ))
         .await?
@@ -23,11 +22,7 @@ pub async fn get_hook_types_since(
         .into_iter()
         .filter_map(|mut row| row.pop())
         .filter_map(|value| match value {
-            FieldValue::String(value) => match value.as_str() {
-                "status" => Some(HookType::Status),
-                "check_run" => Some(HookType::CheckRun),
-                _ => None,
-            },
+            FieldValue::String(value) => Some(value),
             _ => None,
         })
         .collect())
