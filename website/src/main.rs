@@ -1,30 +1,37 @@
+#[macro_use]
+extern crate lazy_static;
+
 mod github;
-mod web_utils;
 
-use actix_web::cookie::{Cookie, SameSite};
-use actix_web::{web, App, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder};
 use bytes::Bytes;
-use listenfd::ListenFd;
-use log::info;
-use once_cell::sync::Lazy;
+use log::{error, info};
+use secstr::SecUtf8;
 use stats::influxdb_name;
-use typed_html::dom::DOMTree;
-use typed_html::{html, text};
+use std::convert::Infallible;
+use typed_html::{dom::DOMTree, html, text};
+use warp::{http::StatusCode, http::Uri, Filter};
 
-static INFLUXDB_BASE_URL: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_BASE_URL").unwrap());
-static INFLUXDB_USERNAME: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_USERNAME").unwrap());
-static INFLUXDB_PASSWORD: Lazy<String> = Lazy::new(|| std::env::var("INFLUXDB_PASSWORD").unwrap());
+lazy_static! {
+    static ref INFLUXDB_BASE_URL: String = std::env::var("INFLUXDB_BASE_URL").unwrap();
+    static ref INFLUXDB_USERNAME: String = std::env::var("INFLUXDB_USERNAME").unwrap();
+    static ref INFLUXDB_PASSWORD: SecUtf8 =
+        SecUtf8::from(std::env::var("INFLUXDB_PASSWORD").unwrap());
+}
 
-async fn index(req: HttpRequest) -> actix_web::Result<HttpResponse> {
-    let user = if let Some(token) = req.cookie("token") {
-        let client = github_client::Client::new(token.value())
-            .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
-        Some(
-            client
-                .get_user()
-                .await
-                .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?,
-        )
+#[derive(Debug)]
+struct HttpError;
+
+impl warp::reject::Reject for HttpError {}
+
+fn reject(err: Box<dyn std::error::Error>) -> warp::Rejection {
+    error!("route error {}", err);
+    warp::reject::custom(HttpError)
+}
+
+async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Rejection> {
+    let user = if let Some(token) = token {
+        let client = github_client::Client::new(&token).map_err(reject)?;
+        Some(client.get_user().await.map_err(reject)?)
     } else {
         None
     };
@@ -43,111 +50,111 @@ async fn index(req: HttpRequest) -> actix_web::Result<HttpResponse> {
             </body>
         </html>
     );
-    Ok(HttpResponse::Ok()
-        .content_type("text/html")
-        .body(doc.to_string()))
+    Ok(warp::reply::html(doc.to_string()))
 }
 
-async fn setup_authorized(
-    info: web::Query<github::auth::AuthCode>,
-) -> actix_web::Result<HttpResponse> {
-    let token = github::auth::exchange_code(info.into_inner())
-        .await
-        .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
+async fn setup_authorized_route(
+    info: github::auth::AuthCode,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let token = github::auth::exchange_code(info).await.map_err(reject)?;
 
-    Ok(HttpResponse::TemporaryRedirect()
-        .header("Location", "/")
-        .cookie(
-            Cookie::build("token", token.access_token)
-                .path("/")
-                .secure(true)
-                .http_only(true)
-                .same_site(SameSite::Strict)
-                .finish(),
-        )
-        .finish())
+    Ok(warp::reply::with_header(
+        warp::redirect::temporary(Uri::from_static("/")),
+        "set-cookie",
+        format!(
+            "token={}; secure; httponly; samesite=strict; path=/",
+            token.access_token
+        ),
+    ))
 }
 
-async fn setup_installed() -> impl Responder {
-    HttpResponse::Ok().body("Setup: Installed")
+async fn setup_installed_route() -> Result<impl warp::Reply, Infallible> {
+    Ok("Setup: Installed")
 }
 
-async fn hooks(req: HttpRequest, body: Bytes) -> actix_web::Result<HttpResponse> {
-    match github::hooks::deserialize(req, body) {
-        Ok(payload) => {
-            info!("Hook: {:?}", payload);
-            match payload {
-                github::hooks::Payload::CheckRun(check_run) => {
-                    let influxdb_db = influxdb_name(&check_run.repository);
-                    let client = influxdb_client::Client::new(
-                        &*INFLUXDB_BASE_URL,
-                        &influxdb_db,
-                        &*INFLUXDB_USERNAME,
-                        &*INFLUXDB_PASSWORD,
-                    )
-                    .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
-                    client
-                        .write(vec![
-                            stats::Hook {
-                                time: check_run.check_run.started_at,
-                                r#type: stats::HookType::CheckRun,
-                                commit_sha: check_run.check_run.head_sha.clone(),
-                            }
-                            .into_point(),
-                            stats::build_from_check_run(check_run.check_run).into_point(),
-                        ])
-                        .await
-                        .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
-                }
-                github::hooks::Payload::GitHubAppAuthorization(_auth) => {}
-                github::hooks::Payload::Ping(_ping) => {}
-                github::hooks::Payload::Status(status) => {
-                    let influxdb_db = influxdb_name(&status.repository);
-                    let client = influxdb_client::Client::new(
-                        &*INFLUXDB_BASE_URL,
-                        &influxdb_db,
-                        &*INFLUXDB_USERNAME,
-                        &*INFLUXDB_PASSWORD,
-                    )
-                    .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
-                    client
-                        .write(vec![stats::Hook {
-                            time: status.created_at,
-                            r#type: stats::HookType::Status,
-                            commit_sha: status.sha,
-                        }
-                        .into_point()])
-                        .await
-                        .map_err(|err| actix_web::error::ErrorBadRequest(err.to_string()))?;
-                }
-            };
-            Ok(HttpResponse::Ok().finish())
+async fn hooks_route(
+    signature: String,
+    event: String,
+    body: Bytes,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let payload = github::hooks::deserialize(signature, event, body).map_err(reject)?;
+
+    info!("Hook: {:?}", payload);
+    match payload {
+        github::hooks::Payload::CheckRun(check_run) => {
+            let influxdb_db = influxdb_name(&check_run.repository);
+            let client = influxdb_client::Client::new(
+                &*INFLUXDB_BASE_URL,
+                &influxdb_db,
+                &*INFLUXDB_USERNAME,
+                &*INFLUXDB_PASSWORD.unsecure(),
+            )
+            .map_err(reject)?;
+            client
+                .write(vec![
+                    stats::Hook {
+                        time: check_run.check_run.started_at,
+                        r#type: stats::HookType::CheckRun,
+                        commit_sha: check_run.check_run.head_sha.clone(),
+                    }
+                    .into_point(),
+                    stats::build_from_check_run(check_run.check_run).into_point(),
+                ])
+                .await
+                .map_err(reject)?;
         }
-        Err(err) => {
-            info!("Error reading hook: {:?}", err);
-            Ok(HttpResponse::BadRequest().finish())
+        github::hooks::Payload::GitHubAppAuthorization(_auth) => {}
+        github::hooks::Payload::Ping(_ping) => {}
+        github::hooks::Payload::Status(status) => {
+            let influxdb_db = influxdb_name(&status.repository);
+            let client = influxdb_client::Client::new(
+                &*INFLUXDB_BASE_URL,
+                &influxdb_db,
+                &*INFLUXDB_USERNAME,
+                &*INFLUXDB_PASSWORD.unsecure(),
+            )
+            .map_err(reject)?;
+            client
+                .write(vec![stats::Hook {
+                    time: status.created_at,
+                    r#type: stats::HookType::Status,
+                    commit_sha: status.sha,
+                }
+                .into_point()])
+                .await
+                .map_err(reject)?;
         }
-    }
-}
-
-#[actix_rt::main]
-async fn main() -> std::io::Result<()> {
-    env_logger::init();
-
-    let mut listenfd = ListenFd::from_env();
-    let mut server = HttpServer::new(|| {
-        App::new()
-            .route("/", web::get().to(index))
-            .route("/setup/authorized", web::get().to(setup_authorized))
-            .route("/setup/installed", web::get().to(setup_installed))
-            .route("/hooks", web::post().to(hooks))
-    });
-
-    server = if let Some(l) = listenfd.take_tcp_listener(0).unwrap() {
-        server.listen(l)?
-    } else {
-        server.bind("0.0.0.0:8888")?
     };
 
-    server.run().await
+    Ok(StatusCode::OK)
+}
+
+#[tokio::main]
+async fn main() {
+    env_logger::init();
+
+    let index = warp::get()
+        .and(warp::cookie::optional("token"))
+        .and_then(index_route);
+    let setup_authorized = warp::get()
+        .and(warp::path!("setup" / "authorized"))
+        .and(warp::query::<github::auth::AuthCode>())
+        .and_then(setup_authorized_route);
+    let setup_installed = warp::get()
+        .and(warp::path!("setup" / "installed"))
+        .and_then(setup_installed_route);
+    let hooks = warp::post()
+        .and(warp::path!("hooks"))
+        .and(warp::cookie("X-Hub-Signature"))
+        .and(warp::cookie("X-GitHub-Event"))
+        .and(warp::body::bytes())
+        .and_then(hooks_route);
+
+    let routes = index
+        .or(setup_authorized)
+        .or(setup_installed)
+        .or(hooks)
+        .with(warp::log("website"));
+
+    warp::serve(routes).run(([0, 0, 0, 0], 8888)).await
 }

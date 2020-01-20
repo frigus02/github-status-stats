@@ -1,24 +1,22 @@
-use once_cell::sync::Lazy;
 use reqwest::{Client, Url};
-use secstr::SecStr;
+use secstr::SecUtf8;
 use serde::Deserialize;
 use std::error::Error;
 
 const REDIRECT_URI: &str = "https://d2921223.ngrok.io/setup/authorized";
-static CLIENT_ID: Lazy<String> = Lazy::new(|| std::env::var("GH_CLIENT_ID").unwrap());
-static CLIENT_SECRET: Lazy<SecStr> =
-    Lazy::new(|| SecStr::from(std::env::var("GH_CLIENT_SECRET").unwrap()));
 
-pub static LOGIN_URL: Lazy<Url> = Lazy::new(|| {
-    Url::parse_with_params(
+lazy_static! {
+    static ref CLIENT_ID: String = std::env::var("GH_CLIENT_ID").unwrap();
+    static ref CLIENT_SECRET: SecUtf8 = SecUtf8::from(std::env::var("GH_CLIENT_SECRET").unwrap());
+    pub static ref LOGIN_URL: Url = Url::parse_with_params(
         "https://github.com/login/oauth/authorize",
         &[
             ("client_id", &*CLIENT_ID.as_str()),
             ("redirect_uri", REDIRECT_URI),
         ],
     )
-    .unwrap()
-});
+    .unwrap();
+}
 
 #[derive(Deserialize)]
 pub struct AuthCode {
@@ -40,10 +38,7 @@ pub async fn exchange_code(code: AuthCode) -> Result<AuthToken, Box<dyn Error>> 
         .header(reqwest::header::ACCEPT, "application/json")
         .form(&[
             ("client_id", &*CLIENT_ID.as_str()),
-            (
-                "client_secret",
-                std::str::from_utf8(&*CLIENT_SECRET.unsecure())?,
-            ),
+            ("client_secret", &*CLIENT_SECRET.unsecure()),
             ("code", code.code.as_str()),
             ("redirect_uri", REDIRECT_URI),
             ("state", code.state.as_ref().map_or("", |x| x.as_str())),

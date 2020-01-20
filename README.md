@@ -66,7 +66,7 @@ Configuration works through environment variables. Create a `.env` file with the
 Install helpers
 
 ```
-cargo install systemfd cargo-watch
+cargo install cargo-watch
 ```
 
 Then start
@@ -74,7 +74,7 @@ Then start
 ```
 ngrok http 8888 &
 cd website/
-systemfd --no-pid -s http::8888 -- cargo watch -x run
+cargo watch -x run
 ```
 
 ### Data model
