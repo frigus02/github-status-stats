@@ -1,17 +1,28 @@
 #[macro_use]
 extern crate lazy_static;
 
-mod github;
+mod github_hooks;
 
 use bytes::Bytes;
 use log::{error, info};
-use secstr::SecUtf8;
+use secstr::{SecStr, SecUtf8};
 use stats::influxdb_name;
 use std::convert::Infallible;
 use typed_html::{dom::DOMTree, html, text};
 use warp::{http::StatusCode, http::Uri, Filter};
 
+const REDIRECT_URI: &str = "https://d2921223.ngrok.io/setup/authorized";
+
 lazy_static! {
+    static ref GH_CLIENT_ID: String = std::env::var("GH_CLIENT_ID").unwrap();
+    static ref GH_CLIENT_SECRET: SecUtf8 =
+        SecUtf8::from(std::env::var("GH_CLIENT_SECRET").unwrap());
+    static ref GH_LOGIN_URL: String =
+        github_client::oauth::login_url(&*GH_CLIENT_ID, &REDIRECT_URI)
+            .unwrap()
+            .into_string();
+    static ref GH_WEBHOOK_SECRET: SecStr =
+        SecStr::from(std::env::var("GH_WEBHOOK_SECRET").unwrap());
     static ref INFLUXDB_BASE_URL: String = std::env::var("INFLUXDB_BASE_URL").unwrap();
     static ref INFLUXDB_USERNAME: String = std::env::var("INFLUXDB_USERNAME").unwrap();
     static ref INFLUXDB_PASSWORD: SecUtf8 =
@@ -45,7 +56,7 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
             { if let Some(user) = user {
                 html!(<div><pre>{text!("{:?}", user)}</pre></div>)
             } else {
-                html!(<div><a href={github::auth::LOGIN_URL.as_str()}>"Login"</a></div>)
+                html!(<div><a href={&*GH_LOGIN_URL}>"Login"</a></div>)
             } }
             </body>
         </html>
@@ -54,9 +65,16 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
 }
 
 async fn setup_authorized_route(
-    info: github::auth::AuthCode,
+    info: github_client::oauth::AuthCodeQuery,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    let token = github::auth::exchange_code(info).await.map_err(reject)?;
+    let token = github_client::oauth::exchange_code(
+        &*GH_CLIENT_ID,
+        &*GH_CLIENT_SECRET.unsecure(),
+        REDIRECT_URI,
+        info,
+    )
+    .await
+    .map_err(reject)?;
 
     Ok(warp::reply::with_header(
         warp::redirect::temporary(Uri::from_static("/")),
@@ -77,11 +95,12 @@ async fn hooks_route(
     event: String,
     body: Bytes,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    let payload = github::hooks::deserialize(signature, event, body).map_err(reject)?;
+    let payload = github_hooks::deserialize(signature, event, body, &*GH_WEBHOOK_SECRET.unsecure())
+        .map_err(reject)?;
 
     info!("Hook: {:?}", payload);
     match payload {
-        github::hooks::Payload::CheckRun(check_run) => {
+        github_hooks::Payload::CheckRun(check_run) => {
             let influxdb_db = influxdb_name(&check_run.repository);
             let client = influxdb_client::Client::new(
                 &*INFLUXDB_BASE_URL,
@@ -103,9 +122,9 @@ async fn hooks_route(
                 .await
                 .map_err(reject)?;
         }
-        github::hooks::Payload::GitHubAppAuthorization(_auth) => {}
-        github::hooks::Payload::Ping(_ping) => {}
-        github::hooks::Payload::Status(status) => {
+        github_hooks::Payload::GitHubAppAuthorization(_auth) => {}
+        github_hooks::Payload::Ping(_ping) => {}
+        github_hooks::Payload::Status(status) => {
             let influxdb_db = influxdb_name(&status.repository);
             let client = influxdb_client::Client::new(
                 &*INFLUXDB_BASE_URL,
@@ -136,13 +155,16 @@ async fn main() {
     let index = warp::get()
         .and(warp::cookie::optional("token"))
         .and_then(index_route);
+
     let setup_authorized = warp::get()
         .and(warp::path!("setup" / "authorized"))
-        .and(warp::query::<github::auth::AuthCode>())
+        .and(warp::query::<github_client::oauth::AuthCodeQuery>())
         .and_then(setup_authorized_route);
+
     let setup_installed = warp::get()
         .and(warp::path!("setup" / "installed"))
         .and_then(setup_installed_route);
+
     let hooks = warp::post()
         .and(warp::path!("hooks"))
         .and(warp::cookie("X-Hub-Signature"))
