@@ -159,6 +159,12 @@ pub struct Installation {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct InstallationList {
+    pub total_count: i32,
+    pub installations: Vec<Installation>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InstallationAccessToken {
     pub token: String,
     pub expires_at: DateTime<FixedOffset>,
@@ -245,7 +251,7 @@ pub struct License {
     pub key: String,
     pub name: String,
     pub spdx_id: String,
-    pub url: String,
+    pub url: Option<String>,
     pub node_id: String,
 }
 
@@ -308,7 +314,7 @@ pub struct Repository {
     pub size: i32,
     pub stargazers_count: i32,
     pub watchers_count: i32,
-    pub language: String,
+    pub language: Option<String>,
     pub has_issues: bool,
     pub has_projects: bool,
     pub has_downloads: bool,
@@ -330,7 +336,7 @@ pub struct Repository {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RepositoryList {
     pub total_count: i32,
-    pub repository_selection: String,
+    pub repository_selection: Option<String>,
     pub repositories: Vec<Repository>,
 }
 

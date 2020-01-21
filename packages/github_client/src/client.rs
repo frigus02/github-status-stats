@@ -76,6 +76,37 @@ impl Client {
         Ok(user)
     }
 
+    pub async fn get_user_installations(&self) -> Result<Vec<Installation>, BoxError> {
+        let raw_url = format!("{base}/user/installations", base = BASE_URL,);
+        let url = reqwest::Url::parse(&raw_url)?;
+        let lists: Vec<InstallationList> =
+            call::get_paged_preview(&self.client, url, call::MACHINE_MAN_PREVIEW).await?;
+        let installations = lists
+            .into_iter()
+            .flat_map(|list| list.installations)
+            .collect();
+        Ok(installations)
+    }
+
+    pub async fn get_user_installation_repositories(
+        &self,
+        installation_id: i32,
+    ) -> Result<Vec<Repository>, BoxError> {
+        let raw_url = format!(
+            "{base}/user/installations/{installation_id}/repositories",
+            base = BASE_URL,
+            installation_id = installation_id
+        );
+        let url = reqwest::Url::parse(&raw_url)?;
+        let lists: Vec<RepositoryList> =
+            call::get_paged_preview(&self.client, url, call::MACHINE_MAN_PREVIEW).await?;
+        let repositories = lists
+            .into_iter()
+            .flat_map(|list| list.repositories)
+            .collect();
+        Ok(repositories)
+    }
+
     pub async fn get_commits(
         &self,
         owner: &str,
