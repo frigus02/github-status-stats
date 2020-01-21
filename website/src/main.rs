@@ -150,10 +150,6 @@ async fn setup_authorized_route(
     ))
 }
 
-async fn setup_installed_route() -> Result<impl warp::Reply, Infallible> {
-    Ok("Setup: Installed")
-}
-
 async fn hooks_route(
     signature: String,
     event: String,
@@ -233,10 +229,6 @@ async fn main() {
         .and(warp::query::<github_client::oauth::AuthCodeQuery>())
         .and_then(setup_authorized_route);
 
-    let setup_installed = warp::get()
-        .and(warp::path!("setup" / "installed"))
-        .and_then(setup_installed_route);
-
     let hooks = warp::post()
         .and(warp::path!("hooks"))
         .and(warp::cookie("X-Hub-Signature"))
@@ -247,7 +239,6 @@ async fn main() {
     let routes = index
         .or(dashboard)
         .or(setup_authorized)
-        .or(setup_installed)
         .or(hooks)
         .with(warp::log("website"));
 
