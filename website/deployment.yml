@@ -46,6 +46,8 @@ spec:
                 secretKeyRef:
                   name: ghss-influxdb
                   key: password
+            - name: GRAFANA_BASE_URL
+              value: http://ghss-grafana
           ports:
             - containerPort: 8888
           # resources:

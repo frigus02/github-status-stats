@@ -2,10 +2,12 @@
 extern crate lazy_static;
 
 mod github_hooks;
+mod reverse_proxy;
 
 use bytes::Bytes;
 use handlebars::Handlebars;
 use log::{error, info};
+use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
 use serde::Serialize;
 use stats::influxdb_name;
@@ -28,6 +30,8 @@ lazy_static! {
     static ref INFLUXDB_USERNAME: String = std::env::var("INFLUXDB_USERNAME").unwrap();
     static ref INFLUXDB_PASSWORD: SecUtf8 =
         SecUtf8::from(std::env::var("INFLUXDB_PASSWORD").unwrap());
+    static ref GRAFANA_BASE_URL: String = std::env::var("GRAFANA_BASE_URL").unwrap();
+    static ref GRAFANA_PROXY: ReverseProxy = ReverseProxy::new(&*GRAFANA_BASE_URL).unwrap();
 }
 
 #[derive(Debug)]
@@ -112,20 +116,23 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
 }
 
 async fn dashboard_route(
-    repo_id: i32,
+    _repo_id: i32,
     method: http::Method,
-    path: warp::filters::path::Tail,
+    path: warp::filters::path::FullPath,
     headers: http::HeaderMap,
-    body: impl warp::Stream<Item = Result<impl warp::Buf, warp::Error>>,
+    body: bytes::Bytes,
 ) -> Result<impl warp::Reply, Infallible> {
     let mut req = http::Request::builder()
         .method(method)
         .uri(path.as_str())
-        .body(body)
+        .body(warp::hyper::body::Body::from(body))
         .expect("request builder");
     *req.headers_mut() = headers;
 
-    Ok(format!("Repo: {}", repo_id))
+    let res = GRAFANA_PROXY.call(req).await;
+
+    // Ok(format!("Repo: {}", repo_id))
+    Ok(res)
 }
 
 async fn setup_authorized_route(
@@ -219,9 +226,9 @@ async fn main() {
 
     let dashboard = warp::path!("d" / i32 / ..)
         .and(warp::method())
-        .and(warp::path::tail())
+        .and(warp::path::full())
         .and(warp::header::headers_cloned())
-        .and(warp::body::stream())
+        .and(warp::body::bytes())
         .and_then(dashboard_route);
 
     let setup_authorized = warp::get()
