@@ -43,6 +43,18 @@ fn create_proxied_request(
     new_authority: &Authority,
 ) -> Request<Body> {
     *request.headers_mut() = filter_headers_by_blacklist(request.headers());
+    request.headers_mut().insert(
+        HeaderName::from_static("x-webauth-user"),
+        "jan".parse().unwrap(),
+    );
+    request.headers_mut().insert(
+        HeaderName::from_static("x-webauth-name"),
+        "Jan".parse().unwrap(),
+    );
+    request.headers_mut().insert(
+        HeaderName::from_static("x-webauth-email"),
+        "jan@kuehle.me".parse().unwrap(),
+    );
     *request.uri_mut() = Uri::builder()
         .scheme(new_scheme.as_str())
         .authority(new_authority.as_str())

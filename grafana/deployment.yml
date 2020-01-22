@@ -16,16 +16,16 @@ spec:
         - name: grafana
           image: grafana/grafana
           env:
-            - name: GF_AUTH_ANONYMOUS_ENABLED
-              value: "true"
-            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
-              value: Admin
-            - name: GF_SERVER_ROOT_URL
-              value: http://localhost:3000
-            - name: GF_SERVER_ENABLE_GZIP
-              value: "true"
-            - name: GF_ALERTING_ENABLED
-              value: "false"
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-grafana
+                  key: username
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-grafana
+                  key: password
           ports:
             - containerPort: 3000
           resources:
@@ -40,22 +40,13 @@ spec:
               path: /login
               port: 3000
           volumeMounts:
-            - name: provisioning-datasources
-              mountPath: /etc/grafana/provisioning/datasources
-            - name: provisioning-dashboards
-              mountPath: /etc/grafana/provisioning/dashboards
-            - name: dashboards
-              mountPath: /var/lib/grafana/dashboards
+            - name: config
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
       volumes:
-        - name: provisioning-datasources
+        - name: config
           configMap:
-            name: ghss-grafana-provisioning-datasources
-        - name: provisioning-dashboards
-          configMap:
-            name: ghss-grafana-provisioning-dashboards
-        - name: dashboards
-          configMap:
-            name: ghss-grafana-dashboards
+            name: ghss-grafana
 ---
 apiVersion: v1
 kind: Service

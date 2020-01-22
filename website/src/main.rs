@@ -135,6 +135,22 @@ async fn dashboard_route(
     Ok(res)
 }
 
+async fn dashboard_passthrough_route(
+    method: http::Method,
+    path: warp::filters::path::FullPath,
+    headers: http::HeaderMap,
+    body: bytes::Bytes,
+) -> Result<impl warp::Reply, Infallible> {
+    let mut req = http::Request::builder()
+        .method(method)
+        .uri(path.as_str())
+        .body(warp::hyper::body::Body::from(body))
+        .expect("request builder");
+    *req.headers_mut() = headers;
+    let res = GRAFANA_PROXY.call(req).await;
+    Ok(res)
+}
+
 async fn setup_authorized_route(
     info: github_client::oauth::AuthCodeQuery,
 ) -> Result<impl warp::Reply, warp::Rejection> {
@@ -224,12 +240,19 @@ async fn main() {
         .and(warp::cookie::optional("token"))
         .and_then(index_route);
 
-    let dashboard = warp::path!("d" / i32 / ..)
-        .and(warp::method())
+    let request_data = warp::method()
         .and(warp::path::full())
         .and(warp::header::headers_cloned())
-        .and(warp::body::bytes())
+        .and(warp::body::bytes());
+    let dashboard = warp::path!("d" / i32 / ..)
+        .and(request_data)
         .and_then(dashboard_route);
+    let dashboard_api = warp::path!("api" / ..)
+        .and(request_data)
+        .and_then(dashboard_passthrough_route);
+    let dashboard_public = warp::path!("public" / ..)
+        .and(request_data)
+        .and_then(dashboard_passthrough_route);
 
     let setup_authorized = warp::get()
         .and(warp::path!("setup" / "authorized"))
@@ -245,6 +268,8 @@ async fn main() {
 
     let routes = index
         .or(dashboard)
+        .or(dashboard_api)
+        .or(dashboard_public)
         .or(setup_authorized)
         .or(hooks)
         .with(warp::log("website"));

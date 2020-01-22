@@ -24,3 +24,10 @@ spec:
             backend:
               serviceName: ghss-influxdb
               servicePort: 80
+    - host: kubernetes.docker.internal
+      http:
+        paths:
+          - path: /grafana
+            backend:
+              serviceName: ghss-grafana
+              servicePort: 80
