@@ -11,7 +11,6 @@ use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
 use serde::Serialize;
 use stats::influxdb_name;
-use std::convert::Infallible;
 use warp::{http, http::StatusCode, http::Uri, Filter};
 
 const REDIRECT_URI: &str = "https://294c6b27.ngrok.io/setup/authorized";
@@ -115,13 +114,12 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
     Ok(warp::reply::html(render))
 }
 
-async fn dashboard_route(
-    _repo_id: i32,
+async fn dashboard_login_route(
     method: http::Method,
     path: warp::filters::path::FullPath,
     headers: http::HeaderMap,
     body: bytes::Bytes,
-) -> Result<impl warp::Reply, Infallible> {
+) -> Result<impl warp::Reply, warp::Rejection> {
     let mut req = http::Request::builder()
         .method(method)
         .uri(path.as_str())
@@ -129,25 +127,32 @@ async fn dashboard_route(
         .expect("request builder");
     *req.headers_mut() = headers;
 
-    let res = GRAFANA_PROXY.call(req).await;
+    let auth = reverse_proxy::Auth {
+        login: "admin".to_owned(),
+        name: "Admin".to_owned(),
+        email: "admin@example.com".to_owned(),
+    };
 
-    // Ok(format!("Repo: {}", repo_id))
+    let res = GRAFANA_PROXY.call(req, Some(auth)).await.map_err(reject)?;
+
     Ok(res)
 }
 
-async fn dashboard_passthrough_route(
+async fn dashboard_route(
     method: http::Method,
     path: warp::filters::path::FullPath,
     headers: http::HeaderMap,
     body: bytes::Bytes,
-) -> Result<impl warp::Reply, Infallible> {
+) -> Result<impl warp::Reply, warp::Rejection> {
     let mut req = http::Request::builder()
         .method(method)
         .uri(path.as_str())
         .body(warp::hyper::body::Body::from(body))
         .expect("request builder");
     *req.headers_mut() = headers;
-    let res = GRAFANA_PROXY.call(req).await;
+
+    let res = GRAFANA_PROXY.call(req, None).await.map_err(reject)?;
+
     Ok(res)
 }
 
@@ -244,15 +249,12 @@ async fn main() {
         .and(warp::path::full())
         .and(warp::header::headers_cloned())
         .and(warp::body::bytes());
-    let dashboard = warp::path!("d" / i32 / ..)
+    let dashboard_login = warp::path!("_" / "login" / ..)
+        .and(request_data)
+        .and_then(dashboard_login_route);
+    let dashboard = warp::path!("_" / ..)
         .and(request_data)
         .and_then(dashboard_route);
-    let dashboard_api = warp::path!("api" / ..)
-        .and(request_data)
-        .and_then(dashboard_passthrough_route);
-    let dashboard_public = warp::path!("public" / ..)
-        .and(request_data)
-        .and_then(dashboard_passthrough_route);
 
     let setup_authorized = warp::get()
         .and(warp::path!("setup" / "authorized"))
@@ -267,9 +269,8 @@ async fn main() {
         .and_then(hooks_route);
 
     let routes = index
+        .or(dashboard_login)
         .or(dashboard)
-        .or(dashboard_api)
-        .or(dashboard_public)
         .or(setup_authorized)
         .or(hooks)
         .with(warp::log("website"));

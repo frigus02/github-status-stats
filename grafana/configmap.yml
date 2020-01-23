@@ -6,9 +6,8 @@ data:
   grafana.ini: |-
     [server]
     #root_url = https://github-status-stats.kuehle.me/
-    #root_url = http://kubernetes.docker.internal/grafana/
-    root_url = http://kubernetes.docker.internal/
-    #serve_from_sub_path = true
+    root_url = http://kubernetes.docker.internal/_/
+    serve_from_sub_path = true
     enable_gzip = true
 
     [security]
@@ -17,11 +16,6 @@ data:
     disable_gravatar = true
     x_content_type_options = true
     x_xss_protection = true
-
-    [users]
-    allow_sign_up = false
-    auto_assign_org = true
-    auto_assign_org_role = Viewer
 
     [auth]
     login_cookie_name = grafana
@@ -32,13 +26,13 @@ data:
     disable_signout_menu = true
 
     [auth.basic]
-    #enabled = false
+    enabled = false
 
     [auth.proxy]
     enabled = true
     header_name = X-WEBAUTH-USER
     headers = Name:X-WEBAUTH-NAME Email:X-WEBAUTH-EMAIL
-    #enable_login_token = true
+    enable_login_token = true
 
     [analytics]
     check_for_updates = false

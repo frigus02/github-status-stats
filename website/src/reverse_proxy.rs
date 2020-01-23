@@ -6,6 +6,9 @@ use warp::hyper::{client::HttpConnector, Body, Client, Request, Response, Status
 type BoxError = Box<dyn std::error::Error>;
 
 lazy_static! {
+    static ref WEBAUTH_USER_HEADER: HeaderName = HeaderName::from_static("x-webauth-user");
+    static ref WEBAUTH_NAME_HEADER: HeaderName = HeaderName::from_static("x-webauth-name");
+    static ref WEBAUTH_EMAIL_HEADER: HeaderName = HeaderName::from_static("x-webauth-email");
     static ref HEADER_BLACKLIST: Vec<HeaderName> = vec![
         // Hop-by-hop
         HeaderName::from_static("connection"),
@@ -16,6 +19,10 @@ lazy_static! {
         HeaderName::from_static("trailers"),
         HeaderName::from_static("transfer-encoding"),
         HeaderName::from_static("upgrade"),
+        // Auth proxy
+        WEBAUTH_USER_HEADER.clone(),
+        WEBAUTH_NAME_HEADER.clone(),
+        WEBAUTH_EMAIL_HEADER.clone(),
         // Others
         HeaderName::from_static("host"),
     ];
@@ -43,18 +50,6 @@ fn create_proxied_request(
     new_authority: &Authority,
 ) -> Request<Body> {
     *request.headers_mut() = filter_headers_by_blacklist(request.headers());
-    request.headers_mut().insert(
-        HeaderName::from_static("x-webauth-user"),
-        "jan".parse().unwrap(),
-    );
-    request.headers_mut().insert(
-        HeaderName::from_static("x-webauth-name"),
-        "Jan".parse().unwrap(),
-    );
-    request.headers_mut().insert(
-        HeaderName::from_static("x-webauth-email"),
-        "jan@kuehle.me".parse().unwrap(),
-    );
     *request.uri_mut() = Uri::builder()
         .scheme(new_scheme.as_str())
         .authority(new_authority.as_str())
@@ -64,10 +59,24 @@ fn create_proxied_request(
     request
 }
 
+fn add_request_authentication(request: &mut Request<Body>, auth: Auth) -> Result<(), BoxError> {
+    let headers = request.headers_mut();
+    headers.insert(&*WEBAUTH_USER_HEADER, auth.login.parse()?);
+    headers.insert(&*WEBAUTH_NAME_HEADER, auth.name.parse()?);
+    headers.insert(&*WEBAUTH_EMAIL_HEADER, auth.email.parse()?);
+    Ok(())
+}
+
 pub struct ReverseProxy {
     client: Client<HttpConnector, Body>,
     scheme: Scheme,
     authority: Authority,
+}
+
+pub struct Auth {
+    pub login: String,
+    pub name: String,
+    pub email: String,
 }
 
 impl ReverseProxy {
@@ -80,18 +89,25 @@ impl ReverseProxy {
         })
     }
 
-    pub async fn call(&self, request: Request<Body>) -> Response<Body> {
-        let proxied_request = create_proxied_request(request, &self.scheme, &self.authority);
+    pub async fn call(
+        &self,
+        request: Request<Body>,
+        auth: Option<Auth>,
+    ) -> Result<Response<Body>, BoxError> {
+        let mut proxied_request = create_proxied_request(request, &self.scheme, &self.authority);
+        if let Some(auth) = auth {
+            add_request_authentication(&mut proxied_request, auth)?;
+        }
+
         debug!("reverse proxy request: {:?}", proxied_request);
         let response = self.client.request(proxied_request).await;
         match response {
-            Ok(response) => create_proxied_response(response),
+            Ok(response) => Ok(create_proxied_response(response)),
             Err(error) => {
                 error!("reverse proxy error: {}", error);
-                Response::builder()
+                Ok(Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::empty())
-                    .unwrap()
+                    .body(Body::empty())?)
             }
         }
     }
