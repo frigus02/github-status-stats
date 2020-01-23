@@ -10,6 +10,7 @@ edition = "2018"
 bytes = "0.5.3"
 env_logger = "0.7.1"
 github_client = { path = "../packages/github_client" }
+grafana_client = { path = "../packages/grafana_client" }
 handlebars = "2.0.4"
 hmac = "0.7.1"
 influxdb_client = { path = "../packages/influxdb_client" }
@@ -22,3 +23,5 @@ sha-1 = "0.8.2"
 stats = { path = "../packages/stats" }
 tokio = { version = "0.2.9", features = ["macros"] }
 warp = "0.2.0"
+futures = "0.3.1"
+rand = "0.7.3"

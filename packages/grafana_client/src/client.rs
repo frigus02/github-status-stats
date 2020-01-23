@@ -1,6 +1,7 @@
 use super::models::*;
 use super::USER_AGENT;
 use log::debug;
+use reqwest::StatusCode;
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -45,19 +46,16 @@ impl Client {
         Ok(res)
     }
 
-    pub async fn lookup_user(&self, login_or_email: &str) -> Result<User, BoxError> {
+    pub async fn lookup_user(&self, login_or_email: &str) -> Result<Option<User>, BoxError> {
         let raw_url = format!("{base}/api/users/lookup", base = &self.base_url);
         let url = reqwest::Url::parse_with_params(&raw_url, &[("loginOrEmail", login_or_email)])?;
         debug!("request GET {}", url);
-        let res = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
-        Ok(res)
+        let res = self.client.get(url).send().await?;
+        if res.status() == StatusCode::NOT_FOUND {
+            Ok(None)
+        } else {
+            Ok(Some(res.error_for_status()?.json().await?))
+        }
     }
 
     pub async fn create_organization(
@@ -79,7 +77,7 @@ impl Client {
         Ok(res)
     }
 
-    pub async fn lookup_organization(&self, name: &str) -> Result<Organization, BoxError> {
+    pub async fn lookup_organization(&self, name: &str) -> Result<Option<Organization>, BoxError> {
         let raw_url = format!(
             "{base}/api/orgs/name/{org_name}",
             base = &self.base_url,
@@ -87,15 +85,12 @@ impl Client {
         );
         let url = reqwest::Url::parse(&raw_url)?;
         debug!("request GET {}", url);
-        let res = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
-        Ok(res)
+        let res = self.client.get(url).send().await?;
+        if res.status() == StatusCode::NOT_FOUND {
+            Ok(None)
+        } else {
+            Ok(Some(res.error_for_status()?.json().await?))
+        }
     }
 
     pub async fn add_user_to_organization(

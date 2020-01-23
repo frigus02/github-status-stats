@@ -31,7 +31,6 @@ data:
     [auth.proxy]
     enabled = true
     header_name = X-WEBAUTH-USER
-    headers = Name:X-WEBAUTH-NAME Email:X-WEBAUTH-EMAIL
     enable_login_token = true
 
     [analytics]

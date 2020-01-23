@@ -2,6 +2,7 @@
 extern crate lazy_static;
 
 mod github_hooks;
+mod grafana_auth;
 mod reverse_proxy;
 
 use bytes::Bytes;
@@ -35,6 +36,12 @@ lazy_static! {
     static ref INFLUXDB_PASSWORD: SecUtf8 =
         SecUtf8::from(std::env::var("INFLUXDB_PASSWORD").unwrap());
     static ref GRAFANA_BASE_URL: String = std::env::var("GRAFANA_BASE_URL").unwrap();
+    static ref GRAFANA_CLIENT: grafana_client::Client = grafana_client::Client::new(
+        GRAFANA_BASE_URL.clone(),
+        std::env::var("GRAFANA_ADMIN_USERNAME").unwrap(),
+        std::env::var("GRAFANA_ADMIN_PASSWORD").unwrap()
+    )
+    .unwrap();
     static ref GRAFANA_PROXY: ReverseProxy = ReverseProxy::new(&*GRAFANA_BASE_URL).unwrap();
 }
 
@@ -149,15 +156,15 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
     Ok(warp::reply::html(render))
 }
 
-async fn dashboard_login_route(req: Request<Body>) -> Result<impl warp::Reply, warp::Rejection> {
-    let auth = reverse_proxy::Auth {
-        login: "admin".to_owned(),
-        name: "Admin".to_owned(),
-        email: "admin@example.com".to_owned(),
-    };
-
+async fn dashboard_login_route(
+    req: Request<Body>,
+    token: String,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let login = grafana_auth::sync_user(&token, &*GRAFANA_CLIENT)
+        .await
+        .map_err(reject)?;
+    let auth = reverse_proxy::Auth { login };
     let res = GRAFANA_PROXY.call(req, Some(auth)).await.map_err(reject)?;
-
     Ok(res)
 }
 
@@ -257,6 +264,7 @@ async fn main() {
 
     let dashboard_login = warp::path!("_" / "login" / ..)
         .and(raw_request())
+        .and(warp::cookie("token"))
         .and_then(dashboard_login_route);
     let dashboard = warp::path!("_" / ..)
         .and(raw_request())

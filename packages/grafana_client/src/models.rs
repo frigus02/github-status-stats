@@ -33,8 +33,8 @@ pub struct CreateOrganizationResponse {
 
 #[derive(Debug, Serialize)]
 pub struct CreateUser {
-    pub name: String,
-    pub email: String,
+    pub name: Option<String>,
+    pub email: Option<String>,
     pub login: String,
     pub password: String,
 }

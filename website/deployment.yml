@@ -48,6 +48,16 @@ spec:
                   key: password
             - name: GRAFANA_BASE_URL
               value: http://ghss-grafana
+            - name: GRAFANA_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-grafana
+                  key: username
+            - name: GRAFANA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-grafana
+                  key: password
           ports:
             - containerPort: 8888
           # resources:

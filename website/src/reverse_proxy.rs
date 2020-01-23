@@ -7,8 +7,6 @@ type BoxError = Box<dyn std::error::Error>;
 
 lazy_static! {
     static ref WEBAUTH_USER_HEADER: HeaderName = HeaderName::from_static("x-webauth-user");
-    static ref WEBAUTH_NAME_HEADER: HeaderName = HeaderName::from_static("x-webauth-name");
-    static ref WEBAUTH_EMAIL_HEADER: HeaderName = HeaderName::from_static("x-webauth-email");
     static ref HEADER_BLACKLIST: Vec<HeaderName> = vec![
         // Hop-by-hop
         HeaderName::from_static("connection"),
@@ -21,8 +19,6 @@ lazy_static! {
         HeaderName::from_static("upgrade"),
         // Auth proxy
         WEBAUTH_USER_HEADER.clone(),
-        WEBAUTH_NAME_HEADER.clone(),
-        WEBAUTH_EMAIL_HEADER.clone(),
         // Others
         HeaderName::from_static("host"),
     ];
@@ -60,10 +56,9 @@ fn create_proxied_request(
 }
 
 fn add_request_authentication(request: &mut Request<Body>, auth: Auth) -> Result<(), BoxError> {
-    let headers = request.headers_mut();
-    headers.insert(&*WEBAUTH_USER_HEADER, auth.login.parse()?);
-    headers.insert(&*WEBAUTH_NAME_HEADER, auth.name.parse()?);
-    headers.insert(&*WEBAUTH_EMAIL_HEADER, auth.email.parse()?);
+    request
+        .headers_mut()
+        .insert(&*WEBAUTH_USER_HEADER, auth.login.parse()?);
     Ok(())
 }
 
@@ -75,8 +70,6 @@ pub struct ReverseProxy {
 
 pub struct Auth {
     pub login: String,
-    pub name: String,
-    pub email: String,
 }
 
 impl ReverseProxy {
