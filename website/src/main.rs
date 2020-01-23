@@ -11,7 +11,12 @@ use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
 use serde::Serialize;
 use stats::influxdb_name;
-use warp::{http, http::StatusCode, http::Uri, Filter};
+use std::convert::Infallible;
+use warp::{
+    http::{Request, StatusCode, Uri},
+    hyper::Body,
+    Filter,
+};
 
 const REDIRECT_URI: &str = "https://294c6b27.ngrok.io/setup/authorized";
 
@@ -41,6 +46,36 @@ impl warp::reject::Reject for HttpError {}
 fn reject(err: Box<dyn std::error::Error>) -> warp::Rejection {
     error!("route error {}", err);
     warp::reject::custom(HttpError)
+}
+
+fn raw_query_option() -> impl Filter<Extract = (Option<String>,), Error = Infallible> + Copy {
+    warp::query::raw()
+        .map(Some)
+        .or(warp::any().map(|| None))
+        .unify()
+}
+
+fn raw_request() -> impl Filter<Extract = (Request<Body>,), Error = warp::Rejection> + Copy {
+    warp::method()
+        .and(warp::path::full())
+        .and(raw_query_option())
+        .and(warp::header::headers_cloned())
+        .and(warp::body::bytes())
+        .map(
+            |method, path: warp::filters::path::FullPath, query: Option<String>, headers, body| {
+                let mut req = Request::builder()
+                    .method(method)
+                    .uri(format!(
+                        "{}{}",
+                        path.as_str(),
+                        query.map_or("".to_owned(), |q| format!("?{}", q))
+                    ))
+                    .body(warp::hyper::body::Body::from(body))
+                    .expect("request builder");
+                *req.headers_mut() = headers;
+                req
+            },
+        )
 }
 
 #[derive(Serialize)]
@@ -114,19 +149,7 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
     Ok(warp::reply::html(render))
 }
 
-async fn dashboard_login_route(
-    method: http::Method,
-    path: warp::filters::path::FullPath,
-    headers: http::HeaderMap,
-    body: bytes::Bytes,
-) -> Result<impl warp::Reply, warp::Rejection> {
-    let mut req = http::Request::builder()
-        .method(method)
-        .uri(path.as_str())
-        .body(warp::hyper::body::Body::from(body))
-        .expect("request builder");
-    *req.headers_mut() = headers;
-
+async fn dashboard_login_route(req: Request<Body>) -> Result<impl warp::Reply, warp::Rejection> {
     let auth = reverse_proxy::Auth {
         login: "admin".to_owned(),
         name: "Admin".to_owned(),
@@ -138,21 +161,8 @@ async fn dashboard_login_route(
     Ok(res)
 }
 
-async fn dashboard_route(
-    method: http::Method,
-    path: warp::filters::path::FullPath,
-    headers: http::HeaderMap,
-    body: bytes::Bytes,
-) -> Result<impl warp::Reply, warp::Rejection> {
-    let mut req = http::Request::builder()
-        .method(method)
-        .uri(path.as_str())
-        .body(warp::hyper::body::Body::from(body))
-        .expect("request builder");
-    *req.headers_mut() = headers;
-
+async fn dashboard_route(req: Request<Body>) -> Result<impl warp::Reply, warp::Rejection> {
     let res = GRAFANA_PROXY.call(req, None).await.map_err(reject)?;
-
     Ok(res)
 }
 
@@ -245,15 +255,11 @@ async fn main() {
         .and(warp::cookie::optional("token"))
         .and_then(index_route);
 
-    let request_data = warp::method()
-        .and(warp::path::full())
-        .and(warp::header::headers_cloned())
-        .and(warp::body::bytes());
     let dashboard_login = warp::path!("_" / "login" / ..)
-        .and(request_data)
+        .and(raw_request())
         .and_then(dashboard_login_route);
     let dashboard = warp::path!("_" / ..)
-        .and(request_data)
+        .and(raw_request())
         .and_then(dashboard_route);
 
     let setup_authorized = warp::get()

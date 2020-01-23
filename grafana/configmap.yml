@@ -22,11 +22,11 @@ data:
     login_maximum_inactive_lifetime_days = 1
     login_maximum_lifetime_days = 1
     token_rotation_interval_minutes = 10
-    #disable_login_form = true
+    disable_login_form = true
     disable_signout_menu = true
 
     [auth.basic]
-    enabled = false
+    #enabled = false
 
     [auth.proxy]
     enabled = true

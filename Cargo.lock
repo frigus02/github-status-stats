@@ -318,6 +318,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "grafana_client"
+version = "0.1.0"
+dependencies = [
+ "base64 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "h2"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
