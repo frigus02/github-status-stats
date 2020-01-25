@@ -19,14 +19,14 @@ use warp::{
     Filter,
 };
 
-const REDIRECT_URI: &str = "https://294c6b27.ngrok.io/setup/authorized";
-
 lazy_static! {
+    static ref HOST: String = std::env::var("HOST").unwrap();
+    static ref GH_REDIRECT_URI: String = format!("{}/setup/authorized", *HOST);
     static ref GH_CLIENT_ID: String = std::env::var("GH_CLIENT_ID").unwrap();
     static ref GH_CLIENT_SECRET: SecUtf8 =
         SecUtf8::from(std::env::var("GH_CLIENT_SECRET").unwrap());
     static ref GH_LOGIN_URL: String =
-        github_client::oauth::login_url(&*GH_CLIENT_ID, &REDIRECT_URI)
+        github_client::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI)
             .unwrap()
             .into_string();
     static ref GH_WEBHOOK_SECRET: SecStr =
@@ -167,7 +167,7 @@ async fn setup_authorized_route(
     let token = github_client::oauth::exchange_code(
         &*GH_CLIENT_ID,
         &*GH_CLIENT_SECRET.unsecure(),
-        REDIRECT_URI,
+        &*GH_REDIRECT_URI,
         info,
     )
     .await
