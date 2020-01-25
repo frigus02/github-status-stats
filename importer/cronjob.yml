@@ -14,7 +14,7 @@ spec:
               imagePullPolicy: Always
               env:
                 - name: RUST_LOG
-                  value: info,importer=debug,github_client=debug,influxdb_client=debug
+                  value: info,importer=debug,github_client=debug,grafana_client=debug,influxdb_client=debug
                 - name: GH_APP_ID
                   value: "50487"
                 - name: GH_PRIVATE_KEY
@@ -33,5 +33,17 @@ spec:
                   valueFrom:
                     secretKeyRef:
                       name: ghss-influxdb
+                      key: password
+                - name: GRAFANA_BASE_URL
+                  value: http://ghss-grafana
+                - name: GRAFANA_ADMIN_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-grafana
+                      key: username
+                - name: GRAFANA_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-grafana
                       key: password
           restartPolicy: OnFailure

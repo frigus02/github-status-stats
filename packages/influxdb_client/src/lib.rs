@@ -100,9 +100,16 @@ pub struct QuerySeries {
     pub values: Vec<Vec<FieldValue>>,
 }
 
+impl QuerySeries {
+    pub fn index(&self, column: &str) -> Option<usize> {
+        self.columns.iter().position(|c| c == column)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct QueryResult {
     pub statement_id: i32,
+    pub error: Option<String>,
     pub series: Option<Vec<QuerySeries>>,
 }
 

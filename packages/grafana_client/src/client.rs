@@ -11,7 +11,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(base_url: String, username: String, password: String) -> Result<Client, BoxError> {
+    pub fn new(base_url: String, username: &str, password: &str) -> Result<Client, BoxError> {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             reqwest::header::USER_AGENT,
@@ -155,6 +155,87 @@ impl Client {
         let res = self
             .client
             .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(res)
+    }
+
+    pub async fn switch_organization_context(
+        &self,
+        org_id: i32,
+    ) -> Result<GenericResponse, BoxError> {
+        let raw_url = format!(
+            "{base}/api/user/using/{org_id}",
+            base = &self.base_url,
+            org_id = org_id
+        );
+        let url = reqwest::Url::parse(&raw_url)?;
+        debug!("request POST {}", url);
+        let res = self
+            .client
+            .post(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(res)
+    }
+
+    pub async fn create_datasource(
+        &self,
+        datasource: CreateDataSource,
+    ) -> Result<CreateDataSourceResponse, BoxError> {
+        let raw_url = format!("{base}/api/datasources", base = &self.base_url);
+        let url = reqwest::Url::parse(&raw_url)?;
+        debug!("request POST {} with body {:?}", url, datasource);
+        let res = self
+            .client
+            .post(url)
+            .json(&datasource)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(res)
+    }
+
+    pub async fn lookup_datasource(&self, name: &str) -> Result<Option<DataSource>, BoxError> {
+        let raw_url = format!(
+            "{base}/api/datasources/name/{name}",
+            base = &self.base_url,
+            name = name
+        );
+        let url = reqwest::Url::parse(&raw_url)?;
+        debug!("request GET {}", url);
+        let res = self.client.get(url).send().await?;
+        if res.status() == StatusCode::NOT_FOUND {
+            Ok(None)
+        } else {
+            Ok(Some(res.error_for_status()?.json().await?))
+        }
+    }
+
+    pub async fn update_datasource(
+        &self,
+        id: i32,
+        datasource: UpdateDataSource,
+    ) -> Result<UpdateDataSourceResponse, BoxError> {
+        let raw_url = format!(
+            "{base}/api/datasources/{id}",
+            base = &self.base_url,
+            id = id
+        );
+        let url = reqwest::Url::parse(&raw_url)?;
+        debug!("request PUT {} with body {:?}", url, datasource);
+        let res = self
+            .client
+            .put(url)
+            .json(&datasource)
             .send()
             .await?
             .error_for_status()?

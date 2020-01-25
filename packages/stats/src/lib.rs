@@ -1,10 +1,20 @@
 mod models;
 
-use github_client::{CheckRun, CheckRunConclusion, CommitStatus, CommitStatusState, Repository};
+use github_client::{
+    CheckRun, CheckRunConclusion, CommitStatus, CommitStatusState, Repository, User,
+};
 pub use models::*;
 
 pub fn influxdb_name(repository: &Repository) -> String {
     format!("r{}", repository.id)
+}
+
+pub fn grafana_org_name(repository: &Repository) -> String {
+    format!("{}", repository.id)
+}
+
+pub fn grafana_user_login(user: &User) -> String {
+    format!("{}", user.id)
 }
 
 pub fn build_from_statuses(statuses: Vec<CommitStatus>, commit_sha: String) -> Build {

@@ -2,14 +2,15 @@ use futures::future::join_all;
 use github_client::Repository;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::Serialize;
+use stats::{grafana_org_name, grafana_user_login};
 
 type BoxError = Box<dyn std::error::Error>;
 
 #[derive(Serialize)]
 pub struct GitHubUser {
-    pub id: i32,
     pub name: String,
     pub email: Option<String>,
+    pub grafana_login: String,
     pub repositories: Vec<github_client::Repository>,
 }
 
@@ -44,10 +45,11 @@ pub async fn get_github_user(token: &str) -> Result<GitHubUser, BoxError> {
     .flatten()
     .collect::<Vec<Repository>>();
 
+    let grafana_login = grafana_user_login(&user);
     Ok(GitHubUser {
-        id: user.id,
         name: user.name,
         email: user.email,
+        grafana_login,
         repositories,
     })
 }
@@ -58,11 +60,10 @@ fn generate_random_password() -> String {
 
 async fn ensure_grafana_user(
     client: &grafana_client::Client,
-    github_user_id: i32,
+    login: String,
     name: Option<String>,
     email: Option<String>,
 ) -> Result<GrafanaUser, BoxError> {
-    let login = format!("{}", github_user_id);
     let user = client.lookup_user(&login).await?;
     let id = match user {
         Some(user) => user.id,
@@ -89,7 +90,7 @@ async fn sync_repos_to_orgs(
     let mut orgs = client.get_organizations_for_user(user.id).await?;
 
     for repo in repositories {
-        let org_name = format!("{}", repo.id);
+        let org_name = grafana_org_name(&repo);
         match orgs.iter().position(|org| org.name == org_name) {
             Some(position) => {
                 orgs.remove(position);
@@ -127,7 +128,7 @@ pub async fn sync_user(
     let permissions = get_github_user(github_token).await?;
     let user = ensure_grafana_user(
         client,
-        permissions.id,
+        permissions.grafana_login,
         Some(permissions.name),
         permissions.email,
     )

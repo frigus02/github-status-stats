@@ -13,9 +13,14 @@ struct Claims<'a> {
 pub fn generate_jwt(app_id: &str, private_key_pem: &str) -> Result<String, Box<dyn Error>> {
     let header = Header::new(Algorithm::RS256);
 
+    // To guard against time difference between this machine and the GitHub
+    // server, issue token 30 seconds in the past.
+    let offset_from_now = 30;
+
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?
-        .as_secs();
+        .as_secs()
+        - offset_from_now;
     let claims = Claims {
         // Issued at time
         iat: now,

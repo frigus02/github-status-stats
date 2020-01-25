@@ -38,8 +38,8 @@ lazy_static! {
     static ref GRAFANA_BASE_URL: String = std::env::var("GRAFANA_BASE_URL").unwrap();
     static ref GRAFANA_CLIENT: grafana_client::Client = grafana_client::Client::new(
         GRAFANA_BASE_URL.clone(),
-        std::env::var("GRAFANA_ADMIN_USERNAME").unwrap(),
-        std::env::var("GRAFANA_ADMIN_PASSWORD").unwrap()
+        &std::env::var("GRAFANA_ADMIN_USERNAME").unwrap(),
+        &std::env::var("GRAFANA_ADMIN_PASSWORD").unwrap()
     )
     .unwrap();
     static ref GRAFANA_PROXY: ReverseProxy = ReverseProxy::new(&*GRAFANA_BASE_URL).unwrap();
