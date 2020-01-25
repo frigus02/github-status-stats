@@ -86,14 +86,8 @@ fn raw_request() -> impl Filter<Extract = (Request<Body>,), Error = warp::Reject
 }
 
 #[derive(Serialize)]
-struct LoggedInData {
-    user: github_client::User,
-    repos: Vec<github_client::Repository>,
-}
-
-#[derive(Serialize)]
 struct TemplateData<'a> {
-    data: Option<LoggedInData>,
+    user: Option<grafana_auth::GitHubUser>,
     login_url: &'a str,
 }
 
@@ -106,12 +100,12 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
         </head>
         <body>
             <h1>GitHub Status Stats</h1>
-            {{#if data}}
-                <h2>Hello {{data.user.name}}!</h2>
+            {{#if user}}
+                <h2>Hello {{user.name}}!</h2>
                 <ul>
-                    {{#each data.repos}}
+                    {{#each user.repos}}
                         <li>
-                            <a href=\"/d/{{id}}\">{{full_name}}</a>
+                            <a href=\"/_/?orgId={{id}}\">{{full_name}}</a>
                         </li>
                     {{/each}}
                 </ul>
@@ -124,25 +118,17 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
     ";
 
     let data = if let Some(token) = token {
-        let client = github_client::Client::new(&token).map_err(reject)?;
-        let user = client.get_user().await.map_err(reject)?;
-        let installations = client.get_user_installations().await.map_err(reject)?;
-        let mut repos = Vec::new();
-        for installation in installations {
-            let mut r = client
-                .get_user_installation_repositories(installation.id)
-                .await
-                .map_err(reject)?;
-            repos.append(&mut r);
-        }
+        let user = grafana_auth::get_github_user(&token)
+            .await
+            .map_err(reject)?;
 
         TemplateData {
-            data: Some(LoggedInData { user, repos }),
+            user: Some(user),
             login_url: &*GH_LOGIN_URL,
         }
     } else {
         TemplateData {
-            data: None,
+            user: None,
             login_url: &*GH_LOGIN_URL,
         }
     };
@@ -163,13 +149,15 @@ async fn dashboard_login_route(
     let login = grafana_auth::sync_user(&token, &*GRAFANA_CLIENT)
         .await
         .map_err(reject)?;
-    let auth = reverse_proxy::Auth { login };
-    let res = GRAFANA_PROXY.call(req, Some(auth)).await.map_err(reject)?;
+    let res = GRAFANA_PROXY
+        .call_with_auth(req, login)
+        .await
+        .map_err(reject)?;
     Ok(res)
 }
 
-async fn dashboard_route(req: Request<Body>) -> Result<impl warp::Reply, warp::Rejection> {
-    let res = GRAFANA_PROXY.call(req, None).await.map_err(reject)?;
+async fn dashboard_route(req: Request<Body>) -> Result<impl warp::Reply, Infallible> {
+    let res = GRAFANA_PROXY.call(req).await;
     Ok(res)
 }
 
@@ -254,7 +242,7 @@ async fn hooks_route(
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     let index = warp::get()
@@ -289,5 +277,6 @@ async fn main() {
         .or(hooks)
         .with(warp::log("website"));
 
-    warp::serve(routes).run(([0, 0, 0, 0], 8888)).await
+    warp::serve(routes).run(([0, 0, 0, 0], 8888)).await;
+    Ok(())
 }

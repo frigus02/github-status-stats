@@ -19,7 +19,9 @@ lazy_static! {
         HeaderName::from_static("upgrade"),
         // Auth proxy
         WEBAUTH_USER_HEADER.clone(),
-        // Others
+        // Prevent direct authentication with API
+        HeaderName::from_static("authorization"),
+        // Don't want to forward Host header
         HeaderName::from_static("host"),
     ];
 }
@@ -55,10 +57,10 @@ fn create_proxied_request(
     request
 }
 
-fn add_request_authentication(request: &mut Request<Body>, auth: Auth) -> Result<(), BoxError> {
+fn add_request_authentication(request: &mut Request<Body>, user: String) -> Result<(), BoxError> {
     request
         .headers_mut()
-        .insert(&*WEBAUTH_USER_HEADER, auth.login.parse()?);
+        .insert(&*WEBAUTH_USER_HEADER, user.parse()?);
     Ok(())
 }
 
@@ -66,10 +68,6 @@ pub struct ReverseProxy {
     client: Client<HttpConnector, Body>,
     scheme: Scheme,
     authority: Authority,
-}
-
-pub struct Auth {
-    pub login: String,
 }
 
 impl ReverseProxy {
@@ -82,25 +80,32 @@ impl ReverseProxy {
         })
     }
 
-    pub async fn call(
+    pub async fn call(&self, request: Request<Body>) -> Response<Body> {
+        let proxied_request = create_proxied_request(request, &self.scheme, &self.authority);
+        self.send(proxied_request).await
+    }
+
+    pub async fn call_with_auth(
         &self,
         request: Request<Body>,
-        auth: Option<Auth>,
+        user: String,
     ) -> Result<Response<Body>, BoxError> {
         let mut proxied_request = create_proxied_request(request, &self.scheme, &self.authority);
-        if let Some(auth) = auth {
-            add_request_authentication(&mut proxied_request, auth)?;
-        }
+        add_request_authentication(&mut proxied_request, user)?;
+        Ok(self.send(proxied_request).await)
+    }
 
+    async fn send(&self, proxied_request: Request<Body>) -> Response<Body> {
         debug!("reverse proxy request: {:?}", proxied_request);
         let response = self.client.request(proxied_request).await;
         match response {
-            Ok(response) => Ok(create_proxied_response(response)),
+            Ok(response) => create_proxied_response(response),
             Err(error) => {
                 error!("reverse proxy error: {}", error);
-                Ok(Response::builder()
+                Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::empty())?)
+                    .body(Body::empty())
+                    .unwrap()
             }
         }
     }

@@ -1,14 +1,16 @@
 use futures::future::join_all;
 use github_client::Repository;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use serde::Serialize;
 
 type BoxError = Box<dyn std::error::Error>;
 
-struct GitHubUserPermissions {
-    id: i32,
-    name: Option<String>,
-    email: Option<String>,
-    repositories: Vec<i32>,
+#[derive(Serialize)]
+pub struct GitHubUser {
+    pub id: i32,
+    pub name: String,
+    pub email: Option<String>,
+    pub repositories: Vec<github_client::Repository>,
 }
 
 struct GrafanaUser {
@@ -16,14 +18,24 @@ struct GrafanaUser {
     login: String,
 }
 
-async fn get_github_user_permissions(token: &str) -> Result<GitHubUserPermissions, BoxError> {
+async fn get_repositories_and_map_error(
+    client: &github_client::Client,
+    installation: &github_client::Installation,
+) -> Result<Vec<github_client::Repository>, String> {
+    client
+        .get_user_installation_repositories(installation.id)
+        .await
+        .map_err(|err| format!("{}", err))
+}
+
+pub async fn get_github_user(token: &str) -> Result<GitHubUser, BoxError> {
     let client = github_client::Client::new(token)?;
     let user = client.get_user().await?;
     let installations = client.get_user_installations().await?;
     let repositories = join_all(
         installations
             .iter()
-            .map(|installation| client.get_user_installation_repositories(installation.id)),
+            .map(|installation| get_repositories_and_map_error(&client, installation)),
     )
     .await
     .into_iter()
@@ -32,11 +44,11 @@ async fn get_github_user_permissions(token: &str) -> Result<GitHubUserPermission
     .flatten()
     .collect::<Vec<Repository>>();
 
-    Ok(GitHubUserPermissions {
+    Ok(GitHubUser {
         id: user.id,
-        name: Some(user.name),
+        name: user.name,
         email: user.email,
-        repositories: repositories.into_iter().map(|repo| repo.id).collect(),
+        repositories,
     })
 }
 
@@ -72,12 +84,12 @@ async fn ensure_grafana_user(
 async fn sync_repos_to_orgs(
     client: &grafana_client::Client,
     user: &GrafanaUser,
-    repositories: Vec<i32>,
+    repositories: Vec<github_client::Repository>,
 ) -> Result<(), BoxError> {
     let mut orgs = client.get_organizations_for_user(user.id).await?;
 
     for repo in repositories {
-        let org_name = format!("{}", repo);
+        let org_name = format!("{}", repo.id);
         match orgs.iter().position(|org| org.name == org_name) {
             Some(position) => {
                 orgs.remove(position);
@@ -112,9 +124,14 @@ pub async fn sync_user(
     github_token: &str,
     client: &grafana_client::Client,
 ) -> Result<String, BoxError> {
-    let permissions = get_github_user_permissions(github_token).await?;
-    let user =
-        ensure_grafana_user(client, permissions.id, permissions.name, permissions.email).await?;
+    let permissions = get_github_user(github_token).await?;
+    let user = ensure_grafana_user(
+        client,
+        permissions.id,
+        Some(permissions.name),
+        permissions.email,
+    )
+    .await?;
     sync_repos_to_orgs(client, &user, permissions.repositories).await?;
     Ok(user.login)
 }
