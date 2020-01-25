@@ -177,7 +177,7 @@ async fn setup_authorized_route(
         warp::redirect::temporary(Uri::from_static("/")),
         "set-cookie",
         format!(
-            "token={}; secure; httponly; samesite=strict; path=/",
+            "token={}; Path=/; SameSite=Strict; Secure; HttpOnly",
             token.access_token
         ),
     ))

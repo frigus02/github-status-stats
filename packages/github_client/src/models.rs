@@ -24,7 +24,7 @@ pub struct Account {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum AppWebhookEvent {
     CheckRun,
     CheckSuite,
@@ -64,7 +64,7 @@ pub enum AppWebhookEvent {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum AppPermissionLevel {
     None,
     Read,
@@ -229,7 +229,7 @@ pub struct Commit {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum CommitStatusState {
     Pending,
     Error,
@@ -350,7 +350,7 @@ pub struct CheckRunOutput {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum CheckRunStatus {
     Queued,
     InProgress,
@@ -358,7 +358,7 @@ pub enum CheckRunStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum CheckRunConclusion {
     Success,
     Failure,
@@ -395,7 +395,7 @@ pub struct CheckRunList {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum CheckRunEventAction {
     Created,
     Completed,
