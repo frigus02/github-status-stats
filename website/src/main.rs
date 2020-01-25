@@ -103,7 +103,7 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
             {{#if user}}
                 <h2>Hello {{user.name}}!</h2>
                 <ul>
-                    {{#each user.repos}}
+                    {{#each user.repositories}}
                         <li>
                             <a href=\"/_/?orgId={{id}}\">{{full_name}}</a>
                         </li>
