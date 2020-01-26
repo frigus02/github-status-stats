@@ -16,4 +16,4 @@ lazy_static = "1.4.0"
 log = "0.4.8"
 secstr = "0.3.2"
 stats = { path = "../packages/stats" }
-tokio = { version = "0.2.9", features = ["fs", "macros", "time"] }
+tokio = { version = "0.2.10", features = ["fs", "macros", "time"] }

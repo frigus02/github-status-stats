@@ -1,4 +1,4 @@
-use jsonwebtoken::{encode, Algorithm, Header};
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::time::SystemTime;
@@ -30,6 +30,10 @@ pub fn generate_jwt(app_id: &str, private_key_pem: &str) -> Result<String, Box<d
         iss: app_id,
     };
 
-    let token = encode(&header, &claims, private_key_pem.as_bytes())?;
+    let token = encode(
+        &header,
+        &claims,
+        &EncodingKey::from_rsa_pem(private_key_pem.as_bytes())?,
+    )?;
     Ok(token)
 }
