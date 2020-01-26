@@ -1,7 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - grafana/configmap.yml
   - grafana/deployment.yml
   - grafana/secret.yml
   - importer/cronjob.yml
@@ -11,6 +10,13 @@ resources:
   # - k8s/ingress.yml
 commonLabels:
   group: github-status-stats
+configMapGenerator:
+  - name: ghss-grafana
+    files:
+      - grafana/config/grafana.ini
+  - name: ghss-grafana-dashboards
+    files:
+      - grafana/dashboards/builds.json
 secretGenerator:
   - name: ghss-github
     type: Opaque

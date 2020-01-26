@@ -15,5 +15,6 @@ influxdb_client = { path = "../packages/influxdb_client" }
 lazy_static = "1.4.0"
 log = "0.4.8"
 secstr = "0.3.2"
+serde_json = "1.0.45"
 stats = { path = "../packages/stats" }
-tokio = { version = "0.2.10", features = ["fs", "macros", "time"] }
+tokio = { version = "0.2.10", features = ["fs", "macros"] }

@@ -2,17 +2,18 @@
 extern crate lazy_static;
 
 mod build;
+mod grafana;
 mod hook;
 mod import;
 
 use build::{get_builds, get_builds_since};
 use chrono::{Duration, Utc};
-use github_client::{Client, Repository};
+use github_client::Client;
 use hook::get_status_hook_commits_since;
-use import::get_last_import;
+use import::{get_last_import, import};
 use log::info;
 use secstr::SecUtf8;
-use stats::{grafana_org_name, influxdb_name, Import};
+use stats::influxdb_name;
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -27,110 +28,7 @@ lazy_static! {
     static ref GRAFANA_ADMIN_USERNAME: String = std::env::var("GRAFANA_ADMIN_USERNAME").unwrap();
     static ref GRAFANA_ADMIN_PASSWORD: SecUtf8 =
         SecUtf8::from(std::env::var("GRAFANA_ADMIN_PASSWORD").unwrap());
-}
-
-async fn import(
-    influxdb_client: &influxdb_client::Client<'_>,
-    mut points: Vec<influxdb_client::Point>,
-) -> Result<(), BoxError> {
-    info!("Import {} points", points.len());
-    points.push(
-        Import {
-            time: Utc::now(),
-            points: points.len() as i64,
-        }
-        .into_point(),
-    );
-    influxdb_client.write(points).await
-}
-
-fn assert_datasource_org(
-    datasource: grafana_client::DataSource,
-    org_id: i32,
-) -> Result<grafana_client::DataSource, String> {
-    if datasource.org_id == org_id {
-        Ok(datasource)
-    } else {
-        Err(format!(
-            "Datasource is not assigned to org {} (actual: {})",
-            org_id, datasource.org_id
-        ))
-    }
-}
-
-async fn setup_grafana(
-    client: &grafana_client::Client,
-    repository: &Repository,
-) -> Result<(), BoxError> {
-    let org_name = grafana_org_name(repository);
-    let org_id = match client.lookup_organization(&org_name).await? {
-        Some(org) => org.id,
-        None => {
-            client
-                .create_organization(grafana_client::CreateOrganization { name: org_name })
-                .await?
-                .org_id
-        }
-    };
-    client.switch_organization_context(org_id).await?;
-
-    let datasource_name = "DB".to_owned();
-    let datasource = match client.lookup_datasource(&datasource_name).await? {
-        Some(data_source) => data_source,
-        None => {
-            client
-                .create_datasource(grafana_client::CreateDataSource {
-                    name: datasource_name,
-                    r#type: "influxdb".to_owned(),
-                    access: grafana_client::DataSourceAccess::Proxy,
-                    url: None,
-                    password: None,
-                    database: None,
-                    user: None,
-                    basic_auth: None,
-                    basic_auth_user: None,
-                    basic_auth_password: None,
-                    with_credentials: None,
-                    is_default: None,
-                    secure_json_data: None,
-                })
-                .await?
-                .datasource
-        }
-    };
-    let datasource = assert_datasource_org(datasource, org_id)?;
-    if datasource.url.is_empty() {
-        client
-            .update_datasource(
-                datasource.id,
-                grafana_client::UpdateDataSource {
-                    name: datasource.name,
-                    r#type: datasource.r#type,
-                    access: datasource.access,
-                    url: Some(INFLUXDB_BASE_URL.clone()),
-                    password: None,
-                    database: Some(influxdb_name(repository)),
-                    user: Some(INFLUXDB_USERNAME.clone()),
-                    basic_auth: None,
-                    basic_auth_user: None,
-                    basic_auth_password: None,
-                    with_credentials: None,
-                    is_default: Some(true),
-                    secure_json_data: Some(
-                        [(
-                            "password".to_owned(),
-                            INFLUXDB_PASSWORD.unsecure().to_owned(),
-                        )]
-                        .iter()
-                        .cloned()
-                        .collect(),
-                    ),
-                    version: Some(datasource.version),
-                },
-            )
-            .await?;
-    }
-    Ok(())
+    static ref GRAFANA_DASHBOARDS_PATH: String = std::env::var("GRAFANA_DASHBOARDS_PATH").unwrap();
 }
 
 #[tokio::main]
@@ -173,7 +71,15 @@ async fn main() -> Result<(), BoxError> {
                     import(&influxdb_client, points).await?;
                 }
             } else {
-                setup_grafana(&grafana_client, &repository).await?;
+                grafana::setup(
+                    &grafana_client,
+                    &repository,
+                    &*INFLUXDB_BASE_URL,
+                    &*INFLUXDB_USERNAME,
+                    &*INFLUXDB_PASSWORD.unsecure(),
+                    &*GRAFANA_DASHBOARDS_PATH,
+                )
+                .await?;
                 influxdb_client
                     .query(&format!("CREATE DATABASE {}", influxdb_db))
                     .await?;

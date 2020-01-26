@@ -28,7 +28,7 @@ pub struct CreateDataSource {
     pub basic_auth_password: Option<String>,
     pub with_credentials: Option<bool>,
     pub is_default: Option<bool>,
-    // pub json_data: Option<HashMap<String, String>>,
+    pub json_data: Option<serde_json::Map<String, serde_json::Value>>,
     pub secure_json_data: Option<HashMap<String, String>>,
 }
 
@@ -58,6 +58,34 @@ pub struct CreateOrganizationMembership {
 pub struct CreateOrganizationResponse {
     pub org_id: i32,
     pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateOrUpdateDashboard {
+    pub dashboard: serde_json::Map<String, serde_json::Value>,
+    pub user_id: Option<i32>,
+    pub overwrite: Option<bool>,
+    pub message: Option<String>,
+    pub folder_id: Option<i32>,
+    pub is_folder: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateOrUpdateDashboardResponse {
+    pub status: CreateOrUpdateDashboardStatus,
+    pub slug: String,
+    pub version: i32,
+    pub id: i32,
+    pub uid: String,
+    pub url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CreateOrUpdateDashboardStatus {
+    Success,
 }
 
 #[derive(Debug, Serialize)]
@@ -92,7 +120,7 @@ pub struct DataSource {
     pub basic_auth_password: String,
     pub with_credentials: bool,
     pub is_default: bool,
-    // pub json_data: HashMap<String, String>,
+    pub json_data: Option<serde_json::Map<String, serde_json::Value>>,
     pub secure_json_fields: HashMap<String, bool>,
     pub version: i32,
     pub read_only: bool,
@@ -147,7 +175,7 @@ pub struct UpdateDataSource {
     pub basic_auth_password: Option<String>,
     pub with_credentials: Option<bool>,
     pub is_default: Option<bool>,
-    // pub json_data: Option<HashMap<String, String>>,
+    pub json_data: Option<serde_json::Map<String, serde_json::Value>>,
     pub secure_json_data: Option<HashMap<String, String>>,
     pub version: Option<i32>,
 }

@@ -1,7 +1,24 @@
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Utc};
 use influxdb_client::{Client, FieldValue};
+use log::info;
+use stats::Import;
 
 type BoxError = Box<dyn std::error::Error>;
+
+pub async fn import(
+    influxdb_client: &influxdb_client::Client<'_>,
+    mut points: Vec<influxdb_client::Point>,
+) -> Result<(), BoxError> {
+    info!("Import {} points", points.len());
+    points.push(
+        Import {
+            time: Utc::now(),
+            points: points.len() as i64,
+        }
+        .into_point(),
+    );
+    influxdb_client.write(points).await
+}
 
 pub async fn get_last_import(
     client: &Client<'_>,

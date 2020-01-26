@@ -46,4 +46,13 @@ spec:
                     secretKeyRef:
                       name: ghss-grafana
                       key: password
+                - name: GRAFANA_DASHBOARDS_PATH
+                  value: /etc/grafana-dashboards
+              volumeMounts:
+                - name: grafana-dashboards
+                  mountPath: /etc/grafana-dashboards
+          volumes:
+            - name: grafana-dashboards
+              configMap:
+                name: ghss-grafana-dashboards
           restartPolicy: OnFailure

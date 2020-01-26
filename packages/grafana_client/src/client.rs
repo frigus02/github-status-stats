@@ -243,4 +243,23 @@ impl Client {
             .await?;
         Ok(res)
     }
+
+    pub async fn create_or_update_dashboard(
+        &self,
+        dashboard: CreateOrUpdateDashboard,
+    ) -> Result<CreateOrUpdateDashboardResponse, BoxError> {
+        let raw_url = format!("{base}/api/dashboards/db", base = &self.base_url,);
+        let url = reqwest::Url::parse(&raw_url)?;
+        debug!("request POST {} with body {:?}", url, dashboard);
+        let res = self
+            .client
+            .post(url)
+            .json(&dashboard)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(res)
+    }
 }
