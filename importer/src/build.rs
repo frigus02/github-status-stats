@@ -1,7 +1,7 @@
 use chrono::{DateTime, TimeZone};
 use github_client::{CheckRun, Client, CommitStatus, CommitStatusState, Repository};
 use log::info;
-use stats::{build_from_check_run, build_from_statuses, Build};
+use stats::Build;
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -36,12 +36,19 @@ fn statuses_to_builds(mut statuses: Vec<CommitStatus>, commit_sha: &str) -> Vec<
         )
         .into_iter()
         .rev()
-        .map(|statuses| build_from_statuses(statuses, commit_sha.to_owned()))
+        .map(|statuses| {
+            let mut build: Build = statuses.into();
+            build.commit_sha = commit_sha.to_owned();
+            build
+        })
         .collect()
 }
 
 fn check_runs_to_builds(check_runs: Vec<CheckRun>) -> Vec<Build> {
-    check_runs.into_iter().map(build_from_check_run).collect()
+    check_runs
+        .into_iter()
+        .map(|check_run| check_run.into())
+        .collect()
 }
 
 pub async fn get_builds_since<Tz: TimeZone>(
@@ -82,7 +89,7 @@ pub async fn get_builds(
             .await?;
         let builds = statuses_to_builds(statuses, &commit_sha);
         for build in builds {
-            points.push(build.into_point());
+            points.push(build.into());
         }
 
         let check_runs = client
@@ -90,7 +97,7 @@ pub async fn get_builds(
             .await?;
         let builds = check_runs_to_builds(check_runs);
         for build in builds {
-            points.push(build.into_point());
+            points.push(build.into());
         }
     }
 

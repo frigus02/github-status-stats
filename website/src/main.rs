@@ -11,7 +11,7 @@ use log::{error, info};
 use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
 use serde::Serialize;
-use stats::influxdb_name;
+use stats::{influxdb_name, Build};
 use std::convert::Infallible;
 use warp::{
     http::{Request, StatusCode, Uri},
@@ -209,8 +209,8 @@ async fn hooks_route(
                         r#type: stats::HookType::CheckRun,
                         commit_sha: check_run.check_run.head_sha.clone(),
                     }
-                    .into_point(),
-                    stats::build_from_check_run(check_run.check_run).into_point(),
+                    .into(),
+                    Build::from(check_run.check_run).into(),
                 ])
                 .await
                 .map_err(reject)?;
@@ -232,7 +232,7 @@ async fn hooks_route(
                     r#type: stats::HookType::Status,
                     commit_sha: status.sha,
                 }
-                .into_point()])
+                .into()])
                 .await
                 .map_err(reject)?;
         }

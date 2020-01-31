@@ -35,7 +35,7 @@ pub async fn import(
             time: Utc::now(),
             points: points.len() as i64,
         }
-        .into_point(),
+        .into(),
     );
     client.write(points).await
 }

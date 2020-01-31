@@ -1,9 +1,11 @@
-mod models;
+mod build;
+mod hook;
+mod import;
 
-use github_client::{
-    CheckRun, CheckRunConclusion, CommitStatus, CommitStatusState, Repository, User,
-};
-pub use models::*;
+pub use build::*;
+use github_client::{Repository, User};
+pub use hook::*;
+pub use import::*;
 
 pub fn influxdb_name(repository: &Repository) -> String {
     format!("r{}", repository.id)
@@ -19,41 +21,4 @@ pub fn grafana_org_name(repository: &Repository) -> String {
 
 pub fn grafana_user_login(user: &User) -> String {
     format!("{}", user.id)
-}
-
-pub fn build_from_statuses(statuses: Vec<CommitStatus>, commit_sha: String) -> Build {
-    let mut iter = statuses.into_iter();
-    let first = iter.next().unwrap();
-    let first_millis = first.created_at.timestamp_millis();
-    let created_at = first.created_at;
-    let name = first.context.clone();
-    let last = iter.last().unwrap_or(first);
-    let last_millis = last.created_at.timestamp_millis();
-    Build {
-        name,
-        source: BuildSource::Status,
-        successful: last.state == CommitStatusState::Success,
-        duration_ms: last_millis - first_millis,
-        created_at,
-        commit_sha,
-    }
-}
-
-pub fn build_from_check_run(check_run: CheckRun) -> Build {
-    Build {
-        name: check_run.name,
-        source: BuildSource::CheckRun,
-        successful: match check_run.conclusion {
-            Some(conclusion) => conclusion == CheckRunConclusion::Success,
-            None => false,
-        },
-        duration_ms: match check_run.completed_at {
-            Some(completed_at) => {
-                check_run.started_at.timestamp_millis() - completed_at.timestamp_millis()
-            }
-            None => 0,
-        },
-        created_at: check_run.started_at,
-        commit_sha: check_run.head_sha,
-    }
 }
