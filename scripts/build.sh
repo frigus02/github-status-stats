@@ -1,5 +1,5 @@
-#!/bin/sh
-set -eu
+#!/bin/bash
+set -euo pipefail
 
 PREFIX=frigus02/github-status-stats
 if [ "$(git diff --stat)" != "" ]; then
