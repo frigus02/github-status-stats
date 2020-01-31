@@ -7,14 +7,14 @@ mod reverse_proxy;
 
 use bytes::Bytes;
 use handlebars::Handlebars;
-use log::{error, info};
+use log::info;
 use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
 use serde::Serialize;
 use stats::{influxdb_name, Build};
 use std::convert::Infallible;
 use warp::{
-    http::{Request, StatusCode, Uri},
+    http::{Request, Response, StatusCode},
     hyper::Body,
     Filter,
 };
@@ -45,24 +45,14 @@ lazy_static! {
     static ref GRAFANA_PROXY: ReverseProxy = ReverseProxy::new(&*GRAFANA_BASE_URL).unwrap();
 }
 
-#[derive(Debug)]
-struct HttpError;
-
-impl warp::reject::Reject for HttpError {}
-
-fn reject(err: Box<dyn std::error::Error>) -> warp::Rejection {
-    error!("route error {}", err);
-    warp::reject::custom(HttpError)
-}
-
-fn raw_query_option() -> impl Filter<Extract = (Option<String>,), Error = Infallible> + Copy {
+fn raw_query_option() -> impl Filter<Extract = (Option<String>,), Error = Infallible> + Clone {
     warp::query::raw()
         .map(Some)
         .or(warp::any().map(|| None))
         .unify()
 }
 
-fn raw_request() -> impl Filter<Extract = (Request<Body>,), Error = warp::Rejection> + Copy {
+fn raw_request() -> impl Filter<Extract = (Request<Body>,), Error = warp::Rejection> + Clone {
     warp::method()
         .and(warp::path::full())
         .and(raw_query_option())
@@ -91,7 +81,7 @@ struct TemplateData<'a> {
     login_url: &'a str,
 }
 
-async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Rejection> {
+async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallible> {
     let template = "
         <!DOCTYPE html>
         <html>
@@ -118,42 +108,60 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, warp::Re
     ";
 
     let data = if let Some(token) = token {
-        let user = grafana_auth::get_github_user(&token)
+        grafana_auth::get_github_user(&token)
             .await
-            .map_err(reject)?;
-
-        TemplateData {
-            user: Some(user),
-            login_url: &*GH_LOGIN_URL,
-        }
+            .map(|user| TemplateData {
+                user: Some(user),
+                login_url: &*GH_LOGIN_URL,
+            })
     } else {
-        TemplateData {
+        Ok(TemplateData {
             user: None,
             login_url: &*GH_LOGIN_URL,
-        }
+        })
     };
 
-    let mut hb = Handlebars::new();
-    hb.register_template_string("template.html", template)
-        .unwrap();
-    let render = hb
-        .render("template.html", &data)
-        .unwrap_or_else(|err| err.to_string());
-    Ok(warp::reply::html(render))
+    match data {
+        Ok(data) => {
+            let mut hb = Handlebars::new();
+            hb.register_template_string("template.html", template)
+                .unwrap();
+            let render = hb
+                .render("template.html", &data)
+                .unwrap_or_else(|err| err.to_string());
+            Ok(warp::reply::with_status(
+                warp::reply::html(render),
+                StatusCode::OK,
+            ))
+        }
+        Err(err) => Ok(warp::reply::with_status(
+            warp::reply::html(err.to_string()),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )),
+    }
 }
 
 async fn dashboard_login_route(
     req: Request<Body>,
     token: String,
-) -> Result<impl warp::Reply, warp::Rejection> {
+) -> Result<impl warp::Reply, Infallible> {
     let login = grafana_auth::sync_user(&token, &*GRAFANA_CLIENT)
         .await
-        .map_err(reject)?;
-    let res = GRAFANA_PROXY
-        .call_with_auth(req, login)
-        .await
-        .map_err(reject)?;
-    Ok(res)
+        .map_err(|err| err.to_string());
+    let res = match login {
+        Ok(login) => GRAFANA_PROXY
+            .call_with_auth(req, login)
+            .await
+            .map_err(|err| err.to_string()),
+        Err(err) => Err(err),
+    };
+    match res {
+        Ok(res) => Ok(res),
+        Err(err) => Ok(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(err.to_string()))
+            .unwrap()),
+    }
 }
 
 async fn dashboard_route(req: Request<Body>) -> Result<impl warp::Reply, Infallible> {
@@ -163,37 +171,45 @@ async fn dashboard_route(req: Request<Body>) -> Result<impl warp::Reply, Infalli
 
 async fn setup_authorized_route(
     info: github_client::oauth::AuthCodeQuery,
-) -> Result<impl warp::Reply, warp::Rejection> {
+) -> Result<impl warp::Reply, Infallible> {
     let token = github_client::oauth::exchange_code(
         &*GH_CLIENT_ID,
         &*GH_CLIENT_SECRET.unsecure(),
         &*GH_REDIRECT_URI,
         info,
     )
-    .await
-    .map_err(reject)?;
-
-    Ok(warp::reply::with_header(
-        warp::redirect::temporary(Uri::from_static("/")),
-        "set-cookie",
-        format!(
-            "token={}; Path=/; SameSite=Strict; Secure; HttpOnly",
-            token.access_token
-        ),
-    ))
+    .await;
+    match token {
+        Ok(token) => Ok(Response::builder()
+            .status(StatusCode::TEMPORARY_REDIRECT)
+            .header("location", "/")
+            .header(
+                "set-cookie",
+                format!(
+                    "token={}; Path=/; SameSite=Strict; Secure; HttpOnly",
+                    token.access_token
+                ),
+            )
+            .body(Body::empty())
+            .unwrap()),
+        Err(err) => Ok(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(err.to_string()))
+            .unwrap()),
+    }
 }
 
 async fn hooks_route(
     signature: String,
     event: String,
     body: Bytes,
-) -> Result<impl warp::Reply, warp::Rejection> {
+) -> Result<impl warp::Reply, Infallible> {
     let payload = github_hooks::deserialize(signature, event, body, &*GH_WEBHOOK_SECRET.unsecure())
-        .map_err(reject)?;
+        .map_err(|err| err.to_string());
 
     info!("Hook: {:?}", payload);
-    match payload {
-        github_hooks::Payload::CheckRun(check_run) => {
+    let res = match payload {
+        Ok(github_hooks::Payload::CheckRun(check_run)) => {
             let influxdb_db = influxdb_name(&check_run.repository);
             let client = influxdb_client::Client::new(
                 &*INFLUXDB_BASE_URL,
@@ -201,7 +217,7 @@ async fn hooks_route(
                 &*INFLUXDB_ADMIN_USERNAME,
                 &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
             )
-            .map_err(reject)?;
+            .unwrap();
             client
                 .write(vec![
                     stats::Hook {
@@ -213,11 +229,11 @@ async fn hooks_route(
                     Build::from(check_run.check_run).into(),
                 ])
                 .await
-                .map_err(reject)?;
+                .map_err(|err| err.to_string())
         }
-        github_hooks::Payload::GitHubAppAuthorization(_auth) => {}
-        github_hooks::Payload::Ping(_ping) => {}
-        github_hooks::Payload::Status(status) => {
+        Ok(github_hooks::Payload::GitHubAppAuthorization(_auth)) => Ok(()),
+        Ok(github_hooks::Payload::Ping(_ping)) => Ok(()),
+        Ok(github_hooks::Payload::Status(status)) => {
             let influxdb_db = influxdb_name(&status.repository);
             let client = influxdb_client::Client::new(
                 &*INFLUXDB_BASE_URL,
@@ -225,7 +241,7 @@ async fn hooks_route(
                 &*INFLUXDB_ADMIN_USERNAME,
                 &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
             )
-            .map_err(reject)?;
+            .unwrap();
             client
                 .write(vec![stats::Hook {
                     time: status.created_at,
@@ -234,11 +250,15 @@ async fn hooks_route(
                 }
                 .into()])
                 .await
-                .map_err(reject)?;
+                .map_err(|err| err.to_string())
         }
+        Err(err) => Err(err),
     };
 
-    Ok(StatusCode::OK)
+    match res {
+        Ok(_) => Ok(StatusCode::OK),
+        Err(_) => Ok(StatusCode::INTERNAL_SERVER_ERROR),
+    }
 }
 
 #[tokio::main]
@@ -249,6 +269,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::path::end())
         .and(warp::cookie::optional("token"))
         .and_then(index_route);
+
+    let favicon = warp::get()
+        .and(warp::path!("favicon.ico"))
+        .and(warp::fs::file("static/favicon.ico"));
 
     let dashboard_login = warp::path!("_" / "login" / ..)
         .and(raw_request())
@@ -271,6 +295,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(hooks_route);
 
     let routes = index
+        .or(favicon)
         .or(dashboard_login)
         .or(dashboard)
         .or(setup_authorized)
