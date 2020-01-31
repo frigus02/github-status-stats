@@ -32,9 +32,9 @@ lazy_static! {
     static ref GH_WEBHOOK_SECRET: SecStr =
         SecStr::from(std::env::var("GH_WEBHOOK_SECRET").unwrap());
     static ref INFLUXDB_BASE_URL: String = std::env::var("INFLUXDB_BASE_URL").unwrap();
-    static ref INFLUXDB_USERNAME: String = std::env::var("INFLUXDB_USERNAME").unwrap();
-    static ref INFLUXDB_PASSWORD: SecUtf8 =
-        SecUtf8::from(std::env::var("INFLUXDB_PASSWORD").unwrap());
+    static ref INFLUXDB_ADMIN_USERNAME: String = std::env::var("INFLUXDB_ADMIN_USERNAME").unwrap();
+    static ref INFLUXDB_ADMIN_PASSWORD: SecUtf8 =
+        SecUtf8::from(std::env::var("INFLUXDB_ADMIN_PASSWORD").unwrap());
     static ref GRAFANA_BASE_URL: String = std::env::var("GRAFANA_BASE_URL").unwrap();
     static ref GRAFANA_CLIENT: grafana_client::Client = grafana_client::Client::new(
         GRAFANA_BASE_URL.clone(),
@@ -198,8 +198,8 @@ async fn hooks_route(
             let client = influxdb_client::Client::new(
                 &*INFLUXDB_BASE_URL,
                 &influxdb_db,
-                &*INFLUXDB_USERNAME,
-                &*INFLUXDB_PASSWORD.unsecure(),
+                &*INFLUXDB_ADMIN_USERNAME,
+                &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
             )
             .map_err(reject)?;
             client
@@ -222,8 +222,8 @@ async fn hooks_route(
             let client = influxdb_client::Client::new(
                 &*INFLUXDB_BASE_URL,
                 &influxdb_db,
-                &*INFLUXDB_USERNAME,
-                &*INFLUXDB_PASSWORD.unsecure(),
+                &*INFLUXDB_ADMIN_USERNAME,
+                &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
             )
             .map_err(reject)?;
             client

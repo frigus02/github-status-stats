@@ -9,6 +9,10 @@ pub fn influxdb_name(repository: &Repository) -> String {
     format!("r{}", repository.id)
 }
 
+pub fn influxdb_read_user(repository: &Repository) -> String {
+    format!("u{}", repository.id)
+}
+
 pub fn grafana_org_name(repository: &Repository) -> String {
     format!("{}", repository.id)
 }

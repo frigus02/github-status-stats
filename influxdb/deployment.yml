@@ -23,12 +23,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ghss-influxdb
-                  key: username
+                  key: admin_username
             - name: INFLUXDB_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: ghss-influxdb
-                  key: password
+                  key: admin_password
           ports:
             - containerPort: 8086
           resources:

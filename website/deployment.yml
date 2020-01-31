@@ -38,16 +38,16 @@ spec:
                   key: WEBHOOK_SECRET
             - name: INFLUXDB_BASE_URL
               value: http://ghss-influxdb
-            - name: INFLUXDB_USERNAME
+            - name: INFLUXDB_ADMIN_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: ghss-influxdb
-                  key: username
-            - name: INFLUXDB_PASSWORD
+                  key: admin_username
+            - name: INFLUXDB_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: ghss-influxdb
-                  key: password
+                  key: admin_password
             - name: GRAFANA_BASE_URL
               value: http://ghss-grafana
             - name: GRAFANA_ADMIN_USERNAME

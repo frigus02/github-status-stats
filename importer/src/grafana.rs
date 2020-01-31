@@ -4,7 +4,7 @@ use grafana_client::{
     DataSourceAccess, UpdateDataSource,
 };
 use log::info;
-use stats::{grafana_org_name, influxdb_name};
+use stats::grafana_org_name;
 use tokio::fs;
 
 type BoxError = Box<dyn std::error::Error>;
@@ -24,8 +24,8 @@ async fn setup_datasource(
     client: &Client,
     datasource_name: &str,
     org_id: i32,
-    repository: &Repository,
     influxdb_base_url: &str,
+    influxdb_db: &str,
     influxdb_user: &str,
     influxdb_password: &str,
 ) -> Result<(), BoxError> {
@@ -64,7 +64,7 @@ async fn setup_datasource(
                     access: datasource.access,
                     url: Some(influxdb_base_url.to_owned()),
                     password: None,
-                    database: Some(influxdb_name(repository)),
+                    database: Some(influxdb_db.to_owned()),
                     user: Some(influxdb_user.to_owned()),
                     basic_auth: None,
                     basic_auth_user: None,
@@ -121,6 +121,7 @@ pub async fn setup(
     client: &Client,
     repository: &Repository,
     influxdb_base_url: &str,
+    influxdb_db: &str,
     influxdb_user: &str,
     influxdb_password: &str,
     dashboards_path: &str,
@@ -144,8 +145,8 @@ pub async fn setup(
         client,
         datasource_name,
         org_id,
-        repository,
         influxdb_base_url,
+        influxdb_db,
         influxdb_user,
         influxdb_password,
     )

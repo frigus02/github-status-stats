@@ -3,17 +3,15 @@ extern crate lazy_static;
 
 mod build;
 mod grafana;
-mod hook;
-mod import;
+mod influxdb;
 
 use build::{get_builds, get_builds_since};
 use chrono::{Duration, Utc};
 use github_client::Client;
-use hook::get_status_hook_commits_since;
-use import::{get_last_import, import};
+use influxdb::{get_last_import, get_status_hook_commits_since, import};
 use log::info;
 use secstr::SecUtf8;
-use stats::influxdb_name;
+use stats::{influxdb_name, influxdb_read_user};
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -21,9 +19,11 @@ lazy_static! {
     static ref GH_APP_ID: String = std::env::var("GH_APP_ID").unwrap();
     static ref GH_PRIVATE_KEY: SecUtf8 = SecUtf8::from(std::env::var("GH_PRIVATE_KEY").unwrap());
     static ref INFLUXDB_BASE_URL: String = std::env::var("INFLUXDB_BASE_URL").unwrap();
-    static ref INFLUXDB_USERNAME: String = std::env::var("INFLUXDB_USERNAME").unwrap();
-    static ref INFLUXDB_PASSWORD: SecUtf8 =
-        SecUtf8::from(std::env::var("INFLUXDB_PASSWORD").unwrap());
+    static ref INFLUXDB_ADMIN_USERNAME: String = std::env::var("INFLUXDB_ADMIN_USERNAME").unwrap();
+    static ref INFLUXDB_ADMIN_PASSWORD: SecUtf8 =
+        SecUtf8::from(std::env::var("INFLUXDB_ADMIN_PASSWORD").unwrap());
+    static ref INFLUXDB_READ_PASSWORD: SecUtf8 =
+        SecUtf8::from(std::env::var("INFLUXDB_READ_PASSWORD").unwrap());
     static ref GRAFANA_BASE_URL: String = std::env::var("GRAFANA_BASE_URL").unwrap();
     static ref GRAFANA_ADMIN_USERNAME: String = std::env::var("GRAFANA_ADMIN_USERNAME").unwrap();
     static ref GRAFANA_ADMIN_PASSWORD: SecUtf8 =
@@ -58,8 +58,8 @@ async fn main() -> Result<(), BoxError> {
             let influxdb_client = influxdb_client::Client::new(
                 &*INFLUXDB_BASE_URL,
                 &influxdb_db,
-                &*INFLUXDB_USERNAME,
-                &*INFLUXDB_PASSWORD.unsecure(),
+                &*INFLUXDB_ADMIN_USERNAME,
+                &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
             )?;
 
             let last_import = get_last_import(&influxdb_client).await?;
@@ -71,18 +71,24 @@ async fn main() -> Result<(), BoxError> {
                     import(&influxdb_client, points).await?;
                 }
             } else {
+                let influxdb_read_user = influxdb_read_user(&repository);
+                influxdb::setup(
+                    &influxdb_client,
+                    &influxdb_db,
+                    &influxdb_read_user,
+                    &*INFLUXDB_READ_PASSWORD.unsecure(),
+                )
+                .await?;
                 grafana::setup(
                     &grafana_client,
                     &repository,
                     &*INFLUXDB_BASE_URL,
-                    &*INFLUXDB_USERNAME,
-                    &*INFLUXDB_PASSWORD.unsecure(),
+                    &influxdb_db,
+                    &influxdb_read_user,
+                    &*INFLUXDB_READ_PASSWORD.unsecure(),
                     &*GRAFANA_DASHBOARDS_PATH,
                 )
                 .await?;
-                influxdb_client
-                    .query(&format!("CREATE DATABASE {}", influxdb_db))
-                    .await?;
                 let points = get_builds_since(
                     &gh_inst_client,
                     &repository,
