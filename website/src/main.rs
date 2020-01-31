@@ -89,6 +89,7 @@ struct TemplateData<'a> {
 }
 
 async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallible> {
+    // TODO: Resolve repository id (== org name) to org id by querying grafana
     let template = "
         <!DOCTYPE html>
         <html>
@@ -102,7 +103,7 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallib
                 <ul>
                     {{#each user.repositories}}
                         <li>
-                            <a href=\"/_/?orgId={{id}}\">{{full_name}}</a>
+                            <a href=\"/_/\">{{full_name}}</a>
                         </li>
                     {{/each}}
                 </ul>
