@@ -9,6 +9,25 @@ use tokio::fs;
 
 type BoxError = Box<dyn std::error::Error>;
 
+const DATASOURCE_NAME: &str = "DB";
+
+pub async fn setup_organization(client: &Client, repository: &Repository) -> Result<i32, BoxError> {
+    info!("Setup Grafana organization for {}", repository.full_name);
+
+    let org_name = grafana_org_name(repository);
+    let org_id = match client.lookup_organization(&org_name).await? {
+        Some(org) => org.id,
+        None => {
+            client
+                .create_organization(CreateOrganization { name: org_name })
+                .await?
+                .org_id
+        }
+    };
+
+    Ok(org_id)
+}
+
 fn assert_datasource_org(datasource: DataSource, org_id: i32) -> Result<DataSource, String> {
     if datasource.org_id == org_id {
         Ok(datasource)
@@ -20,21 +39,23 @@ fn assert_datasource_org(datasource: DataSource, org_id: i32) -> Result<DataSour
     }
 }
 
-async fn setup_datasource(
+pub async fn setup_datasource(
     client: &Client,
-    datasource_name: &str,
     org_id: i32,
     influxdb_base_url: &str,
     influxdb_db: &str,
     influxdb_user: &str,
     influxdb_password: &str,
 ) -> Result<(), BoxError> {
-    let datasource = match client.lookup_datasource(datasource_name).await? {
+    info!("Setup Grafana datasource for {}", org_id);
+
+    client.switch_organization_context(org_id).await?;
+    let datasource = match client.lookup_datasource(DATASOURCE_NAME).await? {
         Some(data_source) => data_source,
         None => {
             client
                 .create_datasource(CreateDataSource {
-                    name: datasource_name.to_owned(),
+                    name: DATASOURCE_NAME.to_owned(),
                     r#type: "influxdb".to_owned(),
                     access: DataSourceAccess::Proxy,
                     url: None,
@@ -94,7 +115,15 @@ fn is_hidden_entry(entry: &tokio::fs::DirEntry) -> bool {
         .map_or(false, |s| s.starts_with('.'))
 }
 
-async fn setup_dashboards(client: &Client, dashboards_path: &str) -> Result<(), BoxError> {
+pub async fn setup_dashboards(
+    client: &Client,
+    org_id: i32,
+    dashboards_path: &str,
+) -> Result<(), BoxError> {
+    info!("Setup Grafana dashboards for {}", org_id);
+
+    client.switch_organization_context(org_id).await?;
+
     let mut entries = fs::read_dir(dashboards_path).await?;
     while let Some(entry) = entries.next_entry().await? {
         if !is_hidden_entry(&entry) {
@@ -113,46 +142,6 @@ async fn setup_dashboards(client: &Client, dashboards_path: &str) -> Result<(), 
                 .await?;
         }
     }
-
-    Ok(())
-}
-
-pub async fn setup(
-    client: &Client,
-    repository: &Repository,
-    influxdb_base_url: &str,
-    influxdb_db: &str,
-    influxdb_user: &str,
-    influxdb_password: &str,
-    dashboards_path: &str,
-) -> Result<(), BoxError> {
-    info!("Grafana setup for {}", repository.full_name);
-
-    let org_name = grafana_org_name(repository);
-    let org_id = match client.lookup_organization(&org_name).await? {
-        Some(org) => org.id,
-        None => {
-            client
-                .create_organization(CreateOrganization { name: org_name })
-                .await?
-                .org_id
-        }
-    };
-    client.switch_organization_context(org_id).await?;
-
-    let datasource_name = "DB";
-    setup_datasource(
-        client,
-        datasource_name,
-        org_id,
-        influxdb_base_url,
-        influxdb_db,
-        influxdb_user,
-        influxdb_password,
-    )
-    .await?;
-
-    setup_dashboards(client, dashboards_path).await?;
 
     Ok(())
 }

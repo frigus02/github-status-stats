@@ -62,8 +62,11 @@ async fn main() -> Result<(), BoxError> {
                 &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
             )?;
 
+            let grafana_org_id = grafana::setup_organization(&grafana_client, &repository).await?;
+
             let last_import = get_last_import(&influxdb_client).await?;
             if let Some(last_import) = last_import {
+                // Import commit statuses since last import.
                 let commit_shas =
                     get_status_hook_commits_since(&influxdb_client, &last_import).await?;
                 if !commit_shas.is_empty() {
@@ -71,6 +74,7 @@ async fn main() -> Result<(), BoxError> {
                     import(&influxdb_client, points).await?;
                 }
             } else {
+                // First import. Setup InfluxDB, Grafana datasource and perform initial import.
                 let influxdb_read_user = influxdb_read_user(&repository);
                 influxdb::setup(
                     &influxdb_client,
@@ -79,14 +83,13 @@ async fn main() -> Result<(), BoxError> {
                     &*INFLUXDB_READ_PASSWORD.unsecure(),
                 )
                 .await?;
-                grafana::setup(
+                grafana::setup_datasource(
                     &grafana_client,
-                    &repository,
+                    grafana_org_id,
                     &*INFLUXDB_BASE_URL,
                     &influxdb_db,
                     &influxdb_read_user,
                     &*INFLUXDB_READ_PASSWORD.unsecure(),
-                    &*GRAFANA_DASHBOARDS_PATH,
                 )
                 .await?;
                 let points = get_builds_since(
@@ -97,6 +100,9 @@ async fn main() -> Result<(), BoxError> {
                 .await?;
                 import(&influxdb_client, points).await?;
             }
+
+            grafana::setup_dashboards(&grafana_client, grafana_org_id, &*GRAFANA_DASHBOARDS_PATH)
+                .await?;
         }
     }
 
