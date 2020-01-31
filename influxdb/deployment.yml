@@ -15,9 +15,6 @@ spec:
       containers:
         - name: influxdb
           image: influxdb:1.7.9
-          args:
-            - -config
-            - /etc/influxdb/influxdb.conf
           env:
             - name: INFLUXDB_ADMIN_USER
               valueFrom:
@@ -33,10 +30,10 @@ spec:
             - containerPort: 8086
           resources:
             requests:
-              cpu: 20m
+              cpu: 50m
               memory: 100Mi
             limits:
-              cpu: 20m
+              cpu: 200m
               memory: 100Mi
           volumeMounts:
             - name: config
