@@ -61,8 +61,7 @@ async fn main() -> Result<(), BoxError> {
                 &*INFLUXDB_ADMIN_USERNAME,
                 &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
             )?;
-
-            let grafana_org_id = grafana::setup_organization(&grafana_client, &repository).await?;
+            let influxdb_read_user = influxdb_read_user(&repository);
 
             let last_import = get_last_import(&influxdb_client).await?;
             if let Some(last_import) = last_import {
@@ -75,18 +74,8 @@ async fn main() -> Result<(), BoxError> {
                 }
             } else {
                 // First import. Setup InfluxDB, Grafana datasource and perform initial import.
-                let influxdb_read_user = influxdb_read_user(&repository);
                 influxdb::setup(
                     &influxdb_client,
-                    &influxdb_db,
-                    &influxdb_read_user,
-                    &*INFLUXDB_READ_PASSWORD.unsecure(),
-                )
-                .await?;
-                grafana::setup_datasource(
-                    &grafana_client,
-                    grafana_org_id,
-                    &*INFLUXDB_BASE_URL,
                     &influxdb_db,
                     &influxdb_read_user,
                     &*INFLUXDB_READ_PASSWORD.unsecure(),
@@ -101,6 +90,16 @@ async fn main() -> Result<(), BoxError> {
                 import(&influxdb_client, points).await?;
             }
 
+            let grafana_org_id = grafana::setup_organization(&grafana_client, &repository).await?;
+            grafana::setup_datasource(
+                &grafana_client,
+                grafana_org_id,
+                &*INFLUXDB_BASE_URL,
+                &influxdb_db,
+                &influxdb_read_user,
+                &*INFLUXDB_READ_PASSWORD.unsecure(),
+            )
+            .await?;
             grafana::setup_dashboards(&grafana_client, grafana_org_id, &*GRAFANA_DASHBOARDS_PATH)
                 .await?;
         }
