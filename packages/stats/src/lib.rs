@@ -27,6 +27,7 @@ pub fn build_from_statuses(statuses: Vec<CommitStatus>, commit_sha: String) -> B
     let last_millis = last.created_at.timestamp_millis();
     Build {
         name,
+        source: BuildSource::Status,
         successful: last.state == CommitStatusState::Success,
         duration_ms: last_millis - first_millis,
         created_at,
@@ -37,6 +38,7 @@ pub fn build_from_statuses(statuses: Vec<CommitStatus>, commit_sha: String) -> B
 pub fn build_from_check_run(check_run: CheckRun) -> Build {
     Build {
         name: check_run.name,
+        source: BuildSource::CheckRun,
         successful: match check_run.conclusion {
             Some(conclusion) => conclusion == CheckRunConclusion::Success,
             None => false,

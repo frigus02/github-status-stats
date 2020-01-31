@@ -84,8 +84,9 @@ cargo watch -x run
 - Measurement: `build`
 - Tags:
   - `name`: `status.context` or `check_run.name`
-  - `commit`: commit SHA
+  - `source`: `status` or `check_run`
 - Fields:
+  - `commit`: commit SHA
   - `successful`: `true` or `false`
   - `duration_ms`
 - Timestamp: `status.created_at` or `check_run.started_at`
@@ -102,7 +103,6 @@ cargo watch -x run
 - Measurement: `hook`
 - Tags:
   - `type`: `status` or `check_run`
-  - `commit`: commit SHA
 - Fields:
-  - `dummy`: `true`
+  - `commit`: commit SHA
 - Timestamp: hook date

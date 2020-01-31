@@ -14,29 +14,43 @@ spec:
     spec:
       containers:
         - name: influxdb
-          image: influxdb
+          image: influxdb:1.7.9
+          args:
+            - -config
+            - /etc/influxdb/influxdb.conf
           env:
-            - name: INFLUXDB_DB
-              value: db0
-            - name: INFLUXDB_USER
+            - name: INFLUXDB_ADMIN_USER
               valueFrom:
                 secretKeyRef:
                   name: ghss-influxdb
                   key: username
-            - name: INFLUXDB_USER_PASSWORD
+            - name: INFLUXDB_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: ghss-influxdb
                   key: password
           ports:
             - containerPort: 8086
-          # resources:
-          #   limits:
-          #     cpu: 100m
-          #     memory: 100Mi
-          #   requests:
-          #     cpu: 100m
-          #     memory: 100Mi
+          resources:
+            requests:
+              cpu: 20m
+              memory: 100Mi
+            limits:
+              cpu: 20m
+              memory: 100Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/influxdb/influxdb.conf
+              subPath: influxdb.conf
+            - name: data
+              mountPath: /var/lib/influxdb
+      volumes:
+        - name: config
+          configMap:
+            name: ghss-influxdb
+        - name: data
+          persistentVolumeClaim:
+            claimName: ghss-influxdb
 ---
 apiVersion: v1
 kind: Service

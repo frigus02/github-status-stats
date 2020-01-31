@@ -48,6 +48,13 @@ spec:
                       key: password
                 - name: GRAFANA_DASHBOARDS_PATH
                   value: /etc/grafana-dashboards
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 20Mi
+                limits:
+                  cpu: 20m
+                  memory: 20Mi
               volumeMounts:
                 - name: grafana-dashboards
                   mountPath: /etc/grafana-dashboards

@@ -5,6 +5,7 @@ resources:
   - grafana/secret.yml
   - importer/cronjob.yml
   - influxdb/deployment.yml
+  - influxdb/pvc.yml
   - influxdb/secret.yml
   - website/deployment.yml
   # - k8s/ingress.yml
@@ -17,6 +18,9 @@ configMapGenerator:
   - name: ghss-grafana-dashboards
     files:
       - grafana/dashboards/builds.json
+  - name: ghss-influxdb
+    files:
+      - influxdb/config/influxdb.conf
 secretGenerator:
   - name: ghss-github
     type: Opaque

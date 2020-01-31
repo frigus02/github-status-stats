@@ -28,17 +28,17 @@ spec:
                   key: password
           ports:
             - containerPort: 3000
-          resources:
-            limits:
-              cpu: 100m
-              memory: 100Mi
-            requests:
-              cpu: 100m
-              memory: 100Mi
           readinessProbe:
             httpGet:
               path: /login
               port: 3000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 50m
+              memory: 50Mi
           volumeMounts:
             - name: config
               mountPath: /etc/grafana/grafana.ini

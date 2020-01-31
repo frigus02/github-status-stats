@@ -62,17 +62,17 @@ spec:
                   key: password
           ports:
             - containerPort: 8888
-          # resources:
-          #   limits:
-          #     cpu: 100m
-          #     memory: 100Mi
-          #   requests:
-          #     cpu: 100m
-          #     memory: 100Mi
-          # readinessProbe:
-          #   httpGet:
-          #     path: /login
-          #     port: 3000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8888
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+            limits:
+              cpu: 10m
+              memory: 20Mi
 ---
 apiVersion: v1
 kind: Service
