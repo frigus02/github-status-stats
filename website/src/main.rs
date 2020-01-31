@@ -75,6 +75,13 @@ fn raw_request() -> impl Filter<Extract = (Request<Body>,), Error = warp::Reject
         )
 }
 
+fn new_error_res(status: StatusCode) -> Response<Body> {
+    Response::builder()
+        .status(status)
+        .body(Body::from(status.to_string()))
+        .unwrap()
+}
+
 #[derive(Serialize)]
 struct TemplateData<'a> {
     user: Option<grafana_auth::GitHubUser>,
@@ -143,8 +150,13 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallib
 
 async fn dashboard_login_route(
     req: Request<Body>,
-    token: String,
+    token: Option<String>,
 ) -> Result<impl warp::Reply, Infallible> {
+    let token = match token {
+        Some(token) => token,
+        None => return Ok(new_error_res(StatusCode::UNAUTHORIZED)),
+    };
+
     let login = grafana_auth::sync_user(&token, &*GRAFANA_CLIENT)
         .await
         .map_err(|err| err.to_string());
@@ -157,10 +169,7 @@ async fn dashboard_login_route(
     };
     match res {
         Ok(res) => Ok(res),
-        Err(err) => Ok(Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from(err.to_string()))
-            .unwrap()),
+        Err(_) => Ok(new_error_res(StatusCode::INTERNAL_SERVER_ERROR)),
     }
 }
 
@@ -192,10 +201,7 @@ async fn setup_authorized_route(
             )
             .body(Body::empty())
             .unwrap()),
-        Err(err) => Ok(Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from(err.to_string()))
-            .unwrap()),
+        Err(_) => Ok(new_error_res(StatusCode::INTERNAL_SERVER_ERROR)),
     }
 }
 
@@ -276,7 +282,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let dashboard_login = warp::path!("_" / "login" / ..)
         .and(raw_request())
-        .and(warp::cookie("token"))
+        .and(warp::cookie::optional("token"))
         .and_then(dashboard_login_route);
     let dashboard = warp::path!("_" / ..)
         .and(raw_request())
