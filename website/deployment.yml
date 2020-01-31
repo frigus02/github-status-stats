@@ -19,7 +19,7 @@ spec:
             - name: RUST_LOG
               value: info,website=debug,github_client=debug,grafana_client=debug,influxdb_client=debug
             - name: HOST
-              value: http://kubernetes.docker.internal
+              value: https://github-status-stats.kuehle.me
             - name: GH_CLIENT_ID
               valueFrom:
                 secretKeyRef:

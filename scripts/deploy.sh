@@ -28,5 +28,4 @@ kustomize edit set image \
     "$(docker inspect --format '{{json .RepoDigests}}' "$IMPORTER:$TAG" | jq -r '.[0]')" \
     "$(docker inspect --format '{{json .RepoDigests}}' "$WEBSITE:$TAG" | jq -r '.[0]')"
 
-# kustomize build | kubectl apply -f -
-kustomize build
+kustomize build | kubectl apply -f -
