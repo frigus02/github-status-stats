@@ -265,8 +265,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let hooks = warp::post()
         .and(warp::path!("hooks"))
-        .and(warp::cookie("X-Hub-Signature"))
-        .and(warp::cookie("X-GitHub-Event"))
+        .and(warp::header("X-Hub-Signature"))
+        .and(warp::header("X-GitHub-Event"))
         .and(warp::body::bytes())
         .and_then(hooks_route);
 
