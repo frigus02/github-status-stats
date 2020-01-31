@@ -23,8 +23,4 @@ if [ "$TAG" != "dev" ]; then
     docker push $BASE
     docker push "$IMPORTER:$TAG"
     docker push "$WEBSITE:$TAG"
-
-    # kustomize edit set image \
-    #     "$(docker inspect --format '{{json .RepoDigests}}' "$IMPORTER:$TAG" | jq -r '.[0]')" \
-    #     "$(docker inspect --format '{{json .RepoDigests}}' "$WEBSITE:$TAG" | jq -r '.[0]')"
 fi

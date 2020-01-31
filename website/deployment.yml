@@ -14,8 +14,7 @@ spec:
     spec:
       containers:
         - name: website
-          image: frigus02/github-status-stats-website
-          imagePullPolicy: Always
+          image: frigus02/github-status-stats-website:dev
           env:
             - name: RUST_LOG
               value: info,website=debug,github_client=debug,grafana_client=debug,influxdb_client=debug
