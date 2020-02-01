@@ -1,18 +1,20 @@
 #[macro_use]
 extern crate lazy_static;
 
+mod filters;
 mod github_hooks;
 mod grafana_auth;
 mod reverse_proxy;
+mod templates;
 
 use bytes::Bytes;
-use handlebars::Handlebars;
+use filters::raw_request;
 use log::info;
 use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
-use serde::Serialize;
 use stats::{influxdb_name, Build};
 use std::convert::Infallible;
+use templates::IndexTemplate;
 use warp::{
     http::{Request, Response, StatusCode},
     hyper::Body,
@@ -20,59 +22,33 @@ use warp::{
 };
 
 lazy_static! {
-    static ref HOST: String = std::env::var("HOST").unwrap();
+    static ref HOST: String = std::env::var("HOST").expect("env HOST");
     static ref GH_REDIRECT_URI: String = format!("{}/setup/authorized", *HOST);
-    static ref GH_CLIENT_ID: String = std::env::var("GH_CLIENT_ID").unwrap();
+    static ref GH_CLIENT_ID: String = std::env::var("GH_CLIENT_ID").expect("env GH_CLIENT_ID");
     static ref GH_CLIENT_SECRET: SecUtf8 =
-        SecUtf8::from(std::env::var("GH_CLIENT_SECRET").unwrap());
+        SecUtf8::from(std::env::var("GH_CLIENT_SECRET").expect("env GH_CLIENT_SECRET"));
     static ref GH_LOGIN_URL: String =
         github_client::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI)
-            .unwrap()
+            .expect("construct GitHub login URL")
             .into_string();
     static ref GH_WEBHOOK_SECRET: SecStr =
-        SecStr::from(std::env::var("GH_WEBHOOK_SECRET").unwrap());
-    static ref INFLUXDB_BASE_URL: String = std::env::var("INFLUXDB_BASE_URL").unwrap();
-    static ref INFLUXDB_ADMIN_USERNAME: String = std::env::var("INFLUXDB_ADMIN_USERNAME").unwrap();
-    static ref INFLUXDB_ADMIN_PASSWORD: SecUtf8 =
-        SecUtf8::from(std::env::var("INFLUXDB_ADMIN_PASSWORD").unwrap());
-    static ref GRAFANA_BASE_URL: String = std::env::var("GRAFANA_BASE_URL").unwrap();
+        SecStr::from(std::env::var("GH_WEBHOOK_SECRET").expect("env GH_WEBHOOK_SECRET"));
+    static ref INFLUXDB_BASE_URL: String =
+        std::env::var("INFLUXDB_BASE_URL").expect("env INFLUXDB_BASE_URL");
+    static ref INFLUXDB_ADMIN_USERNAME: String =
+        std::env::var("INFLUXDB_ADMIN_USERNAME").expect("env INFLUXDB_ADMIN_USERNAME");
+    static ref INFLUXDB_ADMIN_PASSWORD: SecUtf8 = SecUtf8::from(
+        std::env::var("INFLUXDB_ADMIN_PASSWORD").expect("env INFLUXDB_ADMIN_PASSWORD")
+    );
+    static ref GRAFANA_BASE_URL: String =
+        std::env::var("GRAFANA_BASE_URL").expect("env GRAFANA_BASE_URL");
     static ref GRAFANA_CLIENT: grafana_client::Client = grafana_client::Client::new(
         GRAFANA_BASE_URL.clone(),
-        &std::env::var("GRAFANA_ADMIN_USERNAME").unwrap(),
-        &std::env::var("GRAFANA_ADMIN_PASSWORD").unwrap()
+        &std::env::var("GRAFANA_ADMIN_USERNAME").expect("env GRAFANA_ADMIN_USERNAME"),
+        &std::env::var("GRAFANA_ADMIN_PASSWORD").expect("env GRAFANA_ADMIN_PASSWORD")
     )
     .unwrap();
     static ref GRAFANA_PROXY: ReverseProxy = ReverseProxy::new(&*GRAFANA_BASE_URL).unwrap();
-}
-
-fn raw_query_option() -> impl Filter<Extract = (Option<String>,), Error = Infallible> + Clone {
-    warp::query::raw()
-        .map(Some)
-        .or(warp::any().map(|| None))
-        .unify()
-}
-
-fn raw_request() -> impl Filter<Extract = (Request<Body>,), Error = warp::Rejection> + Clone {
-    warp::method()
-        .and(warp::path::full())
-        .and(raw_query_option())
-        .and(warp::header::headers_cloned())
-        .and(warp::body::bytes())
-        .map(
-            |method, path: warp::filters::path::FullPath, query: Option<String>, headers, body| {
-                let mut req = Request::builder()
-                    .method(method)
-                    .uri(format!(
-                        "{}{}",
-                        path.as_str(),
-                        query.map_or("".to_owned(), |q| format!("?{}", q))
-                    ))
-                    .body(warp::hyper::body::Body::from(body))
-                    .expect("request builder");
-                *req.headers_mut() = headers;
-                req
-            },
-        )
 }
 
 fn new_error_res(status: StatusCode) -> Response<Body> {
@@ -82,71 +58,23 @@ fn new_error_res(status: StatusCode) -> Response<Body> {
         .unwrap()
 }
 
-#[derive(Serialize)]
-struct TemplateData<'a> {
-    user: Option<grafana_auth::GitHubUser>,
-    login_url: &'a str,
-}
-
 async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallible> {
     // TODO: Resolve repository id (== org name) to org id by querying grafana
-    let template = "
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>GitHub Status Stats</title>
-        </head>
-        <body>
-            <h1>GitHub Status Stats</h1>
-            {{#if user}}
-                <h2>Hello {{user.name}}!</h2>
-                <ul>
-                    {{#each user.repositories}}
-                        <li>
-                            <a href=\"/_/d/builds/builds\">{{full_name}}</a>
-                        </li>
-                    {{/each}}
-                </ul>
-                <a href=\"https://github.com/apps/status-stats\">Add repository</a>
-            {{else}}
-                <div><a href={{login_url}}>Login</a></div>
-            {{/if}}
-        </body>
-        </html>
-    ";
 
-    let data = if let Some(token) = token {
-        grafana_auth::get_github_user(&token)
-            .await
-            .map(|user| TemplateData {
-                user: Some(user),
-                login_url: &*GH_LOGIN_URL,
-            })
-    } else {
-        Ok(TemplateData {
-            user: None,
-            login_url: &*GH_LOGIN_URL,
-        })
+    let data = match token {
+        Some(token) => match grafana_auth::get_github_user(&token).await {
+            Ok(user) => IndexTemplate::LoggedIn { user },
+            Err(err) => IndexTemplate::Error {
+                message: err.to_string(),
+            },
+        },
+        None => IndexTemplate::Anonymous {
+            login_url: GH_LOGIN_URL.clone(),
+        },
     };
 
-    match data {
-        Ok(data) => {
-            let mut hb = Handlebars::new();
-            hb.register_template_string("template.html", template)
-                .unwrap();
-            let render = hb
-                .render("template.html", &data)
-                .unwrap_or_else(|err| err.to_string());
-            Ok(warp::reply::with_status(
-                warp::reply::html(render),
-                StatusCode::OK,
-            ))
-        }
-        Err(err) => Ok(warp::reply::with_status(
-            warp::reply::html(err.to_string()),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )),
-    }
+    let render = templates::render_index(&data);
+    Ok(warp::reply::html(render))
 }
 
 async fn dashboard_login_route(
