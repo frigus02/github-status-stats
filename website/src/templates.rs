@@ -1,4 +1,3 @@
-use super::grafana_auth::GitHubUser;
 use handlebars::Handlebars;
 use serde::Serialize;
 
@@ -18,18 +17,22 @@ lazy_static! {
                     <div><a href={{login_url}}>Login</a></div>
                 {{/with}}{{/if}}
                 {{#if LoggedIn}}{{#with LoggedIn}}
-                    <h2>Hello {{user.name}}!</h2>
+                    <h2>Hello {{user}}!</h2>
                     <ul>
-                        {{#each user.repositories}}
+                        {{#each repositories}}
                             <li>
-                                <a href=\"/_/d/builds/builds\">{{full_name}}</a>
+                                {{#if grafana_org_id}}
+                                    <a href=\"/_/d/builds/builds?orgId={{grafana_org_id}}\">{{full_name}}</a>
+                                {{else}}
+                                    {{full_name}} (waiting for first import)
+                                {{/if}}
                             </li>
                         {{/each}}
                     </ul>
                     <a href=\"https://github.com/apps/status-stats\">Add repository</a>
                 {{/with}}{{/if}}
                 {{#if Error}}{{#with Error}}
-                    <h2>Something went wrong</2>
+                    <h2>Something went wrong</h2>
                     <p>{{message}}</p>
                 {{/with}}{{/if}}
             </body>
@@ -43,10 +46,23 @@ lazy_static! {
 }
 
 #[derive(Serialize)]
+pub struct RepositoryAccess {
+    pub full_name: String,
+    pub grafana_org_id: Option<i32>,
+}
+
+#[derive(Serialize)]
 pub enum IndexTemplate {
-    Anonymous { login_url: String },
-    LoggedIn { user: GitHubUser },
-    Error { message: String },
+    Anonymous {
+        login_url: String,
+    },
+    LoggedIn {
+        user: String,
+        repositories: Vec<RepositoryAccess>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 pub fn render_index(data: &IndexTemplate) -> String {

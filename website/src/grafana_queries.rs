@@ -1,57 +1,24 @@
+use super::github_queries::{get_github_user, GitHubUser};
 use futures::future::join_all;
-use github_client::Repository;
+use grafana_client::{Client, CreateOrganizationMembership, CreateUser, Organization, Role};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use serde::Serialize;
 use stats::{grafana_org_name, grafana_user_login};
 
 type BoxError = Box<dyn std::error::Error>;
-
-#[derive(Serialize)]
-pub struct GitHubUser {
-    pub name: String,
-    pub email: Option<String>,
-    pub grafana_login: String,
-    pub repositories: Vec<github_client::Repository>,
-}
 
 struct GrafanaUser {
     id: i32,
     login: String,
 }
 
-async fn get_repositories_and_map_error(
-    client: &github_client::Client,
-    installation: &github_client::Installation,
-) -> Result<Vec<github_client::Repository>, String> {
-    client
-        .get_user_installation_repositories(installation.id)
-        .await
-        .map_err(|err| format!("{}", err))
+pub struct MergedUser {
+    pub github: github_client::User,
+    pub repositories: Vec<MergedRepository>,
 }
 
-pub async fn get_github_user(token: &str) -> Result<GitHubUser, BoxError> {
-    let client = github_client::Client::new(token)?;
-    let user = client.get_user().await?;
-    let installations = client.get_user_installations().await?;
-    let repositories = join_all(
-        installations
-            .iter()
-            .map(|installation| get_repositories_and_map_error(&client, installation)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()?
-    .into_iter()
-    .flatten()
-    .collect::<Vec<Repository>>();
-
-    let grafana_login = grafana_user_login(&user);
-    Ok(GitHubUser {
-        name: user.name,
-        email: user.email,
-        grafana_login,
-        repositories,
-    })
+pub struct MergedRepository {
+    pub github: github_client::Repository,
+    pub grafana: Option<Organization>,
 }
 
 fn generate_random_password() -> String {
@@ -59,7 +26,7 @@ fn generate_random_password() -> String {
 }
 
 async fn ensure_grafana_user(
-    client: &grafana_client::Client,
+    client: &Client,
     login: String,
     name: Option<String>,
     email: Option<String>,
@@ -69,7 +36,7 @@ async fn ensure_grafana_user(
         Some(user) => user.id,
         None => {
             client
-                .create_user(grafana_client::CreateUser {
+                .create_user(CreateUser {
                     login: login.clone(),
                     name,
                     email,
@@ -83,7 +50,7 @@ async fn ensure_grafana_user(
 }
 
 async fn sync_repos_to_orgs(
-    client: &grafana_client::Client,
+    client: &Client,
     user: &GrafanaUser,
     repositories: Vec<github_client::Repository>,
 ) -> Result<(), BoxError> {
@@ -101,9 +68,9 @@ async fn sync_repos_to_orgs(
                     client
                         .add_user_to_organization(
                             org.id,
-                            grafana_client::CreateOrganizationMembership {
+                            CreateOrganizationMembership {
                                 login_or_email: user.login.clone(),
-                                role: grafana_client::Role::Viewer,
+                                role: Role::Viewer,
                             },
                         )
                         .await?;
@@ -121,18 +88,42 @@ async fn sync_repos_to_orgs(
     Ok(())
 }
 
-pub async fn sync_user(
-    github_token: &str,
-    client: &grafana_client::Client,
-) -> Result<String, BoxError> {
-    let permissions = get_github_user(github_token).await?;
-    let user = ensure_grafana_user(
-        client,
-        permissions.grafana_login,
-        Some(permissions.name),
-        permissions.email,
+async fn get_repository_access_and_map_error(
+    client: &Client,
+    repository: github_client::Repository,
+) -> Result<MergedRepository, String> {
+    let org_name = grafana_org_name(&repository);
+    let org = client
+        .lookup_organization(&org_name)
+        .await
+        .map_err(|err| err.to_string())?;
+    Ok(MergedRepository {
+        github: repository,
+        grafana: org,
+    })
+}
+
+pub async fn get_user(github_token: &str, client: &Client) -> Result<MergedUser, BoxError> {
+    let GitHubUser { user, repositories } = get_github_user(github_token).await?;
+    let repositories = join_all(
+        repositories
+            .into_iter()
+            .map(|repository| get_repository_access_and_map_error(client, repository)),
     )
-    .await?;
-    sync_repos_to_orgs(client, &user, permissions.repositories).await?;
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()?;
+    Ok(MergedUser {
+        github: user,
+        repositories,
+    })
+}
+
+pub async fn sync_user(github_token: &str, client: &Client) -> Result<String, BoxError> {
+    let GitHubUser { user, repositories } = get_github_user(github_token).await?;
+    let grafana_login = grafana_user_login(&user);
+
+    let user = ensure_grafana_user(client, grafana_login, Some(user.name), user.email).await?;
+    sync_repos_to_orgs(client, &user, repositories).await?;
     Ok(user.login)
 }

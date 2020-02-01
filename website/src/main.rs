@@ -3,7 +3,8 @@ extern crate lazy_static;
 
 mod filters;
 mod github_hooks;
-mod grafana_auth;
+mod github_queries;
+mod grafana_queries;
 mod reverse_proxy;
 mod templates;
 
@@ -14,7 +15,7 @@ use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
 use stats::{influxdb_name, Build};
 use std::convert::Infallible;
-use templates::IndexTemplate;
+use templates::{IndexTemplate, RepositoryAccess};
 use warp::{
     http::{Request, Response, StatusCode},
     hyper::Body,
@@ -59,11 +60,19 @@ fn new_error_res(status: StatusCode) -> Response<Body> {
 }
 
 async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallible> {
-    // TODO: Resolve repository id (== org name) to org id by querying grafana
-
     let data = match token {
-        Some(token) => match grafana_auth::get_github_user(&token).await {
-            Ok(user) => IndexTemplate::LoggedIn { user },
+        Some(token) => match grafana_queries::get_user(&token, &*GRAFANA_CLIENT).await {
+            Ok(user) => IndexTemplate::LoggedIn {
+                user: user.github.name,
+                repositories: user
+                    .repositories
+                    .into_iter()
+                    .map(|repo| RepositoryAccess {
+                        full_name: repo.github.full_name,
+                        grafana_org_id: repo.grafana.map(|org| org.id),
+                    })
+                    .collect(),
+            },
             Err(err) => IndexTemplate::Error {
                 message: err.to_string(),
             },
@@ -86,7 +95,7 @@ async fn dashboard_login_route(
         None => return Ok(new_error_res(StatusCode::UNAUTHORIZED)),
     };
 
-    let login = grafana_auth::sync_user(&token, &*GRAFANA_CLIENT)
+    let login = grafana_queries::sync_user(&token, &*GRAFANA_CLIENT)
         .await
         .map_err(|err| err.to_string());
     let res = match login {
