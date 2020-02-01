@@ -50,7 +50,7 @@ impl From<CheckRun> for Build {
             },
             duration_ms: match check_run.completed_at {
                 Some(completed_at) => {
-                    check_run.started_at.timestamp_millis() - completed_at.timestamp_millis()
+                    completed_at.timestamp_millis() - check_run.started_at.timestamp_millis()
                 }
                 None => 0,
             },
