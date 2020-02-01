@@ -10,6 +10,8 @@ type BoxError = Box<dyn std::error::Error>;
 pub enum Payload {
     CheckRun(Box<CheckRunEvent>),
     GitHubAppAuthorization(Box<GitHubAppAuthorizationEvent>),
+    Installation,
+    InstallationRepositories,
     Ping(Box<PingEvent>),
     Status(Box<StatusEvent>),
 }
@@ -46,6 +48,12 @@ pub fn deserialize(
         }
         "status" => Ok(serde_json::from_slice::<StatusEvent>(&body)
             .map(|data| Payload::Status(Box::new(data)))?),
+        "installation" => Ok(Payload::Installation),
+        // integration_installation is deprecated; replaced by installation
+        "integration_installation" => Ok(Payload::Installation),
+        "installation_repositories" => Ok(Payload::InstallationRepositories),
+        // integration_installation_repositories is deprecated; replaced by installation_repositories
+        "integration_installation_repositories" => Ok(Payload::InstallationRepositories),
         _ => Err(From::from(format!("Unsupported event {}", event))),
     }
 }

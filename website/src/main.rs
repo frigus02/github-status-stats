@@ -103,7 +103,7 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallib
                 <ul>
                     {{#each user.repositories}}
                         <li>
-                            <a href=\"/_/\">{{full_name}}</a>
+                            <a href=\"/_/d/builds/builds\">{{full_name}}</a>
                         </li>
                     {{/each}}
                 </ul>
@@ -239,6 +239,8 @@ async fn hooks_route(
                 .map_err(|err| err.to_string())
         }
         Ok(github_hooks::Payload::GitHubAppAuthorization(_auth)) => Ok(()),
+        Ok(github_hooks::Payload::Installation) => Ok(()),
+        Ok(github_hooks::Payload::InstallationRepositories) => Ok(()),
         Ok(github_hooks::Payload::Ping(_ping)) => Ok(()),
         Ok(github_hooks::Payload::Status(status)) => {
             let influxdb_db = influxdb_name(&status.repository);
