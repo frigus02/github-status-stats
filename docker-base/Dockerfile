@@ -1,4 +1,4 @@
-FROM rust:1.40
+FROM rust:1.41
 
 # Build statically linked OpenSSL
 RUN apt-get update && \
