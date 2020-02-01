@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghss-grafana
+spec:
+  selector:
+    matchLabels:
+      app: ghss-grafana
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ghss-grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:6.6.0
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-grafana
+                  key: username
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-grafana
+                  key: password
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 3000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 50m
+              memory: 50Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
+      volumes:
+        - name: config
+          configMap:
+            name: ghss-grafana

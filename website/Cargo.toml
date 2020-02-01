@@ -1,0 +1,27 @@
+[package]
+name = "website"
+version = "0.1.0"
+authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytes = "0.5.4"
+env_logger = "0.7.1"
+futures = "0.3.1"
+github_client = { path = "../packages/github_client" }
+grafana_client = { path = "../packages/grafana_client" }
+handlebars = "3.0.1"
+hmac = "0.7.1"
+influxdb_client = { path = "../packages/influxdb_client" }
+lazy_static = "1.4.0"
+log = "0.4.8"
+rand = "0.7.3"
+secstr = "0.3.2"
+serde = { version = "1.0.104", features = ["derive"] }
+serde_json = "1.0.45"
+sha-1 = "0.8.2"
+stats = { path = "../packages/stats" }
+tokio = { version = "0.2.10", features = ["macros"] }
+warp = "0.2.1"

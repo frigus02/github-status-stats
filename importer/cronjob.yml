@@ -1,0 +1,72 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: ghss-importer
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: importer
+              image: frigus02/github-status-stats-importer:dev
+              env:
+                - name: RUST_LOG
+                  value: info,importer=debug,github_client=debug,grafana_client=debug,influxdb_client=debug
+                - name: GH_APP_ID
+                  value: "50487"
+                - name: GH_PRIVATE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-github
+                      key: PRIVATE_KEY
+                - name: INFLUXDB_BASE_URL
+                  value: http://ghss-influxdb
+                - name: INFLUXDB_ADMIN_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-influxdb
+                      key: admin_username
+                - name: INFLUXDB_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-influxdb
+                      key: admin_password
+                - name: INFLUXDB_READ_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-influxdb
+                      key: read_password
+                - name: GRAFANA_BASE_URL
+                  value: http://ghss-grafana
+                - name: GRAFANA_ADMIN_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-grafana
+                      key: username
+                - name: GRAFANA_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-grafana
+                      key: password
+                - name: GRAFANA_DASHBOARDS_PATH
+                  value: /etc/grafana-dashboards
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 20Mi
+                limits:
+                  cpu: 20m
+                  memory: 20Mi
+              volumeMounts:
+                - name: grafana-dashboards
+                  mountPath: /etc/grafana-dashboards
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 1000
+          volumes:
+            - name: grafana-dashboards
+              configMap:
+                name: ghss-grafana-dashboards
+          restartPolicy: OnFailure

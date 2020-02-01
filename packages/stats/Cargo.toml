@@ -1,0 +1,12 @@
+[package]
+name = "stats"
+version = "0.1.0"
+authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4.10"
+github_client = { path = "../github_client" }
+influxdb_client = { path = "../influxdb_client" }

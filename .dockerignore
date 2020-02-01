@@ -1,9 +1,7 @@
-data/
 docs/
 grafana/
+influxdb/
 target/
 .env
 .env.example
-.gitignore
-docker-compose.yml
-README.md
+.env.ps1

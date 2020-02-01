@@ -1,0 +1,12 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ghss-website
+spec:
+  rules:
+    - host: kubernetes.docker.internal
+      http:
+        paths:
+          - backend:
+              serviceName: ghss-website
+              servicePort: 80

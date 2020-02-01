@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ghss-website
+  annotations:
+    cert-manager.io/cluster-issuer: kubesail-letsencrypt
+    certmanager.k8s.io/cluster-issuer: kubesail-letsencrypt
+spec:
+  rules:
+    - host: github-status-stats.kuehle.me
+      http:
+        paths:
+          - backend:
+              serviceName: ghss-website
+              servicePort: 80
+  tls:
+    - hosts:
+        - github-status-stats.kuehle.me
+      secretName: github-status-stats-kuehle-me

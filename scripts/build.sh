@@ -1,21 +1,26 @@
-#!/bin/sh
-set -eu
+#!/bin/bash
+set -euo pipefail
 
-BUILD_IMAGE=frigus02/github-status-stats-build
-FINAL_IMAGE=frigus02/github-status-stats
+PREFIX=frigus02/github-status-stats
 if [ "$(git diff --stat)" != "" ]; then
     TAG="dev"
 else
     TAG=$(git rev-parse HEAD)
 fi
 
-docker pull $BUILD_IMAGE
+BASE=$PREFIX-base
+docker pull $BASE
+docker build --cache-from=$BASE -t $BASE -f docker-base/Dockerfile .
 
-docker build --cache-from=$BUILD_IMAGE --target build -t $BUILD_IMAGE .
-docker build --cache-from=$BUILD_IMAGE -t "$FINAL_IMAGE:$TAG" .
+IMPORTER=$PREFIX-importer
+docker build --cache-from=$BASE -t "$IMPORTER:$TAG" -f importer/Dockerfile .
+
+WEBSITE=$PREFIX-website
+docker build --cache-from=$BASE -t "$WEBSITE:$TAG" -f website/Dockerfile .
 
 if [ "$TAG" != "dev" ]; then
     docker login -u frigus02 -p "$DOCKER_PASSWORD"
-    docker push $BUILD_IMAGE
-    docker push "$FINAL_IMAGE:$TAG"
+    docker push $BASE
+    docker push "$IMPORTER:$TAG"
+    docker push "$WEBSITE:$TAG"
 fi
