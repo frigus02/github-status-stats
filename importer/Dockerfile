@@ -1,4 +1,5 @@
-FROM frigus02/github-status-stats-base as build
+ARG REGISTRY=frigus02
+FROM $REGISTRY/github-status-stats-base as build
 
 # Create tiny image
 FROM scratch

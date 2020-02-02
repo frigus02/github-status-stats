@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: website
-          image: frigus02/github-status-stats-website:dev
+          image: frigus02/github-status-stats-website
           env:
             - name: RUST_LOG
               value: info,website=debug,github_client=debug,grafana_client=debug,influxdb_client=debug

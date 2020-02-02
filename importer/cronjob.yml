@@ -10,7 +10,7 @@ spec:
         spec:
           containers:
             - name: importer
-              image: frigus02/github-status-stats-importer:dev
+              image: frigus02/github-status-stats-importer
               env:
                 - name: RUST_LOG
                   value: info,importer=debug,github_client=debug,grafana_client=debug,influxdb_client=debug

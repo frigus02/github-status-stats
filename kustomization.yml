@@ -13,14 +13,14 @@ resources:
 commonLabels:
   group: github-status-stats
 configMapGenerator:
-  - name: ghss-grafana
-    files:
+- files:
       - grafana/config/grafana.ini
-  - name: ghss-grafana-dashboards
-    files:
+  name: ghss-grafana
+- files:
       - grafana/dashboards/builds.json
-  - name: ghss-influxdb
-    files:
+  name: ghss-grafana-dashboards
+- files:
       - influxdb/config/influxdb.conf
+  name: ghss-influxdb
 generatorOptions:
   disableNameSuffixHash: true
