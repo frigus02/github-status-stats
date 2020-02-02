@@ -8,7 +8,7 @@
   - `source`: `status` or `check_run`
 - Fields:
   - `commit`: commit SHA
-  - `successful`: `true` or `false`
+  - `successful`: `1` or `0`
   - `duration_ms`
 - Timestamp: `status.created_at` or `check_run.started_at`
 
