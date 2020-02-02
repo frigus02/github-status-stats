@@ -455,8 +455,8 @@ pub struct CommitCommitTree {
 pub struct CommitCommitVerification {
     pub verified: bool,
     pub reason: String,
-    pub signature: String,
-    pub payload: String,
+    pub signature: Option<String>,
+    pub payload: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
