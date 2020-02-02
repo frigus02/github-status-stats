@@ -1,26 +1,24 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - grafana/deployment.yml
-  - grafana/service.yml
-  - importer/cronjob.yml
-  - influxdb/deployment.yml
-  - influxdb/pvc.yml
-  - influxdb/service.yml
-  - website/deployment.yml
-  - website/ingress.yml
-  - website/service.yml
+- grafana/deployment.yml
+- grafana/service.yml
+- importer/cronjob.yml
+- influxdb/deployment.yml
+- influxdb/pvc.yml
+- influxdb/service.yml
+- website/deployment.yml
+- website/ingress.yml
+- website/service.yml
 commonLabels:
   group: github-status-stats
 configMapGenerator:
-  - name: ghss-grafana
-    files:
-      - grafana/config/grafana.ini
-  - name: ghss-grafana-dashboards
-    files:
-      - grafana/dashboards/builds.json
-  - name: ghss-influxdb
-    files:
-      - influxdb/config/influxdb.conf
-generatorOptions:
-  disableNameSuffixHash: true
+- files:
+  - grafana/config/grafana.ini
+  name: ghss-grafana
+- files:
+  - grafana/dashboards/builds.json
+  name: ghss-grafana-dashboards
+- files:
+  - influxdb/config/influxdb.conf
+  name: ghss-influxdb

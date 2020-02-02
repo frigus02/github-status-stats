@@ -1,7 +1,11 @@
-docs/
-grafana/
-influxdb/
-target/
+/.github/
+/docs/
+/grafana/
+/influxdb/
+/scripts/
+/target/
 .env
 .env.example
 .env.ps1
+kustomization.yml
+README.md
