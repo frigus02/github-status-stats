@@ -1,5 +1,6 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Account {
@@ -504,4 +505,68 @@ pub struct StatusEvent {
 pub struct GitHubAppAuthorizationEvent {
     pub action: String,
     pub sender: Account,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GraphQLQuery {
+    pub query: &'static str,
+    pub variables: Option<HashMap<&'static str, serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GraphQLLocation {
+    pub line: i32,
+    pub column: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum GraphQLPathFragment {
+    Key(String),
+    Index(i32),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GraphQLError {
+    pub message: String,
+    pub locations: Option<Vec<GraphQLLocation>>,
+    pub path: Option<Vec<GraphQLPathFragment>>,
+    pub extensions: Option<HashMap<String, serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GraphQLResponse<T> {
+    pub data: Option<T>,
+    pub errors: Option<Vec<GraphQLError>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetMostRecentCommits {
+    pub repository: GetMostRecentCommitsRepository,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetMostRecentCommitsRepository {
+    pub default_branch_ref: GetMostRecentCommitsDefaultBranchRef,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetMostRecentCommitsDefaultBranchRef {
+    pub target: GetMostRecentCommitsTarget,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetMostRecentCommitsTarget {
+    pub history: GetMostRecentCommitsHistory,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetMostRecentCommitsHistory {
+    pub nodes: Vec<GetMostRecentCommitsNode>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetMostRecentCommitsNode {
+    pub oid: String,
 }

@@ -1,4 +1,3 @@
-use chrono::{DateTime, TimeZone};
 use github_client::{CheckRun, Client, CommitStatus, CommitStatusState, Repository};
 use log::info;
 use stats::Build;
@@ -51,24 +50,13 @@ fn check_runs_to_builds(check_runs: Vec<CheckRun>) -> Vec<Build> {
         .collect()
 }
 
-pub async fn get_builds_since<Tz: TimeZone>(
+pub async fn get_most_recent_builds(
     client: &Client,
     repository: &Repository,
-    commits_since: &DateTime<Tz>,
-) -> Result<Vec<influxdb_client::Point>, BoxError>
-where
-    Tz::Offset: std::fmt::Display,
-{
+) -> Result<Vec<influxdb_client::Point>, BoxError> {
     let commit_shas = client
-        .get_commits(
-            &repository.owner.login,
-            &repository.name,
-            &commits_since.to_rfc3339(),
-        )
-        .await?
-        .into_iter()
-        .map(|commit| commit.sha)
-        .collect();
+        .get_most_recent_commits(&repository.owner.login, &repository.name)
+        .await?;
     get_builds(client, repository, commit_shas).await
 }
 

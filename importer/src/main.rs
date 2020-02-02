@@ -5,8 +5,7 @@ mod build;
 mod grafana;
 mod influxdb;
 
-use build::{get_builds, get_builds_since};
-use chrono::{Duration, Utc};
+use build::{get_builds, get_most_recent_builds};
 use github_client::Client;
 use influxdb::{get_last_import, get_status_hook_commits_since, import};
 use log::info;
@@ -81,12 +80,7 @@ async fn main() -> Result<(), BoxError> {
                     &*INFLUXDB_READ_PASSWORD.unsecure(),
                 )
                 .await?;
-                let points = get_builds_since(
-                    &gh_inst_client,
-                    &repository,
-                    &(Utc::now() - Duration::weeks(1)),
-                )
-                .await?;
+                let points = get_most_recent_builds(&gh_inst_client, &repository).await?;
                 import(&influxdb_client, points).await?;
             }
 
