@@ -133,7 +133,7 @@ async fn setup_authorized_route(
             .header(
                 "set-cookie",
                 format!(
-                    "token={}; Path=/; SameSite=Strict; Secure; HttpOnly",
+                    "token={}; Path=/; SameSite=Lax; Secure; HttpOnly",
                     token.access_token
                 ),
             )
@@ -220,7 +220,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::path!("favicon.ico"))
         .and(warp::fs::file("static/favicon.ico"));
 
-    let dashboard_login = warp::path!("_" / "login" / ..)
+    let dashboard_login = warp::path!("_" / "login")
         .and(raw_request())
         .and(warp::cookie::optional("token"))
         .and_then(dashboard_login_route);
