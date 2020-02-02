@@ -75,7 +75,10 @@ impl From<Build> for Point {
 
         let mut fields = HashMap::new();
         fields.insert("commit", FieldValue::String(build.commit_sha));
-        fields.insert("successful", FieldValue::Boolean(build.successful));
+        fields.insert(
+            "successful",
+            FieldValue::Integer(if build.successful { 1 } else { 0 }),
+        );
         fields.insert("duration_ms", FieldValue::Integer(build.duration_ms));
 
         Self {

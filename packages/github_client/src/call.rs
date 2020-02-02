@@ -3,6 +3,7 @@ use log::debug;
 use reqwest::header::{ACCEPT, LINK};
 use reqwest::{Client, RequestBuilder, Url};
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::error::Error;
 
 struct Response<T> {
@@ -38,6 +39,15 @@ async fn call_api<T: DeserializeOwned>(
 
 pub async fn get<T: DeserializeOwned>(client: &Client, url: Url) -> Result<T, Box<dyn Error>> {
     let result = call_api::<T>(client.get(url)).await?;
+    Ok(result.data)
+}
+
+pub async fn post<B: Serialize + ?Sized, T: DeserializeOwned>(
+    client: &Client,
+    url: Url,
+    body: &B,
+) -> Result<T, Box<dyn Error>> {
+    let result = call_api::<T>(client.post(url).json(body)).await?;
     Ok(result.data)
 }
 

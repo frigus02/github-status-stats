@@ -19,6 +19,12 @@
         "thresholdLabels": false,
         "thresholdMarkers": true
       },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
       "id": 10,
       "interval": null,
       "links": [],
@@ -129,7 +135,7 @@
         "thresholdMarkers": true
       },
       "gridPos": {
-        "h": 3,
+        "h": 4,
         "w": 6,
         "x": 6,
         "y": 0
@@ -227,177 +233,13 @@
       "valueName": "avg"
     },
     {
-      "columns": [
-        {
-          "text": "Avg",
-          "value": "avg"
-        },
-        {
-          "text": "Max",
-          "value": "max"
-        }
-      ],
-      "fontSize": "100%",
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "id": 4,
-      "options": {},
-      "pageSize": null,
-      "pluginVersion": "6.3.6",
-      "scroll": true,
-      "showHeader": true,
-      "sort": {
-        "col": 0,
-        "desc": false
-      },
-      "styles": [
-        {
-          "alias": "Pipeline",
-          "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "mappingType": 1,
-          "pattern": "Metric",
-          "preserveFormat": false,
-          "rangeMaps": [],
-          "type": "string",
-          "valueMaps": []
-        },
-        {
-          "alias": "",
-          "colorMode": null,
-          "colors": [
-            "rgba(245, 54, 54, 0.9)",
-            "rgba(237, 129, 40, 0.89)",
-            "rgba(50, 172, 45, 0.97)"
-          ],
-          "decimals": 2,
-          "pattern": "/avg|max/i",
-          "thresholds": [],
-          "type": "number",
-          "unit": "short"
-        }
-      ],
-      "targets": [
-        {
-          "alias": "$tag_name",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"attempts\") FROM \"build_per_commit\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series"
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Attempts by pipeline",
-      "transform": "timeseries_aggregations",
-      "type": "table"
-    },
-    {
-      "aliasColors": {},
-      "bars": true,
-      "dashLength": 10,
-      "dashes": false,
-      "description": "Attempts we took per build. Ideally 1. It's not guaranteed, that a build succeeded after these attempts.",
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 3
-      },
-      "id": 2,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "hideEmpty": false,
-        "hideZero": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": false,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": {
-        "dataLinks": []
-      },
-      "percentage": false,
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "alias": "$tag_name",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT max(attempts) FROM build_per_commit WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval),\"name\"",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Attempts",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
       "columns": [],
       "fontSize": "100%",
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 0
       },
       "id": 6,
       "options": {},
@@ -407,25 +249,18 @@
       "showHeader": true,
       "sort": {
         "col": 1,
-        "desc": true
+        "desc": false
       },
       "styles": [
         {
-          "alias": "",
-          "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "link": false,
-          "pattern": "Time",
-          "preserveFormat": false,
-          "sanitize": false,
-          "type": "hidden"
-        },
-        {
           "alias": "Pipeline",
+          "align": "auto",
           "pattern": "name",
           "type": "string"
         },
         {
           "alias": "Successful",
+          "align": "auto",
           "colorMode": "value",
           "colors": [
             "rgba(245, 54, 54, 0.9)",
@@ -442,33 +277,46 @@
           ],
           "type": "number",
           "unit": "percentunit"
-        },
-        {
-          "alias": "Canceled",
-          "colorMode": null,
-          "colors": [
-            "rgba(245, 54, 54, 0.9)",
-            "rgba(237, 129, 40, 0.89)",
-            "rgba(50, 172, 45, 0.97)"
-          ],
-          "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "decimals": 2,
-          "mappingType": 1,
-          "pattern": "mean_1",
-          "thresholds": [],
-          "type": "number",
-          "unit": "percentunit"
         }
       ],
       "targets": [
         {
           "alias": "$tag_name",
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"successful\"), mean(\"canceled\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY \"name\" ",
+          "query": "SELECT mean(\"successful\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY \"name\" ",
           "rawQuery": true,
           "refId": "A",
-          "resultFormat": "table"
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
         }
       ],
       "timeFrom": null,
@@ -486,11 +334,12 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 9,
+        "h": 12,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 4
       },
+      "hiddenSeries": false,
       "id": 7,
       "legend": {
         "alignAsTable": false,
@@ -609,10 +458,10 @@
       ],
       "fontSize": "100%",
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 8
       },
       "id": 8,
       "options": {},
@@ -627,6 +476,7 @@
       "styles": [
         {
           "alias": "Pipeline",
+          "align": "auto",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
           "link": false,
           "pattern": "Metric",
@@ -636,6 +486,7 @@
         },
         {
           "alias": "",
+          "align": "auto",
           "colorMode": null,
           "colors": [
             "rgba(245, 54, 54, 0.9)",
@@ -652,12 +503,41 @@
       "targets": [
         {
           "alias": "$tag_name",
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT mean(\"duration_ms\") FROM \"build\" WHERE \"name\" =~ /^$build$/ AND $timeFilter GROUP BY time($__interval), \"name\"",
           "rawQuery": true,
           "refId": "A",
-          "resultFormat": "time_series"
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
         }
       ],
       "timeFrom": null,
@@ -671,6 +551,7 @@
   "templating": {
     "list": [
       {
+        "allFormat": "glob",
         "allValue": null,
         "current": {
           "text": "All",

@@ -107,22 +107,52 @@ impl Client {
         Ok(repositories)
     }
 
-    pub async fn get_commits(
+    pub async fn get_most_recent_commits(
         &self,
         owner: &str,
         repo: &str,
-        since: &str,
-    ) -> Result<Vec<Commit>, BoxError> {
-        let raw_url = format!(
-            "{base}/repos/{owner}/{repo}/commits",
-            base = BASE_URL,
-            owner = owner,
-            repo = repo
-        );
-        let url = reqwest::Url::parse_with_params(&raw_url, &[("since", since)])?;
-        let lists: Vec<Vec<Commit>> = call::get_paged(&self.client, url).await?;
-        let commits = lists.into_iter().flatten().collect();
-        Ok(commits)
+    ) -> Result<Vec<String>, BoxError> {
+        let raw_url = format!("{base}/graphql", base = BASE_URL);
+        let url = reqwest::Url::parse(&raw_url)?;
+        let body = GraphQLQuery {
+            query: "query ($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                  defaultBranchRef {
+                    target {
+                      ... on Commit {
+                        history(first: 50) {
+                          nodes {
+                            oid
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+            }",
+            variables: Some(
+                [
+                    ("owner", serde_json::Value::String(owner.to_owned())),
+                    ("name", serde_json::Value::String(repo.to_owned())),
+                ]
+                .iter()
+                .cloned()
+                .collect(),
+            ),
+        };
+        let res: GraphQLResponse<GetMostRecentCommits> =
+            call::post(&self.client, url, &body).await?;
+        Ok(res
+            .data
+            .ok_or("no data")?
+            .repository
+            .default_branch_ref
+            .target
+            .history
+            .nodes
+            .into_iter()
+            .map(|node| node.oid)
+            .collect())
     }
 
     pub async fn get_statuses(
