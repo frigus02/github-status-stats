@@ -1,122 +1,19 @@
 mod field_value;
+mod point;
+mod query;
+mod timestamp;
 
-use chrono::{DateTime, TimeZone};
 pub use field_value::FieldValue;
 use log::debug;
+pub use point::Point;
+use query::{Query, QueryResponse};
 use reqwest::Url;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
+pub use timestamp::Timestamp;
 
 pub const USER_AGENT: &str = concat!("github-status-stats/", env!("CARGO_PKG_VERSION"));
 
 type BoxError = Box<dyn std::error::Error>;
-
-#[derive(Debug)]
-pub struct Timestamp {
-    nanos: i64,
-}
-
-impl Timestamp {
-    pub fn new<Tz: TimeZone>(datetime: &DateTime<Tz>) -> Timestamp {
-        Timestamp {
-            nanos: datetime.timestamp_nanos(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Point {
-    pub measurement: &'static str,
-    pub tags: HashMap<&'static str, String>,
-    pub fields: HashMap<&'static str, FieldValue>,
-    pub timestamp: Timestamp,
-}
-
-fn escape_string_field_value(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-fn escape_tags_or_field_key(value: &str) -> String {
-    value
-        .replace(',', "\\,")
-        .replace('=', "\\=")
-        .replace(' ', "\\ ")
-}
-
-fn escape_measurement(value: &str) -> String {
-    value.replace(',', "\\,").replace(' ', "\\ ")
-}
-
-impl Point {
-    fn to_line(&self) -> String {
-        let tags = self
-            .tags
-            .iter()
-            .map(|(key, value)| {
-                format!(
-                    ",{}={}",
-                    escape_tags_or_field_key(key),
-                    escape_tags_or_field_key(value)
-                )
-            })
-            .collect::<Vec<String>>()
-            .join("");
-        let fields = self
-            .fields
-            .iter()
-            .map(|(key, value)| {
-                format!(
-                    "{}={}",
-                    escape_tags_or_field_key(key),
-                    match value {
-                        FieldValue::String(s) => format!("\"{}\"", escape_string_field_value(s)),
-                        FieldValue::Float(f) => f.to_string(),
-                        FieldValue::Integer(i) => i.to_string(),
-                        FieldValue::Boolean(b) => b.to_string(),
-                    }
-                )
-            })
-            .collect::<Vec<String>>()
-            .join(",");
-        format!(
-            "{}{} {} {}",
-            escape_measurement(self.measurement),
-            tags,
-            fields,
-            self.timestamp.nanos
-        )
-    }
-}
-
-#[derive(Debug, Serialize)]
-struct Query<'a> {
-    q: &'a str,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct QuerySeries {
-    pub name: String,
-    pub columns: Vec<String>,
-    pub values: Vec<Vec<FieldValue>>,
-}
-
-impl QuerySeries {
-    pub fn index(&self, column: &str) -> Option<usize> {
-        self.columns.iter().position(|c| c == column)
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct QueryResult {
-    pub statement_id: i32,
-    pub error: Option<String>,
-    pub series: Option<Vec<QuerySeries>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct QueryResponse {
-    pub results: Vec<QueryResult>,
-}
 
 pub struct Client<'a> {
     client: reqwest::Client,
