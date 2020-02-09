@@ -241,3 +241,58 @@ mod rowde {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct MyRow {
+        points: i64,
+        success: bool,
+        ratio: f64,
+        time: String,
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn deserialize_series() {
+        let series = QuerySeries {
+            name: "test".to_owned(),
+            columns: vec![
+                "time".to_owned(),
+                "points".to_owned(),
+                "ratio".to_owned(),
+                "success".to_owned(),
+            ],
+            values: vec![
+                vec![
+                    FieldValue::String("2020-02-09T17:27:00Z".to_owned()),
+                    FieldValue::Integer(2),
+                    FieldValue::Float(1.1),
+                    FieldValue::Boolean(true),
+                ],
+                vec![
+                    FieldValue::String("2020-02-09T17:20:00Z".to_owned()),
+                    FieldValue::Integer(50),
+                    FieldValue::Float(0.1234),
+                    FieldValue::Boolean(false),
+                ],
+            ],
+        };
+        let rows = series
+            .into_rows::<MyRow>()
+            .collect::<Result<Vec<MyRow>, _>>()
+            .unwrap();
+        assert_eq!(2, rows.len());
+        assert_eq!("2020-02-09T17:27:00Z", &rows[0].time);
+        assert_eq!(2, rows[0].points);
+        assert_eq!(1.1, rows[0].ratio);
+        assert_eq!(true, rows[0].success);
+        assert_eq!("2020-02-09T17:20:00Z", &rows[1].time);
+        assert_eq!(50, rows[1].points);
+        assert_eq!(0.1234, rows[1].ratio);
+        assert_eq!(false, rows[1].success);
+    }
+}
