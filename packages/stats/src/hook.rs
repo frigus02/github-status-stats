@@ -31,7 +31,7 @@ impl From<Hook> for Point {
         fields.insert("commit", FieldValue::String(hook.commit_sha));
 
         Self {
-            measurement: "import",
+            measurement: "hook",
             tags,
             fields,
             timestamp: Timestamp::new(&hook.time),
