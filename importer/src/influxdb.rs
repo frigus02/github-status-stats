@@ -76,8 +76,12 @@ pub async fn get_status_hook_commits_since(
         ))
         .await?
         .into_single_result()?
-        .into_single_series()?
-        .into_rows::<HookRow>()
-        .filter_map(|row| row.ok().map(|row| row.commit))
-        .collect())
+        .into_single_series()
+        .ok()
+        .map_or_else(Vec::new, |series| {
+            series
+                .into_rows::<HookRow>()
+                .filter_map(|row| row.ok().map(|row| row.commit))
+                .collect()
+        }))
 }
