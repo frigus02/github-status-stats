@@ -161,14 +161,10 @@ impl Client {
         repo: &str,
         git_ref: &str,
     ) -> Result<Vec<CommitStatus>, BoxError> {
-        let raw_url = format!(
-            "{base}/repos/{owner}/{repo}/commits/{git_ref}/statuses",
-            base = BASE_URL,
-            owner = owner,
-            repo = repo,
-            git_ref = git_ref
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(BASE_URL)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["repos", owner, repo, "commits", git_ref, "statuses"]);
         let lists: Vec<Vec<CommitStatus>> = call::get_paged(&self.client, url).await?;
         let statuses = lists.into_iter().flatten().collect();
         Ok(statuses)
@@ -180,14 +176,10 @@ impl Client {
         repo: &str,
         git_ref: &str,
     ) -> Result<Vec<CheckRun>, BoxError> {
-        let raw_url = format!(
-            "{base}/repos/{owner}/{repo}/commits/{git_ref}/check-runs",
-            base = BASE_URL,
-            owner = owner,
-            repo = repo,
-            git_ref = git_ref
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(BASE_URL)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["repos", owner, repo, "commits", git_ref, "check-runs"]);
         let lists: Vec<CheckRunList> =
             call::get_paged_preview(&self.client, url, call::ANTIOPE_PREVIEW).await?;
         let check_runs = lists.into_iter().flat_map(|list| list.check_runs).collect();

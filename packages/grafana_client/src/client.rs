@@ -31,8 +31,10 @@ impl Client {
     }
 
     pub async fn create_user(&self, user: CreateUser) -> Result<CreateUserResponse, BoxError> {
-        let raw_url = format!("{base}/api/admin/users", base = &self.base_url);
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "admin", "users"]);
         debug!("request POST {} with body {:?}", url, user);
         let res = self
             .client
@@ -47,8 +49,12 @@ impl Client {
     }
 
     pub async fn lookup_user(&self, login_or_email: &str) -> Result<Option<User>, BoxError> {
-        let raw_url = format!("{base}/api/users/lookup", base = &self.base_url);
-        let url = reqwest::Url::parse_with_params(&raw_url, &[("loginOrEmail", login_or_email)])?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "users", "lookup"]);
+        url.query_pairs_mut()
+            .append_pair("loginOrEmail", login_or_email);
         debug!("request GET {}", url);
         let res = self.client.get(url).send().await?;
         if res.status() == StatusCode::NOT_FOUND {
@@ -62,8 +68,10 @@ impl Client {
         &self,
         org: CreateOrganization,
     ) -> Result<CreateOrganizationResponse, BoxError> {
-        let raw_url = format!("{base}/api/orgs", base = &self.base_url);
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "orgs"]);
         debug!("request POST {} with body {:?}", url, org);
         let res = self
             .client
@@ -78,12 +86,10 @@ impl Client {
     }
 
     pub async fn lookup_organization(&self, name: &str) -> Result<Option<Organization>, BoxError> {
-        let raw_url = format!(
-            "{base}/api/orgs/name/{org_name}",
-            base = &self.base_url,
-            org_name = name
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "orgs", "name", name]);
         debug!("request GET {}", url);
         let res = self.client.get(url).send().await?;
         if res.status() == StatusCode::NOT_FOUND {
@@ -98,12 +104,10 @@ impl Client {
         org_id: i32,
         user: CreateOrganizationMembership,
     ) -> Result<GenericResponse, BoxError> {
-        let raw_url = format!(
-            "{base}/api/orgs/{org_id}/users",
-            base = &self.base_url,
-            org_id = org_id
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "orgs", &org_id.to_string(), "users"]);
         debug!("request POST {} with body {:?}", url, user);
         let res = self
             .client
@@ -122,13 +126,16 @@ impl Client {
         org_id: i32,
         user_id: i32,
     ) -> Result<GenericResponse, BoxError> {
-        let raw_url = format!(
-            "{base}/api/orgs/{org_id}/users/{user_id}",
-            base = &self.base_url,
-            org_id = org_id,
-            user_id = user_id,
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&[
+                "api",
+                "orgs",
+                &org_id.to_string(),
+                "users",
+                &user_id.to_string(),
+            ]);
         debug!("request DELETE {}", url);
         let res = self
             .client
@@ -145,12 +152,10 @@ impl Client {
         &self,
         user_id: i32,
     ) -> Result<Vec<OrganizationMembership>, BoxError> {
-        let raw_url = format!(
-            "{base}/api/users/{user_id}/orgs",
-            base = &self.base_url,
-            user_id = user_id,
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "users", &user_id.to_string(), "orgs"]);
         debug!("request GET {}", url);
         let res = self
             .client
@@ -167,12 +172,10 @@ impl Client {
         &self,
         org_id: i32,
     ) -> Result<GenericResponse, BoxError> {
-        let raw_url = format!(
-            "{base}/api/user/using/{org_id}",
-            base = &self.base_url,
-            org_id = org_id
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "user", "using", &org_id.to_string()]);
         debug!("request POST {}", url);
         let res = self
             .client
@@ -189,8 +192,10 @@ impl Client {
         &self,
         datasource: CreateDataSource,
     ) -> Result<CreateDataSourceResponse, BoxError> {
-        let raw_url = format!("{base}/api/datasources", base = &self.base_url);
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "datasources"]);
         debug!("request POST {} with body {:?}", url, datasource);
         let res = self
             .client
@@ -205,12 +210,10 @@ impl Client {
     }
 
     pub async fn lookup_datasource(&self, name: &str) -> Result<Option<DataSource>, BoxError> {
-        let raw_url = format!(
-            "{base}/api/datasources/name/{name}",
-            base = &self.base_url,
-            name = name
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "datasources", "name", name]);
         debug!("request GET {}", url);
         let res = self.client.get(url).send().await?;
         if res.status() == StatusCode::NOT_FOUND {
@@ -225,12 +228,10 @@ impl Client {
         id: i32,
         datasource: UpdateDataSource,
     ) -> Result<UpdateDataSourceResponse, BoxError> {
-        let raw_url = format!(
-            "{base}/api/datasources/{id}",
-            base = &self.base_url,
-            id = id
-        );
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "datasources", &id.to_string()]);
         debug!("request PUT {} with body {:?}", url, datasource);
         let res = self
             .client
@@ -248,8 +249,10 @@ impl Client {
         &self,
         dashboard: CreateOrUpdateDashboard,
     ) -> Result<CreateOrUpdateDashboardResponse, BoxError> {
-        let raw_url = format!("{base}/api/dashboards/db", base = &self.base_url,);
-        let url = reqwest::Url::parse(&raw_url)?;
+        let mut url = reqwest::Url::parse(&self.base_url)?;
+        url.path_segments_mut()
+            .map_err(|_| "cannot be base")?
+            .extend(&["api", "dashboards", "db"]);
         debug!("request POST {} with body {:?}", url, dashboard);
         let res = self
             .client
