@@ -31,7 +31,7 @@ ENV PKG_CONFIG_ALLOW_CROSS 1
 RUN rustup target add x86_64-unknown-linux-musl && \
     mkdir .cargo && \
     echo "[build]\ntarget = \"x86_64-unknown-linux-musl\"\n" > .cargo/config && \
-    rustup component add clippy-preview
+    rustup component add clippy
 
 # Download and build dependencies
 WORKDIR /src
@@ -48,7 +48,8 @@ COPY packages/github_client/Cargo.toml ./packages/github_client/
 COPY packages/grafana_client/Cargo.toml ./packages/grafana_client/
 COPY packages/influxdb_client/Cargo.toml ./packages/influxdb_client/
 COPY packages/stats/Cargo.toml ./packages/stats/
-RUN cargo build --release && \
+RUN cargo clippy --release && \
+    cargo build --release && \
     rm target/x86_64-unknown-linux-musl/release/deps/importer* && \
     rm target/x86_64-unknown-linux-musl/release/deps/website* && \
     rm target/x86_64-unknown-linux-musl/release/deps/libgithub_client* && \
@@ -58,5 +59,5 @@ RUN cargo build --release && \
 
 # Build
 COPY . .
-# RUN cargo clippy --workspace --release --frozen -- -Dwarnings && \
-RUN cargo build --release
+RUN cargo clippy --release --frozen -- -Dwarnings && \
+    cargo build --release
