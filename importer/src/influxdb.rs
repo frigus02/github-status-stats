@@ -1,6 +1,7 @@
 use chrono::{DateTime, FixedOffset, Utc};
-use influxdb_client::{Client, FieldValue};
+use influxdb_client::Client;
 use log::info;
+use serde::Deserialize;
 use stats::Import;
 
 type BoxError = Box<dyn std::error::Error>;
@@ -40,24 +41,28 @@ pub async fn import(
     client.write(points).await
 }
 
+#[derive(Deserialize)]
+struct ImportRow {
+    time: String,
+}
+
 pub async fn get_last_import(
     client: &Client<'_>,
 ) -> Result<Option<DateTime<FixedOffset>>, BoxError> {
     Ok(client
         .query("SELECT * FROM import ORDER BY time DESC LIMIT 1")
         .await?
-        .results
-        .pop()
-        .ok_or("InfluxDB returned no result")?
-        .series
-        .and_then(|mut series| series.pop())
-        .and_then(|mut series| series.values.pop().map(|row| (row, series.index("time"))))
-        .and_then(|(row, time_index)| time_index.map(|time_index| (row, time_index)))
-        .map(|(mut row, time_index)| row.remove(time_index))
-        .and_then(|time| match time {
-            FieldValue::String(time) => DateTime::<FixedOffset>::parse_from_rfc3339(&time).ok(),
-            _ => None,
-        }))
+        .into_single_result()?
+        .into_single_series()
+        .ok()
+        .and_then(|series| series.into_rows::<ImportRow>().next())
+        .and_then(|row| row.ok())
+        .and_then(|row| DateTime::<FixedOffset>::parse_from_rfc3339(&row.time).ok()))
+}
+
+#[derive(Deserialize)]
+struct HookRow {
+    commit: String,
 }
 
 pub async fn get_status_hook_commits_since(
@@ -70,17 +75,9 @@ pub async fn get_status_hook_commits_since(
             since.to_rfc3339()
         ))
         .await?
-        .results
-        .pop()
-        .and_then(|result| result.series)
-        .and_then(|mut series| series.pop())
-        .map(|series| series.values)
-        .unwrap_or_else(Vec::new)
-        .into_iter()
-        .filter_map(|mut row| row.pop())
-        .filter_map(|value| match value {
-            FieldValue::String(value) => Some(value),
-            _ => None,
-        })
+        .into_single_result()?
+        .into_single_series()?
+        .into_rows::<HookRow>()
+        .filter_map(|row| row.ok().map(|row| row.commit))
         .collect())
 }

@@ -70,6 +70,7 @@ mod tests {
     use serde_json::from_str;
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn decode_test() {
         let encoded = "[true, 3.14, 42, -42, \"hello world\"]";
         let values: Vec<FieldValue> = from_str(encoded).unwrap();
