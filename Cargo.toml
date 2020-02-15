@@ -1,9 +1,6 @@
 [workspace]
 members = [
     "importer",
-    "packages/github_client",
-    "packages/grafana_client",
-    "packages/influxdb_client",
-    "packages/stats",
+    "packages/*",
     "website",
 ]
