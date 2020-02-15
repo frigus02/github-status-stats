@@ -253,6 +253,11 @@
       },
       "styles": [
         {
+          "alias": "",
+          "pattern": "Time",
+          "type": "hidden"
+        },
+        {
           "alias": "Pipeline",
           "align": "auto",
           "pattern": "name",

@@ -6,7 +6,7 @@ INFLUXDB_ADMIN_PASSWORD=$(kubectl get secret ghss-influxdb -o jsonpath='{.data.a
 INFLUXDB_DB="r${1:?"repository id as first arg required"}"
 INFLUXDB_QUERY="${2:?"query as second arg required"}"
 
-kubectl run influxdb-reset-repository \
+kubectl run influxdb-query \
     --image curlimages/curl:7.68.0 \
     --rm \
     --restart=Never \

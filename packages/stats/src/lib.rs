@@ -16,7 +16,7 @@ pub fn influxdb_read_user(repository: &Repository) -> String {
 }
 
 pub fn grafana_org_name(repository: &Repository) -> String {
-    format!("{}", repository.id)
+    repository.full_name.clone()
 }
 
 pub fn grafana_user_login(user: &User) -> String {
