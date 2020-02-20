@@ -43,3 +43,18 @@ kustomize build | kubectl apply -f -
 ```
 
 See [scripts/build.sh](../scripts/build.sh) for detailed steps.
+
+## Local development on Docker Desktop or Docker for Mac
+
+- [Deploy NGINX Ingress controller](https://kubernetes.github.io/ingress-nginx/deploy/).
+
+  ```sh
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/nginx-0.29.0/deploy/static/mandatory.yaml
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/nginx-0.29.0/deploy/static/provider/cloud-generic.yaml
+  ```
+
+- Create localhost ingress for website.
+
+  ```sh
+  kubectl apply -f website/ingress-localhost.yml
+  ```
