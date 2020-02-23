@@ -75,15 +75,18 @@ async fn dashboard_route(
         Some(user) => {
             let data = match user.repositories.into_iter().find(|r| r.name == name) {
                 Some(repo) => DashboardData::Data {
-                    user: user.name,
-                    repo_id: repo.id,
+                    repository_id: repo.id,
                 },
                 None => DashboardData::Error {
                     message: "Not found".to_string(),
                 },
             };
 
-            let render = templates::render_dashboard(&DashboardTemplate { name, data });
+            let render = templates::render_dashboard(&DashboardTemplate {
+                user: user.name,
+                repository_name: name,
+                data,
+            });
             Box::new(warp::reply::html(render))
         }
         None => Box::new(warp::redirect::temporary(Uri::from_static("/"))),
@@ -265,6 +268,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::path!("favicon.ico"))
         .and(warp::fs::file("static/favicon.ico"));
 
+    let static_files = warp::path!("static" / ..).and(warp::fs::dir("static"));
+
     let dashboard = warp::get()
         .and(warp::path!("d" / String / String))
         .and(optional_token())
@@ -290,6 +295,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routes = index
         .or(favicon)
+        .or(static_files)
         .or(dashboard)
         .or(api_query)
         .or(setup_authorized)

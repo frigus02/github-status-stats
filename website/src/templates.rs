@@ -48,13 +48,14 @@ pub fn render_index(data: &IndexTemplate) -> String {
 
 #[derive(Serialize)]
 pub enum DashboardData {
-    Data { user: String, repo_id: i32 },
+    Data { repository_id: i32 },
     Error { message: String },
 }
 
 #[derive(Serialize)]
 pub struct DashboardTemplate {
-    pub name: String,
+    pub user: String,
+    pub repository_name: String,
     pub data: DashboardData,
 }
 
