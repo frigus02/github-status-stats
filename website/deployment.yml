@@ -47,6 +47,11 @@ spec:
                 secretKeyRef:
                   name: ghss-influxdb
                   key: admin_password
+            - name: INFLUXDB_READ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-influxdb
+                  key: read_password
             - name: TOKEN_SECRET
               valueFrom:
                 secretKeyRef:
