@@ -7,9 +7,11 @@ mod github_queries;
 mod grafana_queries;
 mod reverse_proxy;
 mod templates;
+mod token;
 
 use bytes::Bytes;
 use filters::raw_request;
+use futures::future::TryFutureExt;
 use log::info;
 use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
@@ -51,6 +53,8 @@ lazy_static! {
     )
     .unwrap();
     static ref GRAFANA_PROXY: ReverseProxy = ReverseProxy::new(&*GRAFANA_BASE_URL).unwrap();
+    static ref TOKEN_SECRET: SecStr =
+        SecStr::from(std::env::var("TOKEN_SECRET").expect("env TOKEN_SECRET"));
 }
 
 fn new_error_res(status: StatusCode) -> Response<Body> {
@@ -62,15 +66,15 @@ fn new_error_res(status: StatusCode) -> Response<Body> {
 
 async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallible> {
     let data = match token {
-        Some(token) => match grafana_queries::get_user(&token, &*GRAFANA_CLIENT).await {
+        Some(token) => match token::validate(&token, TOKEN_SECRET.unsecure()) {
             Ok(user) => IndexTemplate::LoggedIn {
-                user: user.github.name,
+                user: user.name,
                 repositories: user
                     .repositories
                     .into_iter()
                     .map(|repo| RepositoryAccess {
-                        full_name: repo.github.full_name,
-                        grafana_org_id: repo.grafana.map(|org| org.id),
+                        full_name: repo.name,
+                        grafana_org_id: None,
                     })
                     .collect(),
             },
@@ -126,7 +130,11 @@ async fn setup_authorized_route(
         &*GH_REDIRECT_URI,
         info,
     )
+    .and_then(|github_token| async move {
+        token::generate(&github_token.access_token, TOKEN_SECRET.unsecure()).await
+    })
     .await;
+
     match token {
         Ok(token) => Ok(Response::builder()
             .status(StatusCode::TEMPORARY_REDIRECT)
@@ -135,7 +143,7 @@ async fn setup_authorized_route(
                 "set-cookie",
                 format!(
                     "{}={}; Path=/; SameSite=Lax; Secure; HttpOnly",
-                    COOKIE_NAME, token.access_token
+                    COOKIE_NAME, token
                 ),
             )
             .body(Body::empty())

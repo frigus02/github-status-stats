@@ -34,6 +34,13 @@
       --from-file PRIVATE_KEY=<path to pem file>
   ```
 
+- Create secret for website.
+
+  ```sh
+  kubectl create secret generic ghss-website \
+      --from-literal TOKEN_SECRET=$(openssl rand -hex 20)
+  ```
+
 ## Deploy new version
 
 A basic deployment works using:

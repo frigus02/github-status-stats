@@ -59,6 +59,11 @@ spec:
                 secretKeyRef:
                   name: ghss-grafana
                   key: password
+            - name: TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-website
+                  key: TOKEN_SECRET
           ports:
             - containerPort: 8888
           readinessProbe:

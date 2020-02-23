@@ -15,6 +15,7 @@ grafana_client = { path = "../packages/grafana_client" }
 handlebars = "3.0.1"
 hmac = "0.7.1"
 influxdb_client = { path = "../packages/influxdb_client" }
+jsonwebtoken = "7.0.1"
 lazy_static = "1.4.0"
 log = "0.4.8"
 rand = "0.7.3"
