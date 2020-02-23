@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+mod ctrlc;
 mod filters;
 mod github_hooks;
 mod github_queries;
@@ -257,6 +258,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(hooks)
         .with(warp::log("website"));
 
-    warp::serve(routes).run(([0, 0, 0, 0], 8888)).await;
+    let (_addr, server) =
+        warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], 8888), async {
+            ctrlc::ctrl_c().await;
+        });
+
+    server.await;
+
     Ok(())
 }
