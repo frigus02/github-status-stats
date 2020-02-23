@@ -11,14 +11,12 @@ bytes = "0.5.4"
 env_logger = "0.7.1"
 futures = "0.3.4"
 github_client = { path = "../packages/github_client" }
-grafana_client = { path = "../packages/grafana_client" }
 handlebars = "3.0.1"
 hmac = "0.7.1"
 influxdb_client = { path = "../packages/influxdb_client" }
 jsonwebtoken = "7.0.1"
 lazy_static = "1.4.0"
 log = "0.4.8"
-rand = "0.7.3"
 secstr = "0.4.0"
 serde = { version = "1.0.104", features = ["derive"] }
 serde_json = "1.0.48"

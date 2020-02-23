@@ -17,7 +17,7 @@ spec:
           image: frigus02/github-status-stats-website
           env:
             - name: RUST_LOG
-              value: info,website=debug,github_client=debug,grafana_client=debug,influxdb_client=debug
+              value: info,website=debug,github_client=debug,influxdb_client=debug
             - name: HOST
               value: https://github-status-stats.kuehle.me
             - name: GH_CLIENT_ID
@@ -47,18 +47,6 @@ spec:
                 secretKeyRef:
                   name: ghss-influxdb
                   key: admin_password
-            - name: GRAFANA_BASE_URL
-              value: http://ghss-grafana
-            - name: GRAFANA_ADMIN_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: ghss-grafana
-                  key: username
-            - name: GRAFANA_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ghss-grafana
-                  key: password
             - name: TOKEN_SECRET
               valueFrom:
                 secretKeyRef:

@@ -21,11 +21,7 @@ lazy_static! {
                     <ul>
                         {{#each repositories}}
                             <li>
-                                {{#if grafana_org_id}}
-                                    <a href=\"/_/d/builds/builds?orgId={{grafana_org_id}}\">{{full_name}}</a>
-                                {{else}}
-                                    {{full_name}} (waiting for first import)
-                                {{/if}}
+                                <a href=\"/d/{{name}}\">{{name}}</a>
                             </li>
                         {{/each}}
                     </ul>
@@ -47,8 +43,7 @@ lazy_static! {
 
 #[derive(Serialize)]
 pub struct RepositoryAccess {
-    pub full_name: String,
-    pub grafana_org_id: Option<i32>,
+    pub name: String,
 }
 
 #[derive(Serialize)]

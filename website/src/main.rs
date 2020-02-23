@@ -2,25 +2,20 @@
 extern crate lazy_static;
 
 mod ctrlc;
-mod filters;
 mod github_hooks;
 mod github_queries;
-mod grafana_queries;
-mod reverse_proxy;
 mod templates;
 mod token;
 
 use bytes::Bytes;
-use filters::raw_request;
 use futures::future::TryFutureExt;
 use log::info;
-use reverse_proxy::ReverseProxy;
 use secstr::{SecStr, SecUtf8};
 use stats::{influxdb_name, Build};
 use std::convert::Infallible;
 use templates::{IndexTemplate, RepositoryAccess};
 use warp::{
-    http::{Request, Response, StatusCode},
+    http::{Response, StatusCode},
     hyper::Body,
     Filter,
 };
@@ -45,15 +40,6 @@ lazy_static! {
     static ref INFLUXDB_ADMIN_PASSWORD: SecUtf8 = SecUtf8::from(
         std::env::var("INFLUXDB_ADMIN_PASSWORD").expect("env INFLUXDB_ADMIN_PASSWORD")
     );
-    static ref GRAFANA_BASE_URL: String =
-        std::env::var("GRAFANA_BASE_URL").expect("env GRAFANA_BASE_URL");
-    static ref GRAFANA_CLIENT: grafana_client::Client = grafana_client::Client::new(
-        GRAFANA_BASE_URL.clone(),
-        &std::env::var("GRAFANA_ADMIN_USERNAME").expect("env GRAFANA_ADMIN_USERNAME"),
-        &std::env::var("GRAFANA_ADMIN_PASSWORD").expect("env GRAFANA_ADMIN_PASSWORD")
-    )
-    .unwrap();
-    static ref GRAFANA_PROXY: ReverseProxy = ReverseProxy::new(&*GRAFANA_BASE_URL).unwrap();
     static ref TOKEN_SECRET: SecStr =
         SecStr::from(std::env::var("TOKEN_SECRET").expect("env TOKEN_SECRET"));
 }
@@ -73,10 +59,7 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallib
                 repositories: user
                     .repositories
                     .into_iter()
-                    .map(|repo| RepositoryAccess {
-                        full_name: repo.name,
-                        grafana_org_id: None,
-                    })
+                    .map(|repo| RepositoryAccess { name: repo.name })
                     .collect(),
             },
             Err(err) => IndexTemplate::Error {
@@ -92,34 +75,12 @@ async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallib
     Ok(warp::reply::html(render))
 }
 
-async fn dashboard_login_route(
-    req: Request<Body>,
-    token: Option<String>,
+async fn dashboard_route(
+    _owner: String,
+    _repo: String,
+    _token: Option<String>,
 ) -> Result<impl warp::Reply, Infallible> {
-    let token = match token {
-        Some(token) => token,
-        None => return Ok(new_error_res(StatusCode::UNAUTHORIZED)),
-    };
-
-    let login = grafana_queries::sync_user(&token, &*GRAFANA_CLIENT)
-        .await
-        .map_err(|err| err.to_string());
-    let res = match login {
-        Ok(login) => GRAFANA_PROXY
-            .call_with_auth(req, login)
-            .await
-            .map_err(|err| err.to_string()),
-        Err(err) => Err(err),
-    };
-    match res {
-        Ok(res) => Ok(res),
-        Err(_) => Ok(new_error_res(StatusCode::INTERNAL_SERVER_ERROR)),
-    }
-}
-
-async fn dashboard_route(req: Request<Body>) -> Result<impl warp::Reply, Infallible> {
-    let res = GRAFANA_PROXY.call(req).await;
-    Ok(res)
+    Ok("")
 }
 
 async fn setup_authorized_route(
@@ -230,12 +191,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::path!("favicon.ico"))
         .and(warp::fs::file("static/favicon.ico"));
 
-    let dashboard_login = warp::path!("_" / "login")
-        .and(raw_request())
+    let dashboard = warp::get()
+        .and(warp::path!("d" / String / String))
         .and(warp::cookie::optional(COOKIE_NAME))
-        .and_then(dashboard_login_route);
-    let dashboard = warp::path!("_" / ..)
-        .and(raw_request())
         .and_then(dashboard_route);
 
     let setup_authorized = warp::get()
@@ -252,7 +210,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routes = index
         .or(favicon)
-        .or(dashboard_login)
         .or(dashboard)
         .or(setup_authorized)
         .or(hooks)
