@@ -22,6 +22,7 @@ use warp::{
     Filter,
 };
 
+const COOKIE_NAME: &str = "token";
 lazy_static! {
     static ref HOST: String = std::env::var("HOST").expect("env HOST");
     static ref GH_REDIRECT_URI: String = format!("{}/setup/authorized", *HOST);
@@ -133,8 +134,8 @@ async fn setup_authorized_route(
             .header(
                 "set-cookie",
                 format!(
-                    "token={}; Path=/; SameSite=Lax; Secure; HttpOnly",
-                    token.access_token
+                    "{}={}; Path=/; SameSite=Lax; Secure; HttpOnly",
+                    COOKIE_NAME, token.access_token
                 ),
             )
             .body(Body::empty())
@@ -213,7 +214,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let index = warp::get()
         .and(warp::path::end())
-        .and(warp::cookie::optional("token"))
+        .and(warp::cookie::optional(COOKIE_NAME))
         .and_then(index_route);
 
     let favicon = warp::get()
@@ -222,7 +223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let dashboard_login = warp::path!("_" / "login")
         .and(raw_request())
-        .and(warp::cookie::optional("token"))
+        .and(warp::cookie::optional(COOKIE_NAME))
         .and_then(dashboard_login_route);
     let dashboard = warp::path!("_" / ..)
         .and(raw_request())
