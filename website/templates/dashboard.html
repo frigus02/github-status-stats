@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{name}} - GitHub Status Stats</title>
+  </head>
+  <body>
+    <h1>GitHub Status Stats</h1>
+    {{#if data.Data}}{{#with data.Data}}
+    <h2>{{name}}</h2>
+    <p>{{user}}</p>
+    <p>{{repo_id}}</p>
+    <p>TODO: Dashboard...</p>
+    {{/with}}{{/if}}{{#if data.Error}}{{#with data.Error}}
+    <h2>Something went wrong</h2>
+    <p>{{message}}</p>
+    {{/with}}{{/if}}
+  </body>
+</html>
