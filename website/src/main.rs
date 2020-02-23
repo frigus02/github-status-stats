@@ -8,8 +8,7 @@ mod templates;
 mod token;
 
 use bytes::Bytes;
-use futures::future::TryFutureExt;
-use log::info;
+use log::{error, info};
 use secstr::{SecStr, SecUtf8};
 use stats::{influxdb_name, Build};
 use std::convert::Infallible;
@@ -42,13 +41,6 @@ lazy_static! {
     );
     static ref TOKEN_SECRET: SecStr =
         SecStr::from(std::env::var("TOKEN_SECRET").expect("env TOKEN_SECRET"));
-}
-
-fn new_error_res(status: StatusCode) -> Response<Body> {
-    Response::builder()
-        .status(status)
-        .body(Body::from(status.to_string()))
-        .unwrap()
 }
 
 async fn index_route(token: Option<String>) -> Result<impl warp::Reply, Infallible> {
@@ -85,32 +77,35 @@ async fn dashboard_route(
 
 async fn setup_authorized_route(
     info: github_client::oauth::AuthCodeQuery,
-) -> Result<impl warp::Reply, Infallible> {
-    let token = github_client::oauth::exchange_code(
-        &*GH_CLIENT_ID,
-        &*GH_CLIENT_SECRET.unsecure(),
-        &*GH_REDIRECT_URI,
-        info,
-    )
-    .and_then(|github_token| async move {
+) -> Result<Box<dyn warp::Reply>, Infallible> {
+    let token = async {
+        let github_token = github_client::oauth::exchange_code(
+            &*GH_CLIENT_ID,
+            &*GH_CLIENT_SECRET.unsecure(),
+            &*GH_REDIRECT_URI,
+            info,
+        )
+        .await?;
         token::generate(&github_token.access_token, TOKEN_SECRET.unsecure()).await
-    })
+    }
     .await;
 
     match token {
-        Ok(token) => Ok(Response::builder()
-            .status(StatusCode::TEMPORARY_REDIRECT)
-            .header("location", "/")
-            .header(
-                "set-cookie",
-                format!(
-                    "{}={}; Path=/; SameSite=Lax; Secure; HttpOnly",
-                    COOKIE_NAME, token
-                ),
-            )
-            .body(Body::empty())
-            .unwrap()),
-        Err(_) => Ok(new_error_res(StatusCode::INTERNAL_SERVER_ERROR)),
+        Ok(token) => Ok(Box::new(
+            Response::builder()
+                .status(StatusCode::TEMPORARY_REDIRECT)
+                .header("location", "/")
+                .header(
+                    "set-cookie",
+                    format!(
+                        "{}={}; Path=/; SameSite=Lax; Secure; HttpOnly",
+                        COOKIE_NAME, token
+                    ),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )),
+        Err(_) => Ok(Box::new(StatusCode::INTERNAL_SERVER_ERROR)),
     }
 }
 
@@ -119,62 +114,65 @@ async fn hooks_route(
     event: String,
     body: Bytes,
 ) -> Result<impl warp::Reply, Infallible> {
-    let payload = github_hooks::deserialize(signature, event, body, &*GH_WEBHOOK_SECRET.unsecure())
-        .map_err(|err| err.to_string());
+    let res: Result<(), Box<dyn std::error::Error>> = async {
+        let payload =
+            github_hooks::deserialize(signature, event, body, &*GH_WEBHOOK_SECRET.unsecure())?;
 
-    info!("Hook: {:?}", payload);
-    let res = match payload {
-        Ok(github_hooks::Payload::CheckRun(check_run)) => {
-            let influxdb_db = influxdb_name(&check_run.repository);
-            let client = influxdb_client::Client::new(
-                &*INFLUXDB_BASE_URL,
-                &influxdb_db,
-                &*INFLUXDB_ADMIN_USERNAME,
-                &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
-            )
-            .unwrap();
-            client
-                .write(vec![
-                    stats::Hook {
-                        time: check_run.check_run.started_at,
-                        r#type: stats::HookType::CheckRun,
-                        commit_sha: check_run.check_run.head_sha.clone(),
+        info!("Hook: {:?}", payload);
+        match payload {
+            github_hooks::Payload::CheckRun(check_run) => {
+                let influxdb_db = influxdb_name(&check_run.repository);
+                let client = influxdb_client::Client::new(
+                    &*INFLUXDB_BASE_URL,
+                    &influxdb_db,
+                    &*INFLUXDB_ADMIN_USERNAME,
+                    &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
+                )?;
+                client
+                    .write(vec![
+                        stats::Hook {
+                            time: check_run.check_run.started_at,
+                            r#type: stats::HookType::CheckRun,
+                            commit_sha: check_run.check_run.head_sha.clone(),
+                        }
+                        .into(),
+                        Build::from(check_run.check_run).into(),
+                    ])
+                    .await?
+            }
+            github_hooks::Payload::GitHubAppAuthorization(_auth) => {}
+            github_hooks::Payload::Installation => {}
+            github_hooks::Payload::InstallationRepositories => {}
+            github_hooks::Payload::Ping(_ping) => {}
+            github_hooks::Payload::Status(status) => {
+                let influxdb_db = influxdb_name(&status.repository);
+                let client = influxdb_client::Client::new(
+                    &*INFLUXDB_BASE_URL,
+                    &influxdb_db,
+                    &*INFLUXDB_ADMIN_USERNAME,
+                    &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
+                )?;
+                client
+                    .write(vec![stats::Hook {
+                        time: status.created_at,
+                        r#type: stats::HookType::Status,
+                        commit_sha: status.sha,
                     }
-                    .into(),
-                    Build::from(check_run.check_run).into(),
-                ])
-                .await
-                .map_err(|err| err.to_string())
-        }
-        Ok(github_hooks::Payload::GitHubAppAuthorization(_auth)) => Ok(()),
-        Ok(github_hooks::Payload::Installation) => Ok(()),
-        Ok(github_hooks::Payload::InstallationRepositories) => Ok(()),
-        Ok(github_hooks::Payload::Ping(_ping)) => Ok(()),
-        Ok(github_hooks::Payload::Status(status)) => {
-            let influxdb_db = influxdb_name(&status.repository);
-            let client = influxdb_client::Client::new(
-                &*INFLUXDB_BASE_URL,
-                &influxdb_db,
-                &*INFLUXDB_ADMIN_USERNAME,
-                &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
-            )
-            .unwrap();
-            client
-                .write(vec![stats::Hook {
-                    time: status.created_at,
-                    r#type: stats::HookType::Status,
-                    commit_sha: status.sha,
-                }
-                .into()])
-                .await
-                .map_err(|err| err.to_string())
-        }
-        Err(err) => Err(err),
-    };
+                    .into()])
+                    .await?
+            }
+        };
+
+        Ok(())
+    }
+    .await;
 
     match res {
         Ok(_) => Ok(StatusCode::OK),
-        Err(_) => Ok(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(err) => {
+            error!("Hook error: {:?}", err);
+            Ok(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
