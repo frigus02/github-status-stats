@@ -13,7 +13,7 @@ where
     T: de::DeserializeOwned,
 {
     columns: Vec<String>,
-    values: IntoIter<Vec<FieldValue>>,
+    values: IntoIter<Vec<Option<FieldValue>>>,
     phantom: PhantomData<T>,
 }
 
@@ -21,7 +21,7 @@ impl<T> Rows<T>
 where
     T: de::DeserializeOwned,
 {
-    fn new(columns: Vec<String>, values: Vec<Vec<FieldValue>>) -> Self {
+    fn new(columns: Vec<String>, values: Vec<Vec<Option<FieldValue>>>) -> Self {
         Self {
             columns,
             values: values.into_iter(),
@@ -51,7 +51,7 @@ where
 pub struct QuerySeries {
     pub name: String,
     pub columns: Vec<String>,
-    pub values: Vec<Vec<FieldValue>>,
+    pub values: Vec<Vec<Option<FieldValue>>>,
 }
 
 impl QuerySeries {
@@ -151,12 +151,12 @@ mod rowde {
 
     pub struct Deserializer<'de> {
         columns: Peekable<Iter<'de, String>>,
-        values: IntoIter<FieldValue>,
+        values: IntoIter<Option<FieldValue>>,
         state: State,
     }
 
     impl<'de> Deserializer<'de> {
-        pub fn from_row(columns: &'de [String], values: Vec<FieldValue>) -> Self {
+        pub fn from_row(columns: &'de [String], values: Vec<Option<FieldValue>>) -> Self {
             Self {
                 columns: columns.iter().peekable(),
                 values: values.into_iter(),
@@ -192,10 +192,11 @@ mod rowde {
                     self.state = State::Column;
                     match self.values.next() {
                         Some(field) => match field {
-                            FieldValue::Boolean(v) => visitor.visit_bool(v),
-                            FieldValue::Float(v) => visitor.visit_f64(v),
-                            FieldValue::Integer(v) => visitor.visit_i64(v),
-                            FieldValue::String(v) => visitor.visit_string(v),
+                            Some(FieldValue::Boolean(v)) => visitor.visit_bool(v),
+                            Some(FieldValue::Float(v)) => visitor.visit_f64(v),
+                            Some(FieldValue::Integer(v)) => visitor.visit_i64(v),
+                            Some(FieldValue::String(v)) => visitor.visit_string(v),
+                            None => visitor.visit_none(),
                         },
                         None => Err(Error::custom("no more values")),
                     }
@@ -251,7 +252,7 @@ mod tests {
     struct MyRow {
         points: i64,
         success: bool,
-        ratio: f64,
+        ratio: Option<f64>,
         time: String,
     }
 
@@ -268,16 +269,16 @@ mod tests {
             ],
             values: vec![
                 vec![
-                    FieldValue::String("2020-02-09T17:27:00Z".to_owned()),
-                    FieldValue::Integer(2),
-                    FieldValue::Float(1.1),
-                    FieldValue::Boolean(true),
+                    Some(FieldValue::String("2020-02-09T17:27:00Z".to_owned())),
+                    Some(FieldValue::Integer(2)),
+                    None,
+                    Some(FieldValue::Boolean(true)),
                 ],
                 vec![
-                    FieldValue::String("2020-02-09T17:20:00Z".to_owned()),
-                    FieldValue::Integer(50),
-                    FieldValue::Float(0.1234),
-                    FieldValue::Boolean(false),
+                    Some(FieldValue::String("2020-02-09T17:20:00Z".to_owned())),
+                    Some(FieldValue::Integer(50)),
+                    Some(FieldValue::Float(0.1234)),
+                    Some(FieldValue::Boolean(false)),
                 ],
             ],
         };
@@ -288,11 +289,11 @@ mod tests {
         assert_eq!(2, rows.len());
         assert_eq!("2020-02-09T17:27:00Z", &rows[0].time);
         assert_eq!(2, rows[0].points);
-        assert_eq!(1.1, rows[0].ratio);
+        assert_eq!(None, rows[0].ratio);
         assert_eq!(true, rows[0].success);
         assert_eq!("2020-02-09T17:20:00Z", &rows[1].time);
         assert_eq!(50, rows[1].points);
-        assert_eq!(0.1234, rows[1].ratio);
+        assert_eq!(Some(0.1234), rows[1].ratio);
         assert_eq!(false, rows[1].success);
     }
 }

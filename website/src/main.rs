@@ -103,7 +103,7 @@ struct ApiQueryParams {
 #[derive(Serialize)]
 struct ApiQueryResponse {
     pub columns: Vec<String>,
-    pub values: Vec<Vec<influxdb_client::FieldValue>>,
+    pub values: Vec<Vec<Option<influxdb_client::FieldValue>>>,
 }
 
 async fn api_query_route(
@@ -124,6 +124,7 @@ async fn api_query_route(
                     .query(&params.query)
                     .await?
                     .into_single_result()?
+                    // TODO: Allow 0 or more series?
                     .into_single_series()?;
                 Ok(ApiQueryResponse {
                     columns: res.columns,
