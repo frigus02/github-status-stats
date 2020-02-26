@@ -3,10 +3,14 @@
   <head>
     <title>{{repository_name}} - GitHub Status Stats</title>
     {{#if data.Data}}
-    <link rel="stylesheet" href="/static/uPlot.css">
-    <link rel="stylesheet" href="/static/dashboard.css">
+    <link rel="stylesheet" href="/static/uPlot.css" />
+    <link rel="stylesheet" href="/static/dashboard.css" />
     <script src="/static/uPlot.iife.min.js" defer></script>
-    <script src="/static/dashboard.js" type="module" data-repository="{{data.Data.repository_id}}"></script>
+    <script
+      src="/static/dashboard.js"
+      type="module"
+      data-repository="{{data.Data.repository_id}}"
+    ></script>
     {{/if}}
   </head>
   <body>
@@ -16,11 +20,11 @@
     {{#if data.Data}}{{#with data.Data}}
     <p>{{repository_id}}</p>
     <div id="dashboard">
-      <div id="overall-success"></div>
-      <div id="overall-duration"></div>
-      <div id="success-by-pipeline"></div>
-      <div id="duration-by-pipeline"></div>
-      <div id="duration"></div>
+      <div class="panel" id="overall-success"></div>
+      <div class="panel" id="overall-duration"></div>
+      <div class="panel" id="success-by-pipeline"></div>
+      <div class="panel" id="duration-by-pipeline"></div>
+      <div class="panel" id="duration"></div>
     </div>
     {{/with}}{{/if}}{{#if data.Error}}{{#with data.Error}}
     <h2>Something went wrong</h2>

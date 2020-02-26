@@ -21,3 +21,14 @@
 #duration {
   grid-area: 2 / 1 / 5 / 3;
 }
+
+.panel {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.single-stat {
+  position: absolute;
+}

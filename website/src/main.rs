@@ -12,6 +12,7 @@ use log::{error, info};
 use secstr::{SecStr, SecUtf8};
 use serde::{Deserialize, Serialize};
 use stats::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
+use std::collections::HashMap;
 use std::convert::Infallible;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
 use warp::{
@@ -102,6 +103,7 @@ struct ApiQueryParams {
 
 #[derive(Serialize)]
 struct ApiQueryResponse {
+    pub tags: Option<HashMap<String, String>>,
     pub columns: Vec<String>,
     pub values: Vec<Vec<Option<influxdb_client::FieldValue>>>,
 }
@@ -112,7 +114,7 @@ async fn api_query_route(
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         Some(user) if user.repositories.iter().any(|r| r.id == params.repository) => {
-            let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
+            let res: Result<Vec<ApiQueryResponse>, Box<dyn std::error::Error>> = async {
                 let influxdb_db = influxdb_name_unsafe(params.repository);
                 let client = influxdb_client::Client::new(
                     &*INFLUXDB_BASE_URL,
@@ -124,12 +126,16 @@ async fn api_query_route(
                     .query(&params.query)
                     .await?
                     .into_single_result()?
-                    // TODO: Allow 0 or more series?
-                    .into_single_series()?;
-                Ok(ApiQueryResponse {
-                    columns: res.columns,
-                    values: res.values,
-                })
+                    .series
+                    .ok_or("no series")?
+                    .into_iter()
+                    .map(|s| ApiQueryResponse {
+                        tags: s.tags,
+                        columns: s.columns,
+                        values: s.values,
+                    })
+                    .collect();
+                Ok(res)
             }
             .await;
             match res {

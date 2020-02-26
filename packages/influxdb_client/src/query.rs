@@ -1,5 +1,6 @@
 use super::FieldValue;
 use serde::{de, Deserialize, Serialize};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::vec::IntoIter;
 
@@ -50,6 +51,7 @@ where
 #[derive(Debug, Deserialize)]
 pub struct QuerySeries {
     pub name: String,
+    pub tags: Option<HashMap<String, String>>,
     pub columns: Vec<String>,
     pub values: Vec<Vec<Option<FieldValue>>>,
 }
@@ -261,6 +263,7 @@ mod tests {
     fn deserialize_series() {
         let series = QuerySeries {
             name: "test".to_owned(),
+            tags: None,
             columns: vec![
                 "time".to_owned(),
                 "points".to_owned(),
