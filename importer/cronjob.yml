@@ -13,7 +13,7 @@ spec:
               image: frigus02/github-status-stats-importer
               env:
                 - name: RUST_LOG
-                  value: info,importer=debug,github_client=debug,grafana_client=debug,influxdb_client=debug
+                  value: info,importer=debug,github_client=debug,influxdb_client=debug
                 - name: GH_APP_ID
                   value: "50487"
                 - name: GH_PRIVATE_KEY
@@ -38,20 +38,6 @@ spec:
                     secretKeyRef:
                       name: ghss-influxdb
                       key: read_password
-                - name: GRAFANA_BASE_URL
-                  value: http://ghss-grafana
-                - name: GRAFANA_ADMIN_USERNAME
-                  valueFrom:
-                    secretKeyRef:
-                      name: ghss-grafana
-                      key: username
-                - name: GRAFANA_ADMIN_PASSWORD
-                  valueFrom:
-                    secretKeyRef:
-                      name: ghss-grafana
-                      key: password
-                - name: GRAFANA_DASHBOARDS_PATH
-                  value: /etc/grafana-dashboards
               resources:
                 requests:
                   cpu: 20m
@@ -59,14 +45,7 @@ spec:
                 limits:
                   cpu: 20m
                   memory: 20Mi
-              volumeMounts:
-                - name: grafana-dashboards
-                  mountPath: /etc/grafana-dashboards
               securityContext:
                 runAsNonRoot: true
                 runAsUser: 1000
-          volumes:
-            - name: grafana-dashboards
-              configMap:
-                name: ghss-grafana-dashboards
           restartPolicy: OnFailure

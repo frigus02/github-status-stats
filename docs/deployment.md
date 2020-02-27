@@ -2,14 +2,6 @@
 
 ## Prerequisites
 
-- Generate secret for Grafana with random passwords.
-
-  ```sh
-  kubectl create secret generic ghss-grafana \
-      --from-literal username=admin \
-      --from-literal password=$(openssl rand -base64 32)
-  ```
-
 - Generate secret for InfluxDB with random passwords.
 
   ```sh

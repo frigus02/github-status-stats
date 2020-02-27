@@ -3,7 +3,7 @@ mod hook;
 mod import;
 
 pub use build::*;
-use github_client::{Repository, User};
+use github_client::Repository;
 pub use hook::*;
 pub use import::*;
 
@@ -21,12 +21,4 @@ pub fn influxdb_read_user(repository: &Repository) -> String {
 
 pub fn influxdb_read_user_unsafe(id: i32) -> String {
     format!("u{}", id)
-}
-
-pub fn grafana_org_name(repository: &Repository) -> String {
-    repository.full_name.clone()
-}
-
-pub fn grafana_user_login(user: &User) -> String {
-    format!("{}", user.id)
 }
