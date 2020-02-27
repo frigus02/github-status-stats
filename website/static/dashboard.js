@@ -1,15 +1,3 @@
-// Success rate by pipeline
-// SELECT mean("successful") FROM "build" WHERE "name" =~ /^build$/ AND time >= now() - 7d GROUP BY "name"
-// | Pipeline | Successful |
-// | -------- | ---------- |
-// | build    | 50.00%     |
-
-// Duration by pipeline
-// SELECT mean("duration_ms") FROM "build" WHERE "name" =~ /^build$/ AND time >= now() - 7d GROUP BY "name"
-// | Pipeline | Duration |
-// | -------- | -------- |
-// | build    | 2.66 min |
-
 const repository = document.querySelector('script[src="/static/dashboard.js"]')
   .dataset.repository;
 
@@ -18,6 +6,14 @@ const queryData = async query => {
   url.searchParams.append("repository", repository);
   url.searchParams.append("query", query);
   const res = await fetch(url.toString());
+  if (!res.ok) {
+    throw new Error(
+      `Query failed eith ${res.status} ${res.statusText} (query=${query
+        .replace(/[\n\s]+/g, " ")
+        .trim()})`
+    );
+  }
+
   return res.json();
 };
 
@@ -109,6 +105,56 @@ const graphPanel = async ({
   new uPlot.Line(opts, data, document.querySelector(elementSelector));
 };
 
+const tablePanel = async ({
+  title,
+  query,
+  valueTransform,
+  valueFormat,
+  valueColumnName,
+  labelTag,
+  labelColumnName,
+  elementSelector
+}) => {
+  const raw = await queryData(query);
+  const data = prepareData(raw, "mean", valueTransform);
+
+  const caption = document.createElement("caption");
+  caption.textContent = title;
+
+  const trHead = document.createElement("tr");
+  const thLabel = document.createElement("th");
+  thLabel.scope = "col";
+  thLabel.textContent = labelColumnName;
+  const thValue = document.createElement("th");
+  thValue.scope = "col";
+  thValue.textContent = valueColumnName;
+  trHead.append(thLabel, thValue);
+
+  const thead = document.createElement("thead");
+  thead.append(trHead);
+
+  const tbody = document.createElement("tbody");
+  tbody.append(
+    ...raw.map((series, i) => {
+      const tr = document.createElement("tr");
+      const label = document.createElement("th");
+      label.scope = "row";
+      label.textContent = series.tags[labelTag];
+      const value = document.createElement("td");
+      value.textContent = valueFormat.format(data[i + 1][0]);
+      tr.append(label, value);
+      return tr;
+    })
+  );
+
+  const table = document.createElement("table");
+  table.className = "table-stat";
+  table.append(caption, thead, tbody);
+
+  const element = document.querySelector(elementSelector);
+  element.append(table);
+};
+
 const overallSuccessRate = () =>
   statPanel({
     title: "Overall success rate",
@@ -155,6 +201,48 @@ const overallAverageDuration = () =>
     elementSelector: "#overall-duration"
   });
 
+const successByPipeline = () =>
+  tablePanel({
+    title: "Success rate by pipeline",
+    query: `
+      SELECT mean("successful")
+      FROM "build"
+      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      GROUP BY "name"
+    `,
+    valueTransform: value => value,
+    valueFormat: new Intl.NumberFormat(undefined, {
+      style: "unit",
+      unit: "percent",
+      maximumFractionDigits: 2
+    }),
+    valueColumnName: "Success",
+    labelTag: "name",
+    labelColumnName: "Pipeline",
+    elementSelector: "#success-by-pipeline"
+  });
+
+const durationByPipeline = () =>
+  tablePanel({
+    title: "Duration by pipeline",
+    query: `
+      SELECT mean("duration_ms")
+      FROM "build"
+      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      GROUP BY "name"
+    `,
+    valueTransform: value => value / 1000 / 60,
+    valueFormat: new Intl.NumberFormat(undefined, {
+      style: "unit",
+      unit: "minute",
+      maximumFractionDigits: 2
+    }),
+    valueColumnName: "Duration",
+    labelTag: "name",
+    labelColumnName: "Pipeline",
+    elementSelector: "#duration-by-pipeline"
+  });
+
 const duration = () =>
   graphPanel({
     title: "Duration",
@@ -176,4 +264,6 @@ const duration = () =>
 
 overallSuccessRate();
 overallAverageDuration();
+successByPipeline();
+durationByPipeline();
 duration();
