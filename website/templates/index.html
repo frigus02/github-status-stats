@@ -2,21 +2,33 @@
 <html>
   <head>
     <title>GitHub Status Stats</title>
+    <link rel="stylesheet" href="/static/base.css" />
+    <link rel="stylesheet" href="/static/index.css" />
   </head>
   <body>
-    <h1>GitHub Status Stats</h1>
-    {{#if Anonymous}}{{#with Anonymous}}
-    <div><a href="{{login_url}}">Login</a></div>
-    {{/with}}{{/if}}{{#if LoggedIn}}{{#with LoggedIn}}
-    <h2>Hello {{user}}!</h2>
-    <ul>
-      {{#each repositories}}
-      <li>
-        <a href="/d/{{name}}">{{name}}</a>
-      </li>
-      {{/each}}
-    </ul>
-    <a href="https://github.com/apps/status-stats">Add repository</a>
-    {{/with}}{{/if}}
+    <header>
+      <h1>GitHub Status Stats</h1>
+      {{#if LoggedIn}}
+      <div class="user">
+        <div>Logged in as</div>
+        <div>{{LoggedIn.user}}</div>
+      </div>
+      {{/if}}
+    </header>
+    <div class="content">
+      {{#if Anonymous}}
+      <a href="{{Anonymous.login_url}}">Login with GitHub</a>
+      {{/if}}{{#if LoggedIn}}
+      <p>GitHub Status Stats is setup for the following repositories:</p>
+      <ul>
+        {{#each LoggedIn.repositories}}
+        <li>
+          <a href="/d/{{name}}">{{name}}</a>
+        </li>
+        {{/each}}
+      </ul>
+      <a href="https://github.com/apps/status-stats">Add repository</a>
+      {{/if}}
+    </div>
   </body>
 </html>

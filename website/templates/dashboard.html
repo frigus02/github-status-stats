@@ -3,6 +3,7 @@
   <head>
     <title>{{repository_name}} - GitHub Status Stats</title>
     {{#if data.Data}}
+    <link rel="stylesheet" href="/static/base.css" />
     <link rel="stylesheet" href="/static/uPlot.css" />
     <link rel="stylesheet" href="/static/dashboard.css" />
     <script src="/static/uPlot.iife.min.js" defer></script>
@@ -14,10 +15,17 @@
     {{/if}}
   </head>
   <body>
-    <h1>GitHub Status Stats</h1>
-    <h2>{{repository_name}}</h2>
-    <p>Hello {{user}}</p>
-    {{#if data.Data}}{{#with data.Data}}
+    <header>
+      <h1>
+        <small>GitHub Status Stats</small>
+        {{repository_name}}
+      </h1>
+      <div class="user">
+        <div>Logged in as</div>
+        <div>{{user}}</div>
+      </div>
+    </header>
+    {{#if data.Data}}
     <div id="dashboard">
       <div class="panel" id="overall-success"></div>
       <div class="panel" id="overall-duration"></div>
@@ -25,9 +33,9 @@
       <div class="panel" id="duration-by-pipeline"></div>
       <div class="panel" id="duration"></div>
     </div>
-    {{/with}}{{/if}}{{#if data.Error}}{{#with data.Error}}
+    {{/if}}{{#if data.Error}}
     <h2>Something went wrong</h2>
-    <p>{{message}}</p>
-    {{/with}}{{/if}}
+    <p>{{data.Error.message}}</p>
+    {{/if}}
   </body>
 </html>
