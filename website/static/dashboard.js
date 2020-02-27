@@ -1,5 +1,9 @@
 const repository = document.querySelector('script[src="/static/dashboard.js"]')
   .dataset.repository;
+const filters = [
+  // '"name" =~ /^build$/',
+  "time >= now() - 30d"
+];
 
 const queryData = async query => {
   const url = new URL("/api/query", location);
@@ -18,6 +22,10 @@ const queryData = async query => {
 };
 
 const prepareData = (raw, yColumnName, valueTransform) => {
+  if (raw.length === 0) {
+    return [[0], [Number.NaN]];
+  }
+
   const x = raw[0].columns.indexOf("time");
   const y = raw[0].columns.indexOf(yColumnName);
   const data = [];
@@ -161,12 +169,12 @@ const overallSuccessRate = () =>
     statQuery: `
       SELECT mean("successful")
       FROM "build"
-      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      WHERE ${filters.join(" AND ")}
     `,
     backgroundQuery: `
       SELECT mean("successful")
       FROM "build"
-      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      WHERE ${filters.join(" AND ")}
       GROUP BY time(6h)
     `,
     valueTransform: value => value,
@@ -184,12 +192,12 @@ const overallAverageDuration = () =>
     statQuery: `
       SELECT mean("duration_ms")
       FROM "build"
-      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      WHERE ${filters.join(" AND ")}
     `,
     backgroundQuery: `
       SELECT mean("duration_ms")
       FROM "build"
-      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      WHERE ${filters.join(" AND ")}
       GROUP BY time(6h)
     `,
     valueTransform: value => value / 1000 / 60,
@@ -207,7 +215,7 @@ const successByPipeline = () =>
     query: `
       SELECT mean("successful")
       FROM "build"
-      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      WHERE ${filters.join(" AND ")}
       GROUP BY "name"
     `,
     valueTransform: value => value,
@@ -228,7 +236,7 @@ const durationByPipeline = () =>
     query: `
       SELECT mean("duration_ms")
       FROM "build"
-      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      WHERE ${filters.join(" AND ")}
       GROUP BY "name"
     `,
     valueTransform: value => value / 1000 / 60,
@@ -249,7 +257,7 @@ const duration = () =>
     query: `
       SELECT mean("duration_ms")
       FROM "build"
-      WHERE "name" =~ /^build$/ AND time >= now() - 30d
+      WHERE ${filters.join(" AND ")}
       GROUP BY time(1h), "name"
     `,
     valueTransform: value => value / 1000 / 60,

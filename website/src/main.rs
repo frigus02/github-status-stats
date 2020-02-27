@@ -126,8 +126,7 @@ async fn api_query_route(
                     .query(&params.query)
                     .await?
                     .into_single_result()?
-                    .series
-                    .ok_or("no series")?
+                    .into_series()?
                     .into_iter()
                     .map(|s| ApiQueryResponse {
                         tags: s.tags,

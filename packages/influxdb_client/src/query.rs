@@ -73,8 +73,16 @@ pub struct QueryResult {
 }
 
 impl QueryResult {
+    pub fn into_series(self) -> Result<Vec<QuerySeries>, String> {
+        if let Some(err) = self.error {
+            return Err(format!("result has error: {}", err));
+        }
+
+        Ok(self.series.unwrap_or_else(Vec::new))
+    }
+
     pub fn into_single_series(self) -> Result<QuerySeries, String> {
-        if let Some(mut series_list) = self.series {
+        self.into_series().and_then(|mut series_list| {
             let series = series_list.pop();
             if let Some(series) = series {
                 if series_list.is_empty() {
@@ -85,9 +93,7 @@ impl QueryResult {
             } else {
                 Err("zero series".to_owned())
             }
-        } else {
-            Err("no series".to_owned())
-        }
+        })
     }
 }
 
