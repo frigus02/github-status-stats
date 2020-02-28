@@ -39,6 +39,9 @@ const prepareData = (raw, yColumnName, valueTransform) => {
   return data;
 };
 
+const color = (index, alpha = 1) =>
+  `hsla(${index * 222.5}, 75%, 50%, ${alpha})`;
+
 const statPanel = async ({
   title,
   statQuery,
@@ -62,8 +65,8 @@ const statPanel = async ({
       {},
       {
         spanGaps: true,
-        stroke: "#1f5f95",
-        fill: "rgba(31, 95, 149, .1)"
+        stroke: color(0),
+        fill: color(0, 0.1)
       }
     ],
     scales: { x: { time: false } },
@@ -95,10 +98,10 @@ const graphPanel = async ({
     height: 362,
     series: [
       {},
-      ...raw.map(series => ({
+      ...raw.map((series, i) => ({
         label: series.tags[labelTag],
         value: (_self, rawValue) => valueFormat.format(rawValue),
-        stroke: "#1f5f95" // TODO: get from color palette
+        stroke: color(i)
       }))
     ],
     axes: [
