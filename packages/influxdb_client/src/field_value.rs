@@ -1,8 +1,10 @@
 use serde::de::{Deserialize, Deserializer, Error, Visitor};
+use serde::Serialize;
 use std::convert::TryInto;
 use std::fmt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(untagged)]
 pub enum FieldValue {
     String(String),
     Float(f64),
@@ -67,7 +69,7 @@ impl<'de> Deserialize<'de> for FieldValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::from_str;
+    use serde_json::{from_str, to_string};
 
     #[test]
     #[allow(clippy::approx_constant)]
@@ -80,5 +82,19 @@ mod tests {
         assert_eq!(FieldValue::Integer(42), values[2]);
         assert_eq!(FieldValue::Integer(-42), values[3]);
         assert_eq!(FieldValue::String("hello world".to_owned()), values[4]);
+    }
+
+    #[test]
+    #[allow(clippy::approx_constant)]
+    fn encode_test() {
+        let values = vec![
+            FieldValue::Boolean(true),
+            FieldValue::Float(3.14),
+            FieldValue::Integer(42),
+            FieldValue::Integer(-42),
+            FieldValue::String("hello world".to_owned()),
+        ];
+        let encoded = to_string(&values).unwrap();
+        assert_eq!("[true,3.14,42,-42,\"hello world\"]", encoded);
     }
 }

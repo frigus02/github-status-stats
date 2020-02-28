@@ -38,14 +38,12 @@ WORKDIR /src
 RUN USER=root cargo new --bin importer && \
     USER=root cargo new --bin website && \
     USER=root cargo new --lib packages/github_client && \
-    USER=root cargo new --lib packages/grafana_client && \
     USER=root cargo new --lib packages/influxdb_client && \
     USER=root cargo new --lib packages/stats
 COPY Cargo.toml Cargo.lock ./
 COPY importer/Cargo.toml ./importer/
 COPY website/Cargo.toml ./website/
 COPY packages/github_client/Cargo.toml ./packages/github_client/
-COPY packages/grafana_client/Cargo.toml ./packages/grafana_client/
 COPY packages/influxdb_client/Cargo.toml ./packages/influxdb_client/
 COPY packages/stats/Cargo.toml ./packages/stats/
 RUN cargo clippy --release && \
@@ -53,7 +51,6 @@ RUN cargo clippy --release && \
     rm target/x86_64-unknown-linux-musl/release/deps/importer* && \
     rm target/x86_64-unknown-linux-musl/release/deps/website* && \
     rm target/x86_64-unknown-linux-musl/release/deps/libgithub_client* && \
-    rm target/x86_64-unknown-linux-musl/release/deps/libgrafana_client* && \
     rm target/x86_64-unknown-linux-musl/release/deps/libinfluxdb_client* && \
     rm target/x86_64-unknown-linux-musl/release/deps/libstats*
 

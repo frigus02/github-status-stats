@@ -2,7 +2,6 @@
 extern crate lazy_static;
 
 mod build;
-mod grafana;
 mod influxdb;
 
 use build::{get_builds, get_most_recent_builds};
@@ -23,11 +22,6 @@ lazy_static! {
         SecUtf8::from(std::env::var("INFLUXDB_ADMIN_PASSWORD").unwrap());
     static ref INFLUXDB_READ_PASSWORD: SecUtf8 =
         SecUtf8::from(std::env::var("INFLUXDB_READ_PASSWORD").unwrap());
-    static ref GRAFANA_BASE_URL: String = std::env::var("GRAFANA_BASE_URL").unwrap();
-    static ref GRAFANA_ADMIN_USERNAME: String = std::env::var("GRAFANA_ADMIN_USERNAME").unwrap();
-    static ref GRAFANA_ADMIN_PASSWORD: SecUtf8 =
-        SecUtf8::from(std::env::var("GRAFANA_ADMIN_PASSWORD").unwrap());
-    static ref GRAFANA_DASHBOARDS_PATH: String = std::env::var("GRAFANA_DASHBOARDS_PATH").unwrap();
 }
 
 #[tokio::main]
@@ -35,12 +29,6 @@ async fn main() -> Result<(), BoxError> {
     env_logger::init();
 
     let gh_app_client = Client::new_app_auth(&*GH_APP_ID, &*GH_PRIVATE_KEY.unsecure())?;
-
-    let grafana_client = grafana_client::Client::new(
-        GRAFANA_BASE_URL.clone(),
-        &*GRAFANA_ADMIN_USERNAME,
-        &*GRAFANA_ADMIN_PASSWORD.unsecure(),
-    )?;
 
     let installations = gh_app_client.get_app_installations().await?;
     for installation in installations {
@@ -72,7 +60,7 @@ async fn main() -> Result<(), BoxError> {
                     import(&influxdb_client, points).await?;
                 }
             } else {
-                // First import. Setup InfluxDB, Grafana datasource and perform initial import.
+                // First import. Setup InfluxDB and perform initial import.
                 influxdb::setup(
                     &influxdb_client,
                     &influxdb_db,
@@ -83,19 +71,6 @@ async fn main() -> Result<(), BoxError> {
                 let points = get_most_recent_builds(&gh_inst_client, &repository).await?;
                 import(&influxdb_client, points).await?;
             }
-
-            let grafana_org_id = grafana::setup_organization(&grafana_client, &repository).await?;
-            grafana::setup_datasource(
-                &grafana_client,
-                grafana_org_id,
-                &*INFLUXDB_BASE_URL,
-                &influxdb_db,
-                &influxdb_read_user,
-                &*INFLUXDB_READ_PASSWORD.unsecure(),
-            )
-            .await?;
-            grafana::setup_dashboards(&grafana_client, grafana_org_id, &*GRAFANA_DASHBOARDS_PATH)
-                .await?;
         }
     }
 

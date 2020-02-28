@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{repository_name}} - GitHub Status Stats</title>
+    {{#if data.Data}}
+    <link rel="stylesheet" href="/static/base.css" />
+    <link rel="stylesheet" href="/static/uPlot.css" />
+    <link rel="stylesheet" href="/static/dashboard.css" />
+    <script src="/static/uPlot.iife.min.js" defer></script>
+    <script
+      src="/static/dashboard.js"
+      type="module"
+      data-repository="{{data.Data.repository_id}}"
+    ></script>
+    {{/if}}
+  </head>
+  <body>
+    <header>
+      <h1>
+        <small><a href="/">GitHub Status Stats</a></small>
+        {{repository_name}}
+      </h1>
+      <div class="timerange">
+        <div>Time range</div>
+        <div>Last 30 days</div>
+      </div>
+      <div class="user">
+        <div>Logged in as</div>
+        <div>{{user}}</div>
+      </div>
+    </header>
+    {{#if data.Data}}
+    <div id="dashboard">
+      <div class="panel" id="overall-success"></div>
+      <div class="panel" id="overall-duration"></div>
+      <div class="panel" id="success-by-pipeline"></div>
+      <div class="panel" id="duration-by-pipeline"></div>
+      <div class="panel" id="duration"></div>
+    </div>
+    {{/if}}{{#if data.Error}}
+    <h2>Something went wrong</h2>
+    <p>{{data.Error.message}}</p>
+    {{/if}}
+  </body>
+</html>
