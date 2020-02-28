@@ -180,7 +180,7 @@ const overallSuccessRate = () =>
       WHERE ${filters.join(" AND ")}
       GROUP BY time(6h)
     `,
-    valueTransform: value => value,
+    valueTransform: value => value * 100,
     valueFormat: new Intl.NumberFormat(undefined, {
       style: "unit",
       unit: "percent",
@@ -221,7 +221,7 @@ const successByPipeline = () =>
       WHERE ${filters.join(" AND ")}
       GROUP BY "name"
     `,
-    valueTransform: value => value,
+    valueTransform: value => value * 100,
     valueFormat: new Intl.NumberFormat(undefined, {
       style: "unit",
       unit: "percent",
