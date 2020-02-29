@@ -111,16 +111,28 @@ const prepareData = (raw, valueTransform) => {
   return data;
 };
 
-const onResize = cb => window.addEventListener("resize", cb);
+const onResize = cb => window.addEventListener("resize", throttle(cb, 100));
 
 const onTimeRangeChange = cb => {
-  const onChange = () => {
+  let running = false;
+  let again = false;
+  const onChange = async () => {
     if (
       startDateInput.value &&
       endDateInput.value &&
       startDateInput.valueAsNumber <= endDateInput.valueAsNumber
     ) {
-      cb();
+      if (running) {
+        again = true;
+      } else {
+        again = false;
+        running = true;
+        await cb();
+        running = false;
+        if (again) {
+          onChange();
+        }
+      }
     }
   };
   startDateInput.addEventListener("change", onChange);
@@ -188,7 +200,7 @@ const statPanel = async ({
   };
 
   const plot = new uPlot.Line(opts, emptyData, element);
-  onResize(throttle(() => plot.setSize(getSize()), 100));
+  onResize(() => plot.setSize(getSize()));
 
   const loadData = async () => {
     const rawStat = await queryData(statQuery);
@@ -243,7 +255,7 @@ const graphPanel = async ({
   };
 
   recreatePlot([], emptyData);
-  onResize(throttle(() => plot.setSize(getSize()), 100));
+  onResize(() => plot.setSize(getSize()));
 
   const loadData = async () => {
     const raw = await queryData(query);
@@ -313,95 +325,84 @@ const tablePanel = async ({
   onTimeRangeChange(loadData);
 };
 
-const overallSuccessRate = () =>
-  statPanel({
-    title: "Overall success rate",
-    statQuery: `
-      SELECT mean("successful") AS value
-      FROM "build"
-      WHERE __time_filter__
-    `,
-    backgroundQuery: `
-      SELECT mean("successful") AS value
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY __time_group_sparse__
-    `,
-    valueTransform: value => value * 100,
-    valueFormat: value => `${value.toFixed(2)}%`,
-    elementSelector: "#overall-success"
-  });
+statPanel({
+  title: "Overall success rate",
+  statQuery: `
+    SELECT mean("successful") AS value
+    FROM "build"
+    WHERE __time_filter__
+  `,
+  backgroundQuery: `
+    SELECT mean("successful") AS value
+    FROM "build"
+    WHERE __time_filter__
+    GROUP BY __time_group_sparse__
+  `,
+  valueTransform: value => value * 100,
+  valueFormat: value => `${value.toFixed(2)}%`,
+  elementSelector: "#overall-success"
+});
 
-const overallAverageDuration = () =>
-  statPanel({
-    title: "Overall average duration",
-    statQuery: `
-      SELECT mean("duration_ms") AS value
-      FROM "build"
-      WHERE __time_filter__
-    `,
-    backgroundQuery: `
-      SELECT mean("duration_ms") AS value
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY __time_group_sparse__
-    `,
-    valueTransform: value => value / 1000 / 60,
-    valueFormat: value => `${value.toFixed(2)} min`,
-    elementSelector: "#overall-duration"
-  });
+statPanel({
+  title: "Overall average duration",
+  statQuery: `
+    SELECT mean("duration_ms") AS value
+    FROM "build"
+    WHERE __time_filter__
+  `,
+  backgroundQuery: `
+    SELECT mean("duration_ms") AS value
+    FROM "build"
+    WHERE __time_filter__
+    GROUP BY __time_group_sparse__
+  `,
+  valueTransform: value => value / 1000 / 60,
+  valueFormat: value => `${value.toFixed(2)} min`,
+  elementSelector: "#overall-duration"
+});
 
-const successByPipeline = () =>
-  tablePanel({
-    title: "Success rate by pipeline",
-    query: `
-      SELECT mean("successful") AS value
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY "name"
-    `,
-    valueTransform: value => value * 100,
-    valueFormat: value => `${value.toFixed(2)}%`,
-    valueColumnName: "Success",
-    labelTag: "name",
-    labelColumnName: "Pipeline",
-    elementSelector: "#success-by-pipeline"
-  });
+tablePanel({
+  title: "Success rate by pipeline",
+  query: `
+    SELECT mean("successful") AS value
+    FROM "build"
+    WHERE __time_filter__
+    GROUP BY "name"
+  `,
+  valueTransform: value => value * 100,
+  valueFormat: value => `${value.toFixed(2)}%`,
+  valueColumnName: "Success",
+  labelTag: "name",
+  labelColumnName: "Pipeline",
+  elementSelector: "#success-by-pipeline"
+});
 
-const durationByPipeline = () =>
-  tablePanel({
-    title: "Duration by pipeline",
-    query: `
-      SELECT mean("duration_ms") AS value
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY "name"
-    `,
-    valueTransform: value => value / 1000 / 60,
-    valueFormat: value => `${value.toFixed(2)} min`,
-    valueColumnName: "Duration",
-    labelTag: "name",
-    labelColumnName: "Pipeline",
-    elementSelector: "#duration-by-pipeline"
-  });
+tablePanel({
+  title: "Duration by pipeline",
+  query: `
+    SELECT mean("duration_ms") AS value
+    FROM "build"
+    WHERE __time_filter__
+    GROUP BY "name"
+  `,
+  valueTransform: value => value / 1000 / 60,
+  valueFormat: value => `${value.toFixed(2)} min`,
+  valueColumnName: "Duration",
+  labelTag: "name",
+  labelColumnName: "Pipeline",
+  elementSelector: "#duration-by-pipeline"
+});
 
-const duration = () =>
-  graphPanel({
-    title: "Duration",
-    query: `
-      SELECT mean("duration_ms") AS value
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY __time_group_detailed__, "name"
-    `,
-    valueTransform: value => value / 1000 / 60,
-    valueFormat: value => `${value.toFixed(2)} min`,
-    labelTag: "name",
-    elementSelector: "#duration"
-  });
-
-overallSuccessRate();
-overallAverageDuration();
-successByPipeline();
-durationByPipeline();
-duration();
+graphPanel({
+  title: "Duration",
+  query: `
+    SELECT mean("duration_ms") AS value
+    FROM "build"
+    WHERE __time_filter__
+    GROUP BY __time_group_detailed__, "name"
+  `,
+  valueTransform: value => value / 1000 / 60,
+  valueFormat: value => `${value.toFixed(2)} min`,
+  labelTag: "name",
+  elementSelector: "#duration"
+});
