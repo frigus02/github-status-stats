@@ -52,3 +52,9 @@ a,
 a:visited {
   color: rgb(var(--color-accent));
 }
+
+.sourcelink {
+  float: right;
+  margin: 0 1rem 1rem;
+  font-size: 0.7rem;
+}
