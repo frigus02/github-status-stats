@@ -22,11 +22,12 @@
       </h1>
       <div class="timerange">
         <div>Time range</div>
-        <div>Last 30 days</div>
+        <div>30 days to <input id="enddate" type="date" /></div>
       </div>
       <div class="user">
         <div>Logged in as</div>
-        <div>{{user}}</div>
+        <div class="user__name">{{user}}</div>
+        <div><a href="/logout">Logout</a></div>
       </div>
     </header>
     {{#if data.Data}}

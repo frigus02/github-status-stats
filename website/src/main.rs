@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+mod cookie;
 mod ctrlc;
 mod github_hooks;
 mod github_queries;
@@ -56,6 +57,7 @@ async fn index_route(token: Option<token::User>) -> Result<impl warp::Reply, Inf
                 .into_iter()
                 .map(|repo| RepositoryAccess { name: repo.name })
                 .collect(),
+            login_url: GH_LOGIN_URL.clone(),
         },
         None => IndexTemplate::Anonymous {
             login_url: GH_LOGIN_URL.clone(),
@@ -173,18 +175,21 @@ async fn setup_authorized_route(
             Response::builder()
                 .status(StatusCode::TEMPORARY_REDIRECT)
                 .header("location", "/")
-                .header(
-                    "set-cookie",
-                    format!(
-                        "{}={}; Path=/; SameSite=Lax; Secure; HttpOnly",
-                        COOKIE_NAME, token
-                    ),
-                )
+                .header("set-cookie", cookie::set(COOKIE_NAME, &token))
                 .body(Body::empty())
                 .unwrap(),
         )),
         Err(_) => Ok(Box::new(StatusCode::INTERNAL_SERVER_ERROR)),
     }
+}
+
+async fn logout_route() -> Result<impl warp::Reply, Infallible> {
+    Ok(Response::builder()
+        .status(StatusCode::TEMPORARY_REDIRECT)
+        .header("location", "/")
+        .header("set-cookie", cookie::remove(COOKIE_NAME))
+        .body(Body::empty())
+        .unwrap())
 }
 
 async fn hooks_route(
@@ -292,6 +297,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::query::<github_client::oauth::AuthCodeQuery>())
         .and_then(setup_authorized_route);
 
+    let logout = warp::get()
+        .and(warp::path!("logout"))
+        .and_then(logout_route);
+
     let hooks = warp::post()
         .and(warp::path!("hooks"))
         .and(warp::header("X-Hub-Signature"))
@@ -306,6 +315,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(api_query)
         .or(setup_authorized)
         .or(hooks)
+        .or(logout)
         .with(warp::log("website"));
 
     let (_addr, server) =

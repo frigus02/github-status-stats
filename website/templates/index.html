@@ -11,7 +11,8 @@
       {{#if LoggedIn}}
       <div class="user">
         <div>Logged in as</div>
-        <div>{{LoggedIn.user}}</div>
+        <div class="user__name">{{LoggedIn.user}}</div>
+        <div><a href="/logout">Logout</a></div>
       </div>
       {{/if}}
     </header>
@@ -19,6 +20,7 @@
       {{#if Anonymous}}
       <a href="{{Anonymous.login_url}}">Login with GitHub</a>
       {{/if}}{{#if LoggedIn}}
+      <h2>Repositories</h2>
       <p>GitHub Status Stats is setup for the following repositories:</p>
       <ul>
         {{#each LoggedIn.repositories}}
@@ -27,6 +29,7 @@
         </li>
         {{/each}}
       </ul>
+      <a href="{{LoggedIn.login_url}}">Refresh</a> -
       <a href="https://github.com/apps/status-stats">Add repository</a>
       {{/if}}
     </div>

@@ -37,6 +37,7 @@ pub enum IndexTemplate {
     LoggedIn {
         user: String,
         repositories: Vec<RepositoryAccess>,
+        login_url: String,
     },
 }
 
