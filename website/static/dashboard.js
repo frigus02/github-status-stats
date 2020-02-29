@@ -21,13 +21,13 @@ const queryData = async query => {
   return res.json();
 };
 
-const prepareData = (raw, yColumnName, valueTransform) => {
+const prepareData = (raw, valueTransform) => {
   if (raw.length === 0) {
     return [[0], [Number.NaN]];
   }
 
   const x = raw[0].columns.indexOf("time");
-  const y = raw[0].columns.indexOf(yColumnName);
+  const y = raw[0].columns.indexOf("value");
   const data = [];
   data.push(
     raw[0].values.map(row => Math.round(new Date(row[x]).getTime() / 1000))
@@ -77,14 +77,14 @@ const statPanel = async ({
   const element = document.querySelector(elementSelector);
 
   const rawStat = await queryData(statQuery);
-  const stat = prepareData(rawStat, "mean", valueTransform)[1][0];
+  const stat = prepareData(rawStat, valueTransform)[1][0];
   const statEl = document.createElement("div");
   element.appendChild(statEl);
   statEl.className = "single-stat";
   statEl.textContent = valueFormat.format(stat);
 
   const rawBackground = await queryData(backgroundQuery);
-  const data = prepareData(rawBackground, "mean", valueTransform);
+  const data = prepareData(rawBackground, valueTransform);
   const getSize = () => getUPlotSize(element, 100);
   const opts = {
     title,
@@ -120,7 +120,7 @@ const graphPanel = async ({
 }) => {
   const element = document.querySelector(elementSelector);
   const raw = await queryData(query);
-  const data = prepareData(raw, "mean", valueTransform);
+  const data = prepareData(raw, valueTransform);
   const getSize = () => getUPlotSize(element, 375);
   const opts = {
     title,
@@ -160,7 +160,7 @@ const tablePanel = async ({
   elementSelector
 }) => {
   const raw = await queryData(query);
-  const data = prepareData(raw, "mean", valueTransform);
+  const data = prepareData(raw, valueTransform);
 
   const caption = document.createElement("caption");
   caption.textContent = title;
@@ -203,12 +203,12 @@ const overallSuccessRate = () =>
   statPanel({
     title: "Overall success rate",
     statQuery: `
-      SELECT mean("successful")
+      SELECT mean("successful") AS value
       FROM "build"
       WHERE ${filters.join(" AND ")}
     `,
     backgroundQuery: `
-      SELECT mean("successful")
+      SELECT mean("successful") AS value
       FROM "build"
       WHERE ${filters.join(" AND ")}
       GROUP BY time(6h)
@@ -226,12 +226,12 @@ const overallAverageDuration = () =>
   statPanel({
     title: "Overall average duration",
     statQuery: `
-      SELECT mean("duration_ms")
+      SELECT mean("duration_ms") AS value
       FROM "build"
       WHERE ${filters.join(" AND ")}
     `,
     backgroundQuery: `
-      SELECT mean("duration_ms")
+      SELECT mean("duration_ms") AS value
       FROM "build"
       WHERE ${filters.join(" AND ")}
       GROUP BY time(6h)
@@ -249,7 +249,7 @@ const successByPipeline = () =>
   tablePanel({
     title: "Success rate by pipeline",
     query: `
-      SELECT mean("successful")
+      SELECT mean("successful") AS value
       FROM "build"
       WHERE ${filters.join(" AND ")}
       GROUP BY "name"
@@ -270,7 +270,7 @@ const durationByPipeline = () =>
   tablePanel({
     title: "Duration by pipeline",
     query: `
-      SELECT mean("duration_ms")
+      SELECT mean("duration_ms") AS value
       FROM "build"
       WHERE ${filters.join(" AND ")}
       GROUP BY "name"
@@ -291,7 +291,7 @@ const duration = () =>
   graphPanel({
     title: "Duration",
     query: `
-      SELECT mean("duration_ms")
+      SELECT mean("duration_ms") AS value
       FROM "build"
       WHERE ${filters.join(" AND ")}
       GROUP BY time(1h), "name"
