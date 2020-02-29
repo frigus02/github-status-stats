@@ -104,7 +104,7 @@ const statPanel = async ({
   const statEl = document.createElement("div");
   element.appendChild(statEl);
   statEl.className = "single-stat";
-  statEl.textContent = valueFormat.format(emptyData[1][0]);
+  statEl.textContent = valueFormat(emptyData[1][0]);
 
   const getSize = () => getUPlotSize(element, 100);
   const opts = {
@@ -130,7 +130,7 @@ const statPanel = async ({
   const loadData = async () => {
     const rawStat = await queryData(statQuery);
     const stat = prepareData(rawStat, valueTransform);
-    statEl.textContent = valueFormat.format(stat[1][0]);
+    statEl.textContent = valueFormat(stat[1][0]);
 
     const rawBackground = await queryData(backgroundQuery);
     const data = prepareData(rawBackground, valueTransform);
@@ -165,15 +165,14 @@ const graphPanel = async ({
         {},
         ...raw.map((series, i) => ({
           label: series.tags[labelTag],
-          value: (_self, rawValue) => valueFormat.format(rawValue),
+          value: (_self, rawValue) => valueFormat(rawValue),
           stroke: color(i)
         }))
       ],
       axes: [
         {},
         {
-          values: (_self, ticks) =>
-            ticks.map(rawValue => valueFormat.format(rawValue))
+          values: (_self, ticks) => ticks.map(valueFormat)
         }
       ]
     };
@@ -241,7 +240,7 @@ const tablePanel = async ({
         label.scope = "row";
         label.textContent = series.tags[labelTag];
         const value = document.createElement("td");
-        value.textContent = valueFormat.format(data[i + 1][0]);
+        value.textContent = valueFormat(data[i + 1][0]);
         tr.append(label, value);
         return tr;
       })
@@ -266,11 +265,7 @@ const overallSuccessRate = () =>
       GROUP BY time(6h)
     `,
     valueTransform: value => value * 100,
-    valueFormat: new Intl.NumberFormat(undefined, {
-      style: "unit",
-      unit: "percent",
-      maximumFractionDigits: 2
-    }),
+    valueFormat: value => `${value.toFixed(2)}%`,
     elementSelector: "#overall-success"
   });
 
@@ -289,11 +284,7 @@ const overallAverageDuration = () =>
       GROUP BY time(6h)
     `,
     valueTransform: value => value / 1000 / 60,
-    valueFormat: new Intl.NumberFormat(undefined, {
-      style: "unit",
-      unit: "minute",
-      maximumFractionDigits: 2
-    }),
+    valueFormat: value => `${value.toFixed(2)} min`,
     elementSelector: "#overall-duration"
   });
 
@@ -307,11 +298,7 @@ const successByPipeline = () =>
       GROUP BY "name"
     `,
     valueTransform: value => value * 100,
-    valueFormat: new Intl.NumberFormat(undefined, {
-      style: "unit",
-      unit: "percent",
-      maximumFractionDigits: 2
-    }),
+    valueFormat: value => `${value.toFixed(2)}%`,
     valueColumnName: "Success",
     labelTag: "name",
     labelColumnName: "Pipeline",
@@ -328,11 +315,7 @@ const durationByPipeline = () =>
       GROUP BY "name"
     `,
     valueTransform: value => value / 1000 / 60,
-    valueFormat: new Intl.NumberFormat(undefined, {
-      style: "unit",
-      unit: "minute",
-      maximumFractionDigits: 2
-    }),
+    valueFormat: value => `${value.toFixed(2)} min`,
     valueColumnName: "Duration",
     labelTag: "name",
     labelColumnName: "Pipeline",
@@ -349,11 +332,7 @@ const duration = () =>
       GROUP BY time(1h), "name"
     `,
     valueTransform: value => value / 1000 / 60,
-    valueFormat: new Intl.NumberFormat(undefined, {
-      style: "unit",
-      unit: "minute",
-      maximumFractionDigits: 2
-    }),
+    valueFormat: value => `${value.toFixed(2)} min`,
     labelTag: "name",
     elementSelector: "#duration"
   });
