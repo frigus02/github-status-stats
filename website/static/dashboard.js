@@ -42,6 +42,30 @@ const prepareData = (raw, yColumnName, valueTransform) => {
 const color = (index, alpha = 1) =>
   `hsla(${index * 222.5}, 75%, 50%, ${alpha})`;
 
+const throttle = (cb, limit) => {
+  let wait = false;
+  return () => {
+    if (!wait) {
+      wait = true;
+      setTimeout(() => {
+        requestAnimationFrame(cb);
+        wait = false;
+      }, limit);
+    }
+  };
+};
+
+const getUPlotSize = (element, height) => {
+  const style = getComputedStyle(element);
+  return {
+    width:
+      element.clientWidth -
+      parseInt(style.paddingLeft, 10) -
+      parseInt(style.paddingRight, 10),
+    height
+  };
+};
+
 const statPanel = async ({
   title,
   statQuery,
@@ -50,15 +74,21 @@ const statPanel = async ({
   valueFormat,
   elementSelector
 }) => {
+  const element = document.querySelector(elementSelector);
+
   const rawStat = await queryData(statQuery);
   const stat = prepareData(rawStat, "mean", valueTransform)[1][0];
+  const statEl = document.createElement("div");
+  element.appendChild(statEl);
+  statEl.className = "single-stat";
+  statEl.textContent = valueFormat.format(stat);
 
   const rawBackground = await queryData(backgroundQuery);
   const data = prepareData(rawBackground, "mean", valueTransform);
+  const getSize = () => getUPlotSize(element, 100);
   const opts = {
     title,
-    width: 370,
-    height: 98,
+    ...getSize(),
     legend: { show: false },
     cursor: { show: false },
     series: [
@@ -73,13 +103,11 @@ const statPanel = async ({
     axes: [{ show: false }, { show: false }]
   };
 
-  const element = document.querySelector(elementSelector);
-  new uPlot.Line(opts, data, element);
-
-  const statEl = document.createElement("div");
-  element.appendChild(statEl);
-  statEl.className = "single-stat";
-  statEl.textContent = valueFormat.format(stat);
+  const plot = new uPlot.Line(opts, data, element);
+  window.addEventListener(
+    "resize",
+    throttle(() => plot.setSize(getSize()), 100)
+  );
 };
 
 const graphPanel = async ({
@@ -90,12 +118,13 @@ const graphPanel = async ({
   labelTag,
   elementSelector
 }) => {
+  const element = document.querySelector(elementSelector);
   const raw = await queryData(query);
   const data = prepareData(raw, "mean", valueTransform);
+  const getSize = () => getUPlotSize(element, 375);
   const opts = {
     title,
-    width: 764,
-    height: 362,
+    ...getSize(),
     series: [
       {},
       ...raw.map((series, i) => ({
@@ -113,7 +142,11 @@ const graphPanel = async ({
     ]
   };
 
-  new uPlot.Line(opts, data, document.querySelector(elementSelector));
+  const plot = new uPlot.Line(opts, data, element);
+  window.addEventListener(
+    "resize",
+    throttle(() => plot.setSize(getSize()), 100)
+  );
 };
 
 const tablePanel = async ({

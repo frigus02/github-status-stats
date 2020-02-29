@@ -4,6 +4,10 @@ html {
   --color-light: 173, 169, 187;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   padding: 0;
   margin: 0;
@@ -15,7 +19,7 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1em;
+  padding: 1rem;
   background-color: rgb(var(--color-dark));
   color: #fff;
 }
