@@ -1,24 +1,80 @@
 const repository = document.querySelector('script[src="/static/dashboard.js"]')
   .dataset.repository;
 
+const startDateInput = document.querySelector("#startdate");
+startDateInput.valueAsNumber = Date.now() - 2592000000; // 30 days in milliseconds
 const endDateInput = document.querySelector("#enddate");
-endDateInput.valueAsDate = new Date();
+endDateInput.valueAsNumber = Date.now();
+
+const startOfDay = date => {
+  const d = new Date(date);
+  d.setHours(0);
+  d.setMinutes(0);
+  d.setSeconds(0);
+  d.setMilliseconds(0);
+  return d;
+};
+
+const endOfDay = date => {
+  const d = new Date(date);
+  d.setHours(23);
+  d.setMinutes(59);
+  d.setSeconds(59);
+  d.setMilliseconds(999);
+  return d;
+};
+
+const closestDurationUnit = ms => {
+  const s = Math.round(ms / 1000);
+
+  const m = Math.round(s / 60);
+  if (m === 0 || Math.abs(m * 60 - s) > 15) {
+    return `${s}s`;
+  }
+
+  const h = Math.round(m / 60);
+  if (h === 0 || Math.abs(h * 60 - m) > 15) {
+    return `${m}m`;
+  }
+
+  const d = Math.round(h / 24);
+  if (d === 0 || Math.abs(d * 24 - h) > 6) {
+    return `${h}h`;
+  }
+
+  const w = Math.round(d / 7);
+  if (w === 0 || Math.abs(w * 7 - d) > 2) {
+    return `${d}d`;
+  }
+
+  return `${w}w`;
+};
 
 const timeRange = () => {
-  const endDate = endDateInput.valueAsDate;
-  endDate.setHours(23);
-  endDate.setMinutes(59);
-  endDate.setSeconds(59);
-  endDate.setMilliseconds(999);
-  const range = 2592000000; // 30 days in milliseconds
-  const startDate = endDate.getTime() - range;
+  const startDate = startOfDay(startDateInput.valueAsDate);
+  const endDate = endOfDay(endDateInput.valueAsDate);
+  const range = endDate.getTime() - startDate.getTime();
+  if (range <= 0) {
+    throw new Error(
+      `Invalid time range ${range}ms. Select an end date, with is equal to or after the start date.`
+    );
+  }
 
-  return `time > ${startDate}ms AND time <= ${endDate.getTime()}ms`;
+  return {
+    filter: `time >= ${startDate.getTime()}ms AND time <= ${endDate.getTime()}ms`,
+    // Roughly 720 entries
+    groupByDetailed: `time(${closestDurationUnit(range / 720)})`,
+    // Roughly 120 entries
+    groupBySparse: `time(${closestDurationUnit(range / 120)})`
+  };
 };
 
 const queryData = async rawQuery => {
+  const time = timeRange();
   const query = rawQuery
-    .replace("__time_filter__", timeRange())
+    .replace("__time_filter__", time.filter)
+    .replace("__time_group_sparse__", time.groupBySparse)
+    .replace("__time_group_detailed__", time.groupByDetailed)
     .replace(/[\n\s]+/g, " ")
     .trim();
 
@@ -57,12 +113,19 @@ const prepareData = (raw, valueTransform) => {
 
 const onResize = cb => window.addEventListener("resize", cb);
 
-const onTimeRangeChange = cb =>
-  endDateInput.addEventListener("change", () => {
-    if (endDateInput.value) {
+const onTimeRangeChange = cb => {
+  const onChange = () => {
+    if (
+      startDateInput.value &&
+      endDateInput.value &&
+      startDateInput.valueAsNumber <= endDateInput.valueAsNumber
+    ) {
       cb();
     }
-  });
+  };
+  startDateInput.addEventListener("change", onChange);
+  endDateInput.addEventListener("change", onChange);
+};
 
 const color = (index, alpha = 1) =>
   `hsla(${index * 222.5}, 75%, 50%, ${alpha})`;
@@ -262,7 +325,7 @@ const overallSuccessRate = () =>
       SELECT mean("successful") AS value
       FROM "build"
       WHERE __time_filter__
-      GROUP BY time(6h)
+      GROUP BY __time_group_sparse__
     `,
     valueTransform: value => value * 100,
     valueFormat: value => `${value.toFixed(2)}%`,
@@ -281,7 +344,7 @@ const overallAverageDuration = () =>
       SELECT mean("duration_ms") AS value
       FROM "build"
       WHERE __time_filter__
-      GROUP BY time(6h)
+      GROUP BY __time_group_sparse__
     `,
     valueTransform: value => value / 1000 / 60,
     valueFormat: value => `${value.toFixed(2)} min`,
@@ -329,7 +392,7 @@ const duration = () =>
       SELECT mean("duration_ms") AS value
       FROM "build"
       WHERE __time_filter__
-      GROUP BY time(1h), "name"
+      GROUP BY __time_group_detailed__, "name"
     `,
     valueTransform: value => value / 1000 / 60,
     valueFormat: value => `${value.toFixed(2)} min`,

@@ -23,6 +23,10 @@
   grid-area: 2 / 1 / 5 / 3;
 }
 
+.timerange {
+  border: none;
+}
+
 .panel {
   position: relative;
   display: flex;

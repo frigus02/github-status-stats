@@ -20,10 +20,11 @@
         <small><a href="/">GitHub Status Stats</a></small>
         {{repository_name}}
       </h1>
-      <div class="timerange">
-        <div>Time range</div>
-        <div>30 days to <input id="enddate" type="date" /></div>
-      </div>
+      <fieldset class="timerange">
+        <legend>Time range</legend>
+        <input id="startdate" type="date" aria-label="Start date" /> to
+        <input id="enddate" type="date" aria-label="End date" />
+      </fieldset>
       <div class="user">
         <div>Logged in as</div>
         <div class="user__name">{{user}}</div>
