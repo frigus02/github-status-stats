@@ -50,11 +50,13 @@ pub async fn generate(github_token: &str, secret: &[u8]) -> Result<String, BoxEr
     Ok(token)
 }
 
+#[derive(Debug)]
 pub struct Repository {
     pub id: i32,
     pub name: String,
 }
 
+#[derive(Debug)]
 pub struct User {
     pub name: String,
     pub repositories: Vec<Repository>,

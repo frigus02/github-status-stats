@@ -10,10 +10,28 @@ pub struct AuthCodeQuery {
     pub state: Option<String>,
 }
 
+impl std::fmt::Debug for AuthCodeQuery {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("AuthCodeQuery")
+            .field("code", &"***")
+            .field("state", &self.state)
+            .finish()
+    }
+}
+
 #[derive(Deserialize)]
 pub struct AuthToken {
     pub access_token: String,
     pub token_type: String,
+}
+
+impl std::fmt::Debug for AuthToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("AuthToken")
+            .field("access_token", &"***")
+            .field("token_type", &self.token_type)
+            .finish()
+    }
 }
 
 pub fn login_url(client_id: &str, redirect_uri: &str) -> Result<Url, BoxError> {

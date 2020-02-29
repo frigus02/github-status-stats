@@ -9,13 +9,16 @@ mod templates;
 mod token;
 
 use bytes::Bytes;
-use log::{error, info};
+use core::convert::TryFrom;
+use honeycomb_tracing::TelemetrySubscriber;
 use secstr::{SecStr, SecUtf8};
 use serde::{Deserialize, Serialize};
 use stats::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
+use tracing::{error, info};
+use tracing_log::LogTracer;
 use warp::{
     http::{Response, StatusCode, Uri},
     hyper::Body,
@@ -46,6 +49,10 @@ lazy_static! {
         SecUtf8::from(std::env::var("INFLUXDB_READ_PASSWORD").expect("env INFLUXDB_READ_PASSWORD"));
     static ref TOKEN_SECRET: SecStr =
         SecStr::from(std::env::var("TOKEN_SECRET").expect("env TOKEN_SECRET"));
+    static ref HONEYCOMB_API_KEY: SecUtf8 =
+        SecUtf8::from(std::env::var("HONEYCOMB_API_KEY").expect("env HONEYCOMB_API_KEY"));
+    static ref HONEYCOMB_DATASET: String =
+        std::env::var("HONEYCOMB_DATASET").expect("env HONEYCOMB_DATASET");
 }
 
 async fn index_route(token: Option<token::User>) -> Result<impl warp::Reply, Infallible> {
@@ -97,13 +104,13 @@ async fn dashboard_route(
     Ok(reply)
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ApiQueryParams {
     repository: i32,
     query: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ApiQueryResponse {
     pub tags: Option<HashMap<String, String>>,
     pub columns: Vec<String>,
@@ -157,7 +164,7 @@ async fn api_query_route(
 
 async fn setup_authorized_route(
     info: github_client::oauth::AuthCodeQuery,
-) -> Result<Box<dyn warp::Reply>, Infallible> {
+) -> Result<impl warp::Reply, Infallible> {
     let token = async {
         let github_token = github_client::oauth::exchange_code(
             &*GH_CLIENT_ID,
@@ -171,15 +178,16 @@ async fn setup_authorized_route(
     .await;
 
     match token {
-        Ok(token) => Ok(Box::new(
-            Response::builder()
-                .status(StatusCode::TEMPORARY_REDIRECT)
-                .header("location", "/")
-                .header("set-cookie", cookie::set(COOKIE_NAME, &token))
-                .body(Body::empty())
-                .unwrap(),
-        )),
-        Err(_) => Ok(Box::new(StatusCode::INTERNAL_SERVER_ERROR)),
+        Ok(token) => Ok(Response::builder()
+            .status(StatusCode::TEMPORARY_REDIRECT)
+            .header("location", "/")
+            .header("set-cookie", cookie::set(COOKIE_NAME, &token))
+            .body(Body::empty())
+            .unwrap()),
+        Err(_) => Ok(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::empty())
+            .unwrap()),
     }
 }
 
@@ -268,7 +276,21 @@ pub fn optional_token() -> impl Filter<Extract = (Option<token::User>,), Error =
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    LogTracer::builder()
+        .with_max_level(log::LevelFilter::Info)
+        .init()?;
+
+    let honeycomb_config = libhoney::Config {
+        options: libhoney::client::Options {
+            api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
+            dataset: HONEYCOMB_DATASET.clone(),
+            ..libhoney::client::Options::default()
+        },
+        transmission_options: libhoney::transmission::Options::default(),
+    };
+    let subscriber = TelemetrySubscriber::new("website".to_string(), honeycomb_config);
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting global defailt tracing subscriber failed");
 
     let index = warp::get()
         .and(warp::path::end())
@@ -316,7 +338,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(setup_authorized)
         .or(hooks)
         .or(logout)
-        .with(warp::log("website"));
+        .with(warp::log::custom(|info| {
+            info!(
+                method = info.method().as_str(),
+                path = info.path(),
+                status = info.status().as_u16(),
+                user_agent = info.user_agent().unwrap_or(""),
+                duration_ms = u64::try_from(info.elapsed().as_millis()).unwrap(),
+                "request"
+            )
+        }));
 
     let (_addr, server) =
         warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], 8888), async {
