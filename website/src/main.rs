@@ -57,6 +57,7 @@ async fn index_route(token: Option<token::User>) -> Result<impl warp::Reply, Inf
                 .into_iter()
                 .map(|repo| RepositoryAccess { name: repo.name })
                 .collect(),
+            login_url: GH_LOGIN_URL.clone(),
         },
         None => IndexTemplate::Anonymous {
             login_url: GH_LOGIN_URL.clone(),
