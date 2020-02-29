@@ -4,6 +4,7 @@
   grid-template-rows: repeat(4, 1fr);
   grid-column-gap: 0.5rem;
   grid-row-gap: 0.5rem;
+  margin: 0.5rem;
 }
 
 #overall-success {
@@ -26,28 +27,35 @@
   position: relative;
   display: flex;
   justify-content: center;
-  background-color: #eee;
-  padding: 0.3rem;
+  background-color: #fff;
+  padding: 1rem;
+}
+
+.uplot {
+  font-family: inherit;
+  line-height: inherit;
+}
+
+.uplot .title {
+  font-size: 1.2rem;
+  margin-bottom: 0.8rem;
 }
 
 .single-stat {
   position: absolute;
   align-self: center;
+  font-size: 1.2rem;
 }
 
 .table-stat {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
-    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  line-height: 1.5;
   width: 100%;
   border-collapse: collapse;
 }
 
 .table-stat caption {
-  font-size: 18px;
+  font-size: 1.2rem;
   font-weight: bold;
-  margin-bottom: 0.3rem;
+  margin-bottom: 1rem;
 }
 
 .table-stat th {
@@ -61,12 +69,12 @@
 }
 
 .table-stat thead {
-  border-top: 2px solid #333333;
-  border-bottom: 2px solid #333333;
+  border-top: 2px solid rgb(var(--color-light));
+  border-bottom: 2px solid rgb(var(--color-light));
 }
 
 .table-stat tbody td {
-  border-left: 2px solid #333333;
+  border-left: 2px solid rgb(var(--color-light));
 }
 .table-stat tbody td:first-child {
   border-left: none;
@@ -74,5 +82,5 @@
 
 .table-stat tbody th,
 .table-stat tbody td {
-  border-bottom: 2px solid #333333;
+  border-bottom: 2px solid rgb(var(--color-light));
 }

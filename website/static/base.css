@@ -1,6 +1,14 @@
+html {
+  --color-accent: 65, 88, 255;
+  --color-dark: 72, 69, 84;
+  --color-light: 173, 169, 187;
+}
+
 body {
   padding: 0;
   margin: 0;
+  background-color: rgba(var(--color-light), 0.3);
+  font-family: sans-serif;
 }
 
 header {
@@ -8,9 +16,12 @@ header {
   justify-content: space-between;
   align-items: center;
   padding: 1em;
+  background-color: rgb(var(--color-dark));
+  color: #fff;
 }
 
 header h1 {
+  font-size: 2rem;
   margin: 0;
 }
 
@@ -20,5 +31,20 @@ header h1 small {
 }
 
 header .user {
+  font-size: 0.7rem;
   text-align: end;
+}
+
+header .user__name {
+  font-size: 1rem;
+}
+
+header a,
+header a:visited {
+  color: #fff;
+}
+
+a,
+a:visited {
+  color: rgb(var(--color-accent));
 }
