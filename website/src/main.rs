@@ -163,7 +163,7 @@ async fn api_query_route(
 
 async fn setup_authorized_route(
     info: github_client::oauth::AuthCodeQuery,
-) -> Result<impl warp::Reply, Infallible> {
+) -> Result<Box<dyn warp::Reply>, Infallible> {
     let token = async {
         let github_token = github_client::oauth::exchange_code(
             &*GH_CLIENT_ID,
@@ -177,16 +177,15 @@ async fn setup_authorized_route(
     .await;
 
     match token {
-        Ok(token) => Ok(Response::builder()
-            .status(StatusCode::TEMPORARY_REDIRECT)
-            .header("location", "/")
-            .header("set-cookie", cookie::set(COOKIE_NAME, &token))
-            .body(Body::empty())
-            .unwrap()),
-        Err(_) => Ok(Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::empty())
-            .unwrap()),
+        Ok(token) => Ok(Box::new(
+            Response::builder()
+                .status(StatusCode::TEMPORARY_REDIRECT)
+                .header("location", "/")
+                .header("set-cookie", cookie::set(COOKIE_NAME, &token))
+                .body(Body::empty())
+                .unwrap(),
+        )),
+        Err(_) => Ok(Box::new(StatusCode::INTERNAL_SERVER_ERROR)),
     }
 }
 
