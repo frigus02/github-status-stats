@@ -33,7 +33,7 @@ async fn main() -> Result<(), BoxError> {
     tracing::setup(tracing::Config {
         honeycomb_api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
         honeycomb_dataset: HONEYCOMB_DATASET.clone(),
-        service_name: "website".to_owned(),
+        service_name: "importer".to_owned(),
     });
 
     let span = info_span!("import", import_id = %tracing::uuid());
