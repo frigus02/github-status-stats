@@ -7,9 +7,9 @@ mod influxdb;
 use build::{get_builds, get_most_recent_builds};
 use github_client::Client;
 use influxdb::{get_last_import, get_status_hook_commits_since, import};
-use log::info;
 use secstr::SecUtf8;
 use stats::{influxdb_name, influxdb_read_user};
+use tracing::{info, info_span};
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -22,24 +22,40 @@ lazy_static! {
         SecUtf8::from(std::env::var("INFLUXDB_ADMIN_PASSWORD").unwrap());
     static ref INFLUXDB_READ_PASSWORD: SecUtf8 =
         SecUtf8::from(std::env::var("INFLUXDB_READ_PASSWORD").unwrap());
+    static ref HONEYCOMB_API_KEY: SecUtf8 =
+        SecUtf8::from(std::env::var("HONEYCOMB_API_KEY").expect("env HONEYCOMB_API_KEY"));
+    static ref HONEYCOMB_DATASET: String =
+        std::env::var("HONEYCOMB_DATASET").expect("env HONEYCOMB_DATASET");
 }
 
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
-    env_logger::init();
+    tracing::setup(tracing::Config {
+        honeycomb_api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
+        honeycomb_dataset: HONEYCOMB_DATASET.clone(),
+        service_name: "website".to_owned(),
+    });
+
+    let span = info_span!("import", import_id = %tracing::uuid());
+    let _guard = span.enter();
 
     let gh_app_client = Client::new_app_auth(&*GH_APP_ID, &*GH_PRIVATE_KEY.unsecure())?;
 
     let installations = gh_app_client.get_app_installations().await?;
     for installation in installations {
-        info!("Installation {}", installation.id);
+        let span = info_span!("installation", installation.id);
+        let _guard = span.enter();
+
         let token = gh_app_client
             .create_app_installation_access_token(installation.id)
             .await?;
         let gh_inst_client = Client::new(&token.token)?;
         let repositories = gh_inst_client.get_installation_repositories().await?;
         for repository in repositories {
-            info!("Repository {}", repository.full_name);
+            let span = info_span!("repository", repository.id);
+            let _guard = span.enter();
+
+            info!(%repository.full_name, "start importing repository");
 
             let influxdb_db = influxdb_name(&repository);
             let influxdb_client = influxdb_client::Client::new(
@@ -52,7 +68,11 @@ async fn main() -> Result<(), BoxError> {
 
             let last_import = get_last_import(&influxdb_client).await?;
             if let Some(last_import) = last_import {
-                // Import commit statuses since last import.
+                info!(
+                    repository.last_import = %last_import,
+                    "found last import; importing since then"
+                );
+
                 let commit_shas =
                     get_status_hook_commits_since(&influxdb_client, &last_import).await?;
                 if !commit_shas.is_empty() {
@@ -60,7 +80,8 @@ async fn main() -> Result<(), BoxError> {
                     import(&influxdb_client, points).await?;
                 }
             } else {
-                // First import. Setup InfluxDB and perform initial import.
+                info!("first import; setup db and perform initial import");
+
                 influxdb::setup(
                     &influxdb_client,
                     &influxdb_db,

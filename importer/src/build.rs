@@ -1,5 +1,4 @@
 use github_client::{CheckRun, Client, CommitStatus, CommitStatusState, Repository};
-use log::info;
 use stats::Build;
 
 type BoxError = Box<dyn std::error::Error>;
@@ -66,12 +65,7 @@ pub async fn get_builds(
     commit_shas: Vec<String>,
 ) -> Result<Vec<influxdb_client::Point>, BoxError> {
     let mut points = Vec::new();
-    let commits_len = commit_shas.len();
-    let mut commits_curr: usize = 0;
     for commit_sha in commit_shas {
-        commits_curr += 1;
-        info!("Commit {}/{}", commits_curr, commits_len);
-
         let statuses = client
             .get_statuses(&repository.owner.login, &repository.name, &commit_sha)
             .await?;

@@ -12,8 +12,6 @@ spec:
             - name: importer
               image: frigus02/github-status-stats-importer
               env:
-                - name: RUST_LOG
-                  value: info,importer=debug,github_client=debug,influxdb_client=debug
                 - name: GH_APP_ID
                   value: "50487"
                 - name: GH_PRIVATE_KEY
@@ -38,6 +36,16 @@ spec:
                     secretKeyRef:
                       name: ghss-influxdb
                       key: read_password
+                - name: HONEYCOMB_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-honeycomb
+                      key: API_KEY
+                - name: HONEYCOMB_DATASET
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghss-honeycomb
+                      key: DATASET
               resources:
                 requests:
                   cpu: 20m

@@ -344,7 +344,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let svc = hyper::service::service_fn(move |req: Request<Body>| {
                 let mut warp_svc = warp_svc.clone();
                 async move {
-                    let span = info_span!("request", request_id = ?tracing::uuid());
+                    let span = info_span!("request", request_id = %tracing::uuid());
                     let method = req.method().clone();
                     let path = req.uri().path().to_owned();
                     let user_agent = req
