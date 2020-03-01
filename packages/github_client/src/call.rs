@@ -1,10 +1,10 @@
 use super::page_links;
-use log::debug;
 use reqwest::header::{ACCEPT, LINK};
 use reqwest::{Client, RequestBuilder, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::error::Error;
+use tracing::debug;
 
 struct Response<T> {
     data: T,
@@ -17,7 +17,7 @@ pub const ANTIOPE_PREVIEW: &str = "application/vnd.github.antiope-preview+json";
 async fn call_api<T: DeserializeOwned>(
     request: RequestBuilder,
 ) -> Result<Response<T>, Box<dyn Error>> {
-    debug!("request {:?}", request);
+    debug!(?request, "github request");
     let res = request.send().await?.error_for_status()?;
     let next_page_url = match res.headers().get(LINK) {
         Some(value) => {
