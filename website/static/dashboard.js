@@ -111,6 +111,8 @@ const prepareData = (raw, valueTransform) => {
   return data;
 };
 
+const formatNumber = n => n.toFixed(2).replace(/(\.0)?0$/, "");
+
 const onResize = cb => window.addEventListener("resize", throttle(cb, 100));
 
 const onTimeRangeChange = cb => {
@@ -339,7 +341,7 @@ statPanel({
     GROUP BY __time_group_sparse__
   `,
   valueTransform: value => value * 100,
-  valueFormat: value => `${value.toFixed(2)}%`,
+  valueFormat: value => `${formatNumber(value)}%`,
   elementSelector: "#overall-success"
 });
 
@@ -357,7 +359,7 @@ statPanel({
     GROUP BY __time_group_sparse__
   `,
   valueTransform: value => value / 1000 / 60,
-  valueFormat: value => `${value.toFixed(2)} min`,
+  valueFormat: value => `${formatNumber(value)} min`,
   elementSelector: "#overall-duration"
 });
 
@@ -370,7 +372,7 @@ tablePanel({
     GROUP BY "name"
   `,
   valueTransform: value => value * 100,
-  valueFormat: value => `${value.toFixed(2)}%`,
+  valueFormat: value => `${formatNumber(value)}%`,
   valueColumnName: "Success",
   labelTag: "name",
   labelColumnName: "Pipeline",
@@ -386,7 +388,7 @@ tablePanel({
     GROUP BY "name"
   `,
   valueTransform: value => value / 1000 / 60,
-  valueFormat: value => `${value.toFixed(2)} min`,
+  valueFormat: value => `${formatNumber(value)} min`,
   valueColumnName: "Duration",
   labelTag: "name",
   labelColumnName: "Pipeline",
@@ -402,7 +404,7 @@ graphPanel({
     GROUP BY __time_group_detailed__, "name"
   `,
   valueTransform: value => value / 1000 / 60,
-  valueFormat: value => `${value.toFixed(2)} min`,
+  valueFormat: value => `${formatNumber(value)} min`,
   labelTag: "name",
   elementSelector: "#duration"
 });
