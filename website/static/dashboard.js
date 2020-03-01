@@ -271,9 +271,7 @@ const graphPanel = async ({
 const tablePanel = async ({
   title,
   query,
-  valueTransform,
-  valueFormat,
-  valueColumnName,
+  values,
   labelTag,
   labelColumnName,
   elementSelector
@@ -285,10 +283,15 @@ const tablePanel = async ({
   const thLabel = document.createElement("th");
   thLabel.scope = "col";
   thLabel.textContent = labelColumnName;
-  const thValue = document.createElement("th");
-  thValue.scope = "col";
-  thValue.textContent = valueColumnName;
-  trHead.append(thLabel, thValue);
+  trHead.append(
+    thLabel,
+    ...values.map(value => {
+      const thValue = document.createElement("th");
+      thValue.scope = "col";
+      thValue.textContent = value.columnName;
+      return thValue;
+    })
+  );
 
   const thead = document.createElement("thead");
   thead.append(trHead);
@@ -304,7 +307,6 @@ const tablePanel = async ({
 
   const loadData = async () => {
     const raw = await queryData(query);
-    const data = prepareData(raw, valueTransform);
 
     while (tbody.firstChild) {
       tbody.removeChild(tbody.firstChild);
@@ -313,12 +315,21 @@ const tablePanel = async ({
     tbody.append(
       ...raw.map((series, i) => {
         const tr = document.createElement("tr");
-        const label = document.createElement("th");
-        label.scope = "row";
-        label.textContent = series.tags[labelTag];
-        const value = document.createElement("td");
-        value.textContent = valueFormat(data[i + 1][0]);
-        tr.append(label, value);
+        const thLabel = document.createElement("th");
+        thLabel.scope = "row";
+        thLabel.textContent = series.tags[labelTag];
+        tr.append(
+          thLabel,
+          ...values.map(value => {
+            const tdValue = document.createElement("td");
+            tdValue.textContent = value.format(
+              value.transform(
+                series.values[0][series.columns.indexOf(value.name)]
+              )
+            );
+            return tdValue;
+          })
+        );
         return tr;
       })
     );
@@ -364,35 +375,36 @@ statPanel({
 });
 
 tablePanel({
-  title: "Success rate by pipeline",
+  title: "Statistics by pipeline",
   query: `
-    SELECT mean("successful") AS value
+    SELECT count("commit") AS "count", mean("duration_ms") AS "duration_ms", mean("successful") AS "successful"
     FROM "build"
     WHERE __time_filter__
     GROUP BY "name"
   `,
-  valueTransform: value => value * 100,
-  valueFormat: value => `${formatNumber(value)}%`,
-  valueColumnName: "Success",
+  values: [
+    {
+      name: "count",
+      columnName: "Count",
+      transform: value => value,
+      format: value => value
+    },
+    {
+      name: "duration_ms",
+      columnName: "Duration",
+      transform: value => value / 1000 / 60,
+      format: value => `${formatNumber(value)} min`
+    },
+    {
+      name: "successful",
+      columnName: "Success",
+      transform: value => value * 100,
+      format: value => `${formatNumber(value)}%`
+    }
+  ],
   labelTag: "name",
   labelColumnName: "Pipeline",
-  elementSelector: "#success-by-pipeline"
-});
-
-tablePanel({
-  title: "Duration by pipeline",
-  query: `
-    SELECT mean("duration_ms") AS value
-    FROM "build"
-    WHERE __time_filter__
-    GROUP BY "name"
-  `,
-  valueTransform: value => value / 1000 / 60,
-  valueFormat: value => `${formatNumber(value)} min`,
-  valueColumnName: "Duration",
-  labelTag: "name",
-  labelColumnName: "Pipeline",
-  elementSelector: "#duration-by-pipeline"
+  elementSelector: "#stats-by-pipeline"
 });
 
 graphPanel({
