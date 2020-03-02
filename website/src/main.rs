@@ -271,7 +271,10 @@ pub fn optional_token() -> impl Filter<Extract = (Option<token::User>,), Error =
         raw_token.and_then(|t| {
             let user = token::validate(&t, TOKEN_SECRET.unsecure());
             match user {
-                Ok(user) => Some(user),
+                Ok(user) => {
+                    tracing::Span::current().record("user_id", &user.id.as_str());
+                    Some(user)
+                }
                 Err(err) => {
                     error!(error = %err, "token validation failed");
                     None
@@ -343,7 +346,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let svc = hyper::service::service_fn(move |req: Request<Body>| {
                 let mut warp_svc = warp_svc.clone();
                 async move {
-                    let span = info_span!("request", request_id = %tracing::uuid());
+                    let span = info_span!("request", request_id = %tracing::uuid(), user_id = tracing::EmptyField);
                     let method = req.method().clone();
                     let path = req.uri().path().to_owned();
                     let user_agent = req

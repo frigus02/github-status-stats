@@ -58,6 +58,7 @@ pub struct Repository {
 
 #[derive(Debug)]
 pub struct User {
+    pub id: String,
     pub name: String,
     pub repositories: Vec<Repository>,
 }
@@ -69,6 +70,7 @@ pub fn validate(token: &str, secret: &[u8]) -> Result<User, BoxError> {
         &Validation::new(Algorithm::HS256),
     )?;
     Ok(User {
+        id: token.claims.sub,
         name: token.claims.name,
         repositories: token
             .claims
