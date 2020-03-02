@@ -25,12 +25,12 @@ pub fn setup(config: Config) {
         .expect("setting global default tracing subscriber failed");
 }
 
-#[cfg(not(release))]
+#[cfg(debug_assertions)]
 fn create_subscriber(_config: Config) -> impl Subscriber {
     tracing_subscriber::FmtSubscriber::new()
 }
 
-#[cfg(release)]
+#[cfg(not(debug_assertions))]
 fn create_subscriber(config: Config) -> impl Subscriber {
     let honeycomb_config = libhoney::Config {
         options: libhoney::client::Options {
