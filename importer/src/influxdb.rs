@@ -1,8 +1,8 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use influxdb_client::Client;
-use log::info;
 use serde::Deserialize;
 use stats::Import;
+use tracing::info;
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -12,7 +12,7 @@ pub async fn setup(
     user: &str,
     password: &str,
 ) -> Result<(), BoxError> {
-    info!("Setup DB {} with user {}", db, user);
+    info!(influxdb.db = db, influxdb.user = user, "setup db");
     client.query(&format!("CREATE DATABASE {}", db)).await?;
     client
         .query(&format!(
@@ -30,7 +30,7 @@ pub async fn import(
     client: &influxdb_client::Client<'_>,
     mut points: Vec<influxdb_client::Point>,
 ) -> Result<(), BoxError> {
-    info!("Import {} points", points.len());
+    info!(points_count = points.len(), "write points");
     points.push(
         Import {
             time: Utc::now(),

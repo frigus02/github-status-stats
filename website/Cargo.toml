@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 bytes = "0.5.4"
 chrono = "0.4.10"
-env_logger = "0.7.1"
 futures = "0.3.4"
 github_client = { path = "../packages/github_client" }
 handlebars = "3.0.1"
@@ -17,11 +16,11 @@ hmac = "0.7.1"
 influxdb_client = { path = "../packages/influxdb_client" }
 jsonwebtoken = "7.0.1"
 lazy_static = "1.4.0"
-log = "0.4.8"
 secstr = "0.4.0"
 serde = { version = "1.0.104", features = ["derive"] }
 serde_json = "1.0.48"
 sha-1 = "0.8.2"
 stats = { path = "../packages/stats" }
 tokio = { version = "0.2.13", features = ["macros", "signal"] }
+tracing = { path = "../packages/tracing" }
 warp = "0.2.1"

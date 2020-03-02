@@ -4,3 +4,8 @@ members = [
     "packages/*",
     "website",
 ]
+
+[patch.crates-io]
+# Current version of libhoney-rust on crates.io uses fixed version numbers for
+# dependencies, which results in some clashes.
+libhoney-rust = { git = "https://github.com/nlopes/libhoney-rust", rev = "3acdc4021d08a9b78653c77bb4ff3dab3e2b9556" }

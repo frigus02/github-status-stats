@@ -9,16 +9,16 @@ mod templates;
 mod token;
 
 use bytes::Bytes;
-use log::{error, info};
 use secstr::{SecStr, SecUtf8};
 use serde::{Deserialize, Serialize};
 use stats::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
+use tracing::{error, info, info_span, Instrument};
 use warp::{
     http::{Response, StatusCode, Uri},
-    hyper::Body,
+    hyper::{self, header, service::Service, Body, Request},
     Filter,
 };
 
@@ -46,6 +46,10 @@ lazy_static! {
         SecUtf8::from(std::env::var("INFLUXDB_READ_PASSWORD").expect("env INFLUXDB_READ_PASSWORD"));
     static ref TOKEN_SECRET: SecStr =
         SecStr::from(std::env::var("TOKEN_SECRET").expect("env TOKEN_SECRET"));
+    static ref HONEYCOMB_API_KEY: SecUtf8 =
+        SecUtf8::from(std::env::var("HONEYCOMB_API_KEY").expect("env HONEYCOMB_API_KEY"));
+    static ref HONEYCOMB_DATASET: String =
+        std::env::var("HONEYCOMB_DATASET").expect("env HONEYCOMB_DATASET");
 }
 
 async fn index_route(token: Option<token::User>) -> Result<impl warp::Reply, Infallible> {
@@ -97,13 +101,13 @@ async fn dashboard_route(
     Ok(reply)
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ApiQueryParams {
     repository: i32,
     query: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ApiQueryResponse {
     pub tags: Option<HashMap<String, String>>,
     pub columns: Vec<String>,
@@ -116,8 +120,8 @@ async fn api_query_route(
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         Some(user) if user.repositories.iter().any(|r| r.id == params.repository) => {
+            let influxdb_db = influxdb_name_unsafe(params.repository);
             let res: Result<Vec<ApiQueryResponse>, Box<dyn std::error::Error>> = async {
-                let influxdb_db = influxdb_name_unsafe(params.repository);
                 let client = influxdb_client::Client::new(
                     &*INFLUXDB_BASE_URL,
                     &influxdb_db,
@@ -143,8 +147,10 @@ async fn api_query_route(
                 Ok(res) => Box::new(warp::reply::json(&res)),
                 Err(err) => {
                     error!(
-                        "Error executing query {} on repository {}: {}",
-                        params.query, params.repository, err
+                        influxdb.db = %influxdb_db,
+                        influxdb.query = %params.query,
+                        err = %err,
+                        "influxdb query failed",
                     );
                     Box::new(StatusCode::INTERNAL_SERVER_ERROR)
                 }
@@ -253,7 +259,7 @@ async fn hooks_route(
     match res {
         Ok(_) => Ok(StatusCode::OK),
         Err(err) => {
-            error!("Hook error: {:?}", err);
+            error!(error = %err, "hook failed");
             Ok(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -262,13 +268,29 @@ async fn hooks_route(
 pub fn optional_token() -> impl Filter<Extract = (Option<token::User>,), Error = Infallible> + Clone
 {
     warp::cookie::optional(COOKIE_NAME).map(|raw_token: Option<String>| {
-        raw_token.and_then(|t| token::validate(&t, TOKEN_SECRET.unsecure()).ok())
+        raw_token.and_then(|t| {
+            let user = token::validate(&t, TOKEN_SECRET.unsecure());
+            match user {
+                Ok(user) => {
+                    tracing::Span::current().record("user_id", &user.id.as_str());
+                    Some(user)
+                }
+                Err(err) => {
+                    error!(error = %err, "token validation failed");
+                    None
+                }
+            }
+        })
     })
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    tracing::setup(tracing::Config {
+        honeycomb_api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
+        honeycomb_dataset: HONEYCOMB_DATASET.clone(),
+        service_name: "website".to_owned(),
+    });
 
     let index = warp::get()
         .and(warp::path::end())
@@ -315,15 +337,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(api_query)
         .or(setup_authorized)
         .or(hooks)
-        .or(logout)
-        .with(warp::log("website"));
+        .or(logout);
 
-    let (_addr, server) =
-        warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], 8888), async {
+    let warp_svc = warp::service(routes);
+    let make_svc = hyper::service::make_service_fn(move |_| {
+        let warp_svc = warp_svc.clone();
+        async move {
+            let svc = hyper::service::service_fn(move |req: Request<Body>| {
+                let mut warp_svc = warp_svc.clone();
+                async move {
+                    let span = info_span!("request", request_id = %tracing::uuid(), user_id = tracing::EmptyField);
+                    let method = req.method().clone();
+                    let path = req.uri().path().to_owned();
+                    let user_agent = req
+                        .headers()
+                        .get(header::USER_AGENT)
+                        .map(|v| v.to_str().expect("user agent to string"))
+                        .unwrap_or("")
+                        .to_owned();
+                    let started = std::time::Instant::now();
+
+                    let res = warp_svc.call(req).instrument(span.clone()).await;
+
+                    let duration_ms = (std::time::Instant::now() - started).as_millis();
+                    let _guard = span.enter();
+                    match res.as_ref() {
+                        Ok(res) => {
+                            let status = res.status().as_u16();
+                            info!(
+                                %method,
+                                %path,
+                                %user_agent,
+                                status,
+                                %duration_ms,
+                                "request finished",
+                            );
+                        }
+                        Err(err) => {
+                            error!(
+                                %method,
+                                %path,
+                                %user_agent,
+                                error = %err,
+                                %duration_ms,
+                                "request failed",
+                            );
+                        }
+                    };
+
+                    res
+                }
+            });
+            Ok::<_, Infallible>(svc)
+        }
+    });
+
+    hyper::Server::bind(&([0, 0, 0, 0], 8888).into())
+        .serve(make_svc)
+        .with_graceful_shutdown(async {
             ctrlc::ctrl_c().await;
-        });
-
-    server.await;
+        })
+        .await?;
 
     Ok(())
 }
