@@ -95,5 +95,7 @@ async fn main() -> Result<(), BoxError> {
         }
     }
 
+    tracing::flush().await;
+
     Ok(())
 }

@@ -26,6 +26,17 @@ pub fn setup(config: Config) {
 }
 
 #[cfg(debug_assertions)]
+pub async fn flush() {}
+
+#[cfg(not(debug_assertions))]
+pub async fn flush() {
+    // libhoney-rust batches events and has a default batch timeout of 100ms
+    //   https://github.com/nlopes/libhoney-rust/blob/3acdc4021d08a9b78653c77bb4ff3dab3e2b9556/src/transmission.rs#L33
+    // It provides Client::flush() but this is not exposed by honeycomb-tracing.
+    tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+}
+
+#[cfg(debug_assertions)]
 fn create_subscriber(_config: Config) -> impl Subscriber {
     tracing_subscriber::FmtSubscriber::new()
 }
