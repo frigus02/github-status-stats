@@ -14,14 +14,18 @@ use tracing::{info, info_span};
 type BoxError = Box<dyn std::error::Error>;
 
 lazy_static! {
-    static ref GH_APP_ID: String = std::env::var("GH_APP_ID").unwrap();
-    static ref GH_PRIVATE_KEY: SecUtf8 = SecUtf8::from(std::env::var("GH_PRIVATE_KEY").unwrap());
-    static ref INFLUXDB_BASE_URL: String = std::env::var("INFLUXDB_BASE_URL").unwrap();
-    static ref INFLUXDB_ADMIN_USERNAME: String = std::env::var("INFLUXDB_ADMIN_USERNAME").unwrap();
-    static ref INFLUXDB_ADMIN_PASSWORD: SecUtf8 =
-        SecUtf8::from(std::env::var("INFLUXDB_ADMIN_PASSWORD").unwrap());
+    static ref GH_APP_ID: String = std::env::var("GH_APP_ID").expect("env GH_APP_ID");
+    static ref GH_PRIVATE_KEY: SecUtf8 =
+        SecUtf8::from(std::env::var("GH_PRIVATE_KEY").expect("env GH_PRIVATE_KEY"));
+    static ref INFLUXDB_BASE_URL: String =
+        std::env::var("INFLUXDB_BASE_URL").expect("env INFLUXDB_BASE_URL");
+    static ref INFLUXDB_ADMIN_USERNAME: String =
+        std::env::var("INFLUXDB_ADMIN_USERNAME").expect("env INFLUXDB_ADMIN_USERNAME");
+    static ref INFLUXDB_ADMIN_PASSWORD: SecUtf8 = SecUtf8::from(
+        std::env::var("INFLUXDB_ADMIN_PASSWORD").expect("env INFLUXDB_ADMIN_PASSWORD")
+    );
     static ref INFLUXDB_READ_PASSWORD: SecUtf8 =
-        SecUtf8::from(std::env::var("INFLUXDB_READ_PASSWORD").unwrap());
+        SecUtf8::from(std::env::var("INFLUXDB_READ_PASSWORD").expect("env INFLUXDB_READ_PASSWORD"));
     static ref HONEYCOMB_API_KEY: SecUtf8 =
         SecUtf8::from(std::env::var("HONEYCOMB_API_KEY").expect("env HONEYCOMB_API_KEY"));
     static ref HONEYCOMB_DATASET: String =
