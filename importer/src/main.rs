@@ -9,7 +9,7 @@ use github_client::Client;
 use influxdb::{get_last_import, get_status_hook_commits_since, import};
 use secstr::SecUtf8;
 use stats::{influxdb_name, influxdb_read_user};
-use tracing::{info, info_span};
+use tracing::{error, info, info_span};
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -32,17 +32,8 @@ lazy_static! {
         std::env::var("HONEYCOMB_DATASET").expect("env HONEYCOMB_DATASET");
 }
 
-#[tokio::main]
-async fn main() -> Result<(), BoxError> {
-    tracing::setup(tracing::Config {
-        honeycomb_api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
-        honeycomb_dataset: HONEYCOMB_DATASET.clone(),
-        service_name: "importer".to_owned(),
-    });
-
-    let span = info_span!("import", import_id = %tracing::uuid());
-    let _guard = span.enter();
-
+#[allow(clippy::cognitive_complexity)]
+async fn run() -> Result<(), BoxError> {
     let gh_app_client = Client::new_app_auth(&*GH_APP_ID, &*GH_PRIVATE_KEY.unsecure())?;
 
     let installations = gh_app_client.get_app_installations().await?;
@@ -99,7 +90,33 @@ async fn main() -> Result<(), BoxError> {
         }
     }
 
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), String> {
+    tracing::setup(tracing::Config {
+        honeycomb_api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
+        honeycomb_dataset: HONEYCOMB_DATASET.clone(),
+        service_name: "importer".to_owned(),
+    });
+
+    let res = async {
+        let import_id = tracing::uuid();
+        let span = info_span!("import", %import_id);
+        let _guard = span.enter();
+
+        match run().await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!(error = %err, "import failed");
+                Err(format!("Import {} failed", import_id))
+            }
+        }
+    }
+    .await;
+
     tracing::flush().await;
 
-    Ok(())
+    res
 }
