@@ -53,7 +53,7 @@ impl Client<'_> {
     pub async fn query(&self, q: &str) -> Result<QueryResponse, BoxError> {
         let raw_url = format!("{base}/query", base = &self.base_url);
         let url = Url::parse_with_params(&raw_url, &[("db", &self.db)])?;
-        debug!(request.url = %url, "influxdb request");
+        debug!(request.method = "POST", request.url = %url, request.body.q = q, "influxdb request");
         let result = self
             .client
             .post(url)
@@ -74,7 +74,7 @@ impl Client<'_> {
             .map(|point| point.to_line())
             .collect::<Vec<String>>()
             .join("\n");
-        debug!(request.url = %url, request.body = %body, "influxdb request");
+        debug!(request.method = "POST", request.url = %url, request.body = %body, "influxdb request");
         self.client
             .post(url)
             .body(body)
