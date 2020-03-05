@@ -1,8 +1,10 @@
 mod build;
+mod commit;
 mod hook;
 mod import;
 
 pub use build::*;
+pub use commit::*;
 use github_client::Repository;
 pub use hook::*;
 pub use import::*;

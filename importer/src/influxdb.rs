@@ -65,13 +65,13 @@ struct HookRow {
     commit: String,
 }
 
-pub async fn get_status_hook_commits_since(
+pub async fn get_commits_since_from_hooks(
     client: &Client<'_>,
     since: &DateTime<FixedOffset>,
 ) -> Result<Vec<String>, BoxError> {
     Ok(client
         .query(&format!(
-            "SELECT DISTINCT(commit) FROM hook WHERE type = \"status\" AND time >= \"{}\"",
+            "SELECT DISTINCT(commit) FROM hook WHERE time >= \"{}\"",
             since.to_rfc3339()
         ))
         .await?

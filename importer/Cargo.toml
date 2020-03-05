@@ -10,6 +10,7 @@ edition = "2018"
 chrono = "0.4.10"
 github_client = { path = "../packages/github_client" }
 influxdb_client = { path = "../packages/influxdb_client" }
+itertools = "0.8.2"
 lazy_static = "1.4.0"
 secstr = "0.4.0"
 serde = { version = "1.0.104", features = ["derive"] }

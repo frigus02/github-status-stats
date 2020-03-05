@@ -4,9 +4,9 @@ extern crate lazy_static;
 mod build;
 mod influxdb;
 
-use build::{get_builds, get_most_recent_builds};
+use build::{get_builds_from_commit_shas, get_most_recent_builds};
 use github_client::Client;
-use influxdb::{get_last_import, get_status_hook_commits_since, import};
+use influxdb::{get_commits_since_from_hooks, get_last_import, import};
 use secstr::SecUtf8;
 use stats::{influxdb_name, influxdb_read_user};
 use tracing::{error, info, info_span};
@@ -69,9 +69,11 @@ async fn run() -> Result<(), BoxError> {
                 );
 
                 let commit_shas =
-                    get_status_hook_commits_since(&influxdb_client, &last_import).await?;
+                    get_commits_since_from_hooks(&influxdb_client, &last_import).await?;
                 if !commit_shas.is_empty() {
-                    let points = get_builds(&gh_inst_client, &repository, commit_shas).await?;
+                    let points =
+                        get_builds_from_commit_shas(&gh_inst_client, &repository, commit_shas)
+                            .await?;
                     import(&influxdb_client, points).await?;
                 }
             } else {

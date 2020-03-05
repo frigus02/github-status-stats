@@ -2,6 +2,8 @@ use super::apps;
 use super::call;
 use super::models::*;
 use super::{BASE_URL, USER_AGENT};
+use chrono::{DateTime, FixedOffset};
+use std::collections::HashMap;
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -111,7 +113,7 @@ impl Client {
         &self,
         owner: &str,
         repo: &str,
-    ) -> Result<Vec<String>, BoxError> {
+    ) -> Result<Vec<MostRecentCommit>, BoxError> {
         let raw_url = format!("{base}/graphql", base = BASE_URL);
         let url = reqwest::Url::parse(&raw_url)?;
         let body = GraphQLQuery {
@@ -123,6 +125,7 @@ impl Client {
                         history(first: 50) {
                           nodes {
                             oid
+                            committedDate
                           }
                         }
                       }
@@ -132,8 +135,14 @@ impl Client {
             }",
             variables: Some(
                 [
-                    ("owner", serde_json::Value::String(owner.to_owned())),
-                    ("name", serde_json::Value::String(repo.to_owned())),
+                    (
+                        "owner".to_owned(),
+                        serde_json::Value::String(owner.to_owned()),
+                    ),
+                    (
+                        "name".to_owned(),
+                        serde_json::Value::String(repo.to_owned()),
+                    ),
                 ]
                 .iter()
                 .cloned()
@@ -151,8 +160,72 @@ impl Client {
             .history
             .nodes
             .into_iter()
-            .map(|node| node.oid)
+            .map(|node| MostRecentCommit {
+                sha: node.oid,
+                committed_date: node.committed_date,
+            })
             .collect())
+    }
+
+    pub async fn get_commit_dates(
+        &self,
+        owner: &str,
+        repo: &str,
+        commit_shas: &[String],
+    ) -> Result<Vec<DateTime<FixedOffset>>, BoxError> {
+        let raw_url = format!("{base}/graphql", base = BASE_URL);
+        let url = reqwest::Url::parse(&raw_url)?;
+
+        let args = (0..commit_shas.len())
+            .map(|i| format!(", $commit{}: GitObjectID", i))
+            .collect::<Vec<_>>()
+            .join("");
+        let objects = (0..commit_shas.len())
+            .map(|i| format!("_{i}: object(oid: $commit{i}) {{ ...dateField }}", i = i))
+            .collect::<Vec<_>>()
+            .join("");
+        let query = format!(
+            "query ($owner: String!, $name: String!{}) {{
+              repository(owner: $owner, name: $name) {{
+                {}
+              }}
+            }}
+
+            fragment dateField on Commit {{
+              committedDate
+            }}",
+            args, objects
+        );
+        let mut variables = HashMap::new();
+        variables.insert(
+            "owner".to_owned(),
+            serde_json::Value::String(owner.to_owned()),
+        );
+        variables.insert(
+            "owner".to_owned(),
+            serde_json::Value::String(repo.to_owned()),
+        );
+        for (i, commit_sha) in commit_shas.iter().enumerate() {
+            variables.insert(
+                format!("commit{}", i),
+                serde_json::Value::String(commit_sha.to_owned()),
+            );
+        }
+
+        let body = GraphQLQuery {
+            query: &query,
+            variables: Some(variables),
+        };
+        let res: GraphQLResponse<GetCommitDates> = call::post(&self.client, url, &body).await?;
+        let date_nodes = res.data.ok_or("no data")?.repository;
+        Ok((0..commit_shas.len())
+            .map(|i| {
+                date_nodes
+                    .get(&format!("_{}", i))
+                    .map(|node| node.committed_date)
+                    .ok_or_else(|| format!("no result for {}", i))
+            })
+            .collect::<Result<_, _>>()?)
     }
 
     pub async fn get_statuses(
