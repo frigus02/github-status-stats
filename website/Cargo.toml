@@ -14,7 +14,7 @@ github_client = { path = "../packages/github_client" }
 handlebars = "3.0.1"
 hmac = "0.7.1"
 influxdb_client = { path = "../packages/influxdb_client" }
-jsonwebtoken = "7.0.1"
+jsonwebtoken = "7.1.0"
 lazy_static = "1.4.0"
 secstr = "0.4.0"
 serde = { version = "1.0.104", features = ["derive"] }
@@ -23,4 +23,4 @@ sha-1 = "0.8.2"
 stats = { path = "../packages/stats" }
 tokio = { version = "0.2.13", features = ["macros", "signal"] }
 tracing = { path = "../packages/tracing" }
-warp = "0.2.1"
+warp = "0.2.2"
