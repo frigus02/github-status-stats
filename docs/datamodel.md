@@ -9,7 +9,8 @@
 - Fields:
   - `commit`: commit SHA
   - `successful`: `1` or `0`
-  - `duration_ms`
+  - `failed`: `1` or `0`
+  - `duration_ms`: duration of build in milliseconds
 - Timestamp: `status.created_at` or `check_run.started_at`
 
 ## Import

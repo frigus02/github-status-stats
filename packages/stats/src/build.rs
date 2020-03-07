@@ -14,6 +14,7 @@ pub struct Build {
     pub name: String,
     pub source: BuildSource,
     pub successful: bool,
+    pub failed: bool,
     pub duration_ms: i64,
     pub created_at: DateTime<FixedOffset>,
     pub commit_sha: String,
@@ -32,9 +33,11 @@ impl From<Vec<CommitStatus>> for Build {
             name,
             source: BuildSource::Status,
             successful: last.state == CommitStatusState::Success,
+            failed: last.state == CommitStatusState::Error
+                || last.state == CommitStatusState::Failure,
             duration_ms: last_millis - first_millis,
             created_at,
-            commit_sha: "".to_owned(),
+            commit_sha,
         }
     }
 }
@@ -44,8 +47,15 @@ impl From<CheckRun> for Build {
         Self {
             name: check_run.name,
             source: BuildSource::CheckRun,
-            successful: match check_run.conclusion {
-                Some(conclusion) => conclusion == CheckRunConclusion::Success,
+            successful: match &check_run.conclusion {
+                Some(conclusion) => conclusion == &CheckRunConclusion::Success,
+                None => false,
+            },
+            failed: match &check_run.conclusion {
+                Some(conclusion) => {
+                    conclusion == &CheckRunConclusion::Failure
+                        || conclusion == &CheckRunConclusion::TimedOut
+                }
                 None => false,
             },
             duration_ms: match check_run.completed_at {
@@ -78,6 +88,10 @@ impl From<Build> for Point {
         fields.insert(
             "successful",
             FieldValue::Integer(if build.successful { 1 } else { 0 }),
+        );
+        fields.insert(
+            "failed",
+            FieldValue::Integer(if build.failed { 1 } else { 0 }),
         );
         fields.insert("duration_ms", FieldValue::Integer(build.duration_ms));
 
