@@ -1,5 +1,5 @@
 [package]
-name = "stats"
+name = "ghss_models"
 version = "0.1.0"
 authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
 edition = "2018"
@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 chrono = "0.4.10"
-github_client = { path = "../github_client" }
-influxdb_client = { path = "../influxdb_client" }
+ghss_github = { path = "../ghss_github" }
+ghss_influxdb = { path = "../ghss_influxdb" }

@@ -384,15 +384,51 @@ dependencies = [
 ]
 
 [[package]]
-name = "github_client"
+name = "ghss_github"
 version = "0.1.0"
 dependencies = [
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ghss_tracing 0.1.0",
  "jsonwebtoken 7.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.10.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing 0.1.0",
+]
+
+[[package]]
+name = "ghss_influxdb"
+version = "0.1.0"
+dependencies = [
+ "base64 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ghss_tracing 0.1.0",
+ "reqwest 0.10.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "ghss_models"
+version = "0.1.0"
+dependencies = [
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ghss_github 0.1.0",
+ "ghss_influxdb 0.1.0",
+]
+
+[[package]]
+name = "ghss_tracing"
+version = "0.1.0"
+dependencies = [
+ "honeycomb-tracing 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libhoney-rust 0.1.3 (git+https://github.com/nlopes/libhoney-rust?rev=3acdc4021d08a9b78653c77bb4ff3dab3e2b9556)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing-futures 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing-log 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing-subscriber 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uuid 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -554,16 +590,16 @@ name = "importer"
 version = "0.1.0"
 dependencies = [
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "github_client 0.1.0",
- "influxdb_client 0.1.0",
+ "ghss_github 0.1.0",
+ "ghss_influxdb 0.1.0",
+ "ghss_models 0.1.0",
+ "ghss_tracing 0.1.0",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "secstr 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
- "stats 0.1.0",
  "tokio 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing 0.1.0",
 ]
 
 [[package]]
@@ -572,18 +608,6 @@ version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "autocfg 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "influxdb_client"
-version = "0.1.0"
-dependencies = [
- "base64 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.10.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing 0.1.0",
 ]
 
 [[package]]
@@ -1563,15 +1587,6 @@ version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "stats"
-version = "0.1.0"
-dependencies = [
- "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "github_client 0.1.0",
- "influxdb_client 0.1.0",
-]
-
-[[package]]
 name = "subtle"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1856,21 +1871,6 @@ dependencies = [
 name = "tower-service"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "tracing"
-version = "0.1.0"
-dependencies = [
- "honeycomb-tracing 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "libhoney-rust 0.1.3 (git+https://github.com/nlopes/libhoney-rust?rev=3acdc4021d08a9b78653c77bb4ff3dab3e2b9556)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing-futures 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing-log 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing-subscriber 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "uuid 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "tracing"
@@ -2210,19 +2210,19 @@ dependencies = [
  "bytes 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "github_client 0.1.0",
+ "ghss_github 0.1.0",
+ "ghss_influxdb 0.1.0",
+ "ghss_models 0.1.0",
+ "ghss_tracing 0.1.0",
  "handlebars 3.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hmac 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "influxdb_client 0.1.0",
  "jsonwebtoken 7.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "secstr 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha-1 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "stats 0.1.0",
  "tokio 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing 0.1.0",
  "warp 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

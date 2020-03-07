@@ -1,13 +1,13 @@
 use chrono::{DateTime, FixedOffset, Utc};
-use influxdb_client::Client;
+use ghss_influxdb::Client;
+use ghss_models::Import;
+use ghss_tracing::info;
 use serde::Deserialize;
-use stats::Import;
-use tracing::info;
 
 type BoxError = Box<dyn std::error::Error>;
 
 pub async fn setup(
-    client: &influxdb_client::Client<'_>,
+    client: &ghss_influxdb::Client<'_>,
     db: &str,
     user: &str,
     password: &str,
@@ -27,8 +27,8 @@ pub async fn setup(
 }
 
 pub async fn import(
-    client: &influxdb_client::Client<'_>,
-    mut points: Vec<influxdb_client::Point>,
+    client: &ghss_influxdb::Client<'_>,
+    mut points: Vec<ghss_influxdb::Point>,
 ) -> Result<(), BoxError> {
     info!(points_count = points.len(), "write points");
     points.push(

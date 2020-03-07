@@ -1,6 +1,6 @@
 use chrono::{DateTime, FixedOffset};
-use github_client::{CheckRun, CheckRunConclusion, CommitStatus, CommitStatusState};
-use influxdb_client::{FieldValue, Point, Timestamp};
+use ghss_github::{CheckRun, CheckRunConclusion, CommitStatus, CommitStatusState};
+use ghss_influxdb::{FieldValue, Point, Timestamp};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq)]

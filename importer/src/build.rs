@@ -1,10 +1,10 @@
 use chrono::{DateTime, FixedOffset};
-use github_client::{
+use ghss_github::{
     CheckRun, Client, CommitStatus, CommitStatusState, MostRecentCommit, Repository,
 };
-use influxdb_client::Point;
+use ghss_influxdb::Point;
+use ghss_models::{Build, Commit};
 use itertools::Itertools;
-use stats::{Build, Commit};
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -64,7 +64,7 @@ fn builds_to_points(builds: Vec<Build>, committed_date: DateTime<FixedOffset>) -
 pub async fn get_most_recent_builds(
     client: &Client,
     repository: &Repository,
-) -> Result<Vec<influxdb_client::Point>, BoxError> {
+) -> Result<Vec<ghss_influxdb::Point>, BoxError> {
     let commit_shas = client
         .get_most_recent_commits(&repository.owner.login, &repository.name)
         .await?;
@@ -75,7 +75,7 @@ pub async fn get_builds_from_commit_shas(
     client: &Client,
     repository: &Repository,
     commit_shas: Vec<String>,
-) -> Result<Vec<influxdb_client::Point>, BoxError> {
+) -> Result<Vec<ghss_influxdb::Point>, BoxError> {
     let commit_dates = client
         .get_commit_dates(&repository.owner.login, &repository.name, &commit_shas)
         .await?;
@@ -94,7 +94,7 @@ async fn get_builds(
     client: &Client,
     repository: &Repository,
     commits: Vec<MostRecentCommit>,
-) -> Result<Vec<influxdb_client::Point>, BoxError> {
+) -> Result<Vec<ghss_influxdb::Point>, BoxError> {
     let mut points = Vec::new();
     for commit in commits {
         let statuses = client

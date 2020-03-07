@@ -1,10 +1,10 @@
 use super::page_links;
+use ghss_tracing::debug;
 use reqwest::header::{ACCEPT, LINK};
 use reqwest::{Client, Request, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::error::Error;
-use tracing::debug;
 
 struct Response<T> {
     data: T,

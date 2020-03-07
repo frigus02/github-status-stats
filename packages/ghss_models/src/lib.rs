@@ -5,7 +5,7 @@ mod import;
 
 pub use build::*;
 pub use commit::*;
-use github_client::Repository;
+use ghss_github::Repository;
 pub use hook::*;
 pub use import::*;
 

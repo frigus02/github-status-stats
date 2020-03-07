@@ -1,6 +1,6 @@
 use super::{Build, BuildSource};
 use chrono::{DateTime, FixedOffset};
-use influxdb_client::{FieldValue, Point, Timestamp};
+use ghss_influxdb::{FieldValue, Point, Timestamp};
 use std::collections::HashMap;
 use std::convert::TryInto;
 
