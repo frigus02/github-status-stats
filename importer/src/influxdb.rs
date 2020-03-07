@@ -43,7 +43,7 @@ pub async fn import(
 
 #[derive(Deserialize)]
 struct ImportRow {
-    time: String,
+    time: DateTime<FixedOffset>,
 }
 
 pub async fn get_last_import(
@@ -53,11 +53,10 @@ pub async fn get_last_import(
         .query("SELECT * FROM import ORDER BY time DESC LIMIT 1")
         .await?
         .into_single_result()?
-        .into_single_series()
-        .ok()
+        .into_single_series()?
         .and_then(|series| series.into_rows::<ImportRow>().next())
-        .and_then(|row| row.ok())
-        .and_then(|row| DateTime::<FixedOffset>::parse_from_rfc3339(&row.time).ok()))
+        .transpose()
+        .map(|row| row.map(|row| row.time))?)
 }
 
 #[derive(Deserialize)]
@@ -71,17 +70,19 @@ pub async fn get_commits_since_from_hooks(
 ) -> Result<Vec<String>, BoxError> {
     Ok(client
         .query(&format!(
-            "SELECT DISTINCT(commit) FROM hook WHERE time >= \"{}\"",
+            "SELECT DISTINCT(commit) AS commit FROM hook WHERE time >= '{}'",
             since.to_rfc3339()
         ))
         .await?
         .into_single_result()?
-        .into_single_series()
-        .ok()
-        .map_or_else(Vec::new, |series| {
-            series
-                .into_rows::<HookRow>()
-                .filter_map(|row| row.ok().map(|row| row.commit))
-                .collect()
-        }))
+        .into_single_series()?
+        .map_or_else(
+            || Ok(Vec::new()),
+            |series| {
+                series
+                    .into_rows::<HookRow>()
+                    .map(|row| row.map(|row| row.commit))
+                    .collect()
+            },
+        )?)
 }

@@ -149,11 +149,11 @@ impl Client {
                 .collect(),
             ),
         };
-        let res: GraphQLResponse<GetMostRecentCommits> =
+        let GraphQLResponse::<GetMostRecentCommits> { data, errors } =
             call::post(&self.client, url, &body).await?;
-        Ok(res
-            .data
-            .ok_or("no data")?
+
+        Ok(data
+            .ok_or_else(|| format!("no data. error: {:?}", errors))?
             .repository
             .default_branch_ref
             .target
@@ -202,7 +202,7 @@ impl Client {
             serde_json::Value::String(owner.to_owned()),
         );
         variables.insert(
-            "owner".to_owned(),
+            "name".to_owned(),
             serde_json::Value::String(repo.to_owned()),
         );
         for (i, commit_sha) in commit_shas.iter().enumerate() {
@@ -216,8 +216,11 @@ impl Client {
             query: &query,
             variables: Some(variables),
         };
-        let res: GraphQLResponse<GetCommitDates> = call::post(&self.client, url, &body).await?;
-        let date_nodes = res.data.ok_or("no data")?.repository;
+        let GraphQLResponse::<GetCommitDates> { data, errors } =
+            call::post(&self.client, url, &body).await?;
+        let date_nodes = data
+            .ok_or_else(|| format!("no data. error: {:?}", errors))?
+            .repository;
         Ok((0..commit_shas.len())
             .map(|i| {
                 date_nodes
