@@ -38,7 +38,9 @@ pub async fn flush() {
 
 #[cfg(debug_assertions)]
 fn create_subscriber(_config: Config) -> impl Subscriber {
-    tracing_subscriber::FmtSubscriber::new()
+    tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing_subscriber::filter::LevelFilter::DEBUG)
+        .finish()
 }
 
 #[cfg(not(debug_assertions))]
