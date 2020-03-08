@@ -201,7 +201,7 @@ const statPanel = async ({
     axes: [{ show: false }, { show: false }]
   };
 
-  const plot = new uPlot.Line(opts, emptyData, element);
+  const plot = new uPlot(opts, emptyData, element);
   onResize(() => plot.setSize(getSize()));
 
   const loadData = async () => {
@@ -253,7 +253,7 @@ const graphPanel = async ({
         }
       ]
     };
-    plot = new uPlot.Line(opts, data, element);
+    plot = new uPlot(opts, data, element);
   };
 
   recreatePlot([], emptyData);
