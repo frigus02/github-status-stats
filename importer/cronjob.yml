@@ -48,11 +48,11 @@ spec:
                       key: DATASET
               resources:
                 requests:
-                  cpu: 20m
-                  memory: 20Mi
+                  cpu: 50m
+                  memory: 50Mi
                 limits:
-                  cpu: 20m
-                  memory: 20Mi
+                  cpu: 50m
+                  memory: 50Mi
               securityContext:
                 runAsNonRoot: true
                 runAsUser: 1000

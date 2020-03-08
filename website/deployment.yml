@@ -73,8 +73,8 @@ spec:
               port: 8888
           resources:
             requests:
-              cpu: 10m
-              memory: 20Mi
+              cpu: 20m
+              memory: 50Mi
             limits:
-              cpu: 10m
-              memory: 20Mi
+              cpu: 20m
+              memory: 50Mi

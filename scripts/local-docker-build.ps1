@@ -19,15 +19,15 @@ if (!$?)
 $PREFIX="localhost:5000/github-status-stats"
 
 $BASE="$PREFIX-base"
-docker build -t $BASE -f docker-base/Dockerfile .
+docker build --build-arg CARGO_FLAGS= --build-arg CARGO_MODE=debug -t $BASE -f docker-base/Dockerfile .
 ExitIfNativeCallFailed $?
 
 $IMPORTER="$PREFIX-importer"
-docker build --build-arg REGISTRY=localhost:5000 -t ${IMPORTER} -f importer/Dockerfile .
+docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=debug -t ${IMPORTER} -f importer/Dockerfile .
 ExitIfNativeCallFailed $?
 
 $WEBSITE="$PREFIX-website"
-docker build --build-arg REGISTRY=localhost:5000 -t ${WEBSITE} -f website/Dockerfile .
+docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=debug -t ${WEBSITE} -f website/Dockerfile .
 ExitIfNativeCallFailed $?
 
 docker push ${IMPORTER}

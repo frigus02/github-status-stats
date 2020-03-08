@@ -1,5 +1,8 @@
 FROM rust:1.41
 
+ARG CARGO_FLAGS=--release
+ARG CARGO_MODE=release
+
 # Build statically linked OpenSSL
 RUN apt-get update && \
     apt-get install -y \
@@ -48,16 +51,16 @@ COPY packages/ghss_github/Cargo.toml ./packages/ghss_github/
 COPY packages/ghss_influxdb/Cargo.toml ./packages/ghss_influxdb/
 COPY packages/ghss_models/Cargo.toml ./packages/ghss_models/
 COPY packages/ghss_tracing/Cargo.toml ./packages/ghss_tracing/
-RUN cargo clippy --release && \
-    cargo build --release && \
-    rm target/x86_64-unknown-linux-musl/release/deps/importer* && \
-    rm target/x86_64-unknown-linux-musl/release/deps/website* && \
-    rm target/x86_64-unknown-linux-musl/release/deps/libghss_github* && \
-    rm target/x86_64-unknown-linux-musl/release/deps/libghss_influxdb* && \
-    rm target/x86_64-unknown-linux-musl/release/deps/libghss_models* && \
-    rm target/x86_64-unknown-linux-musl/release/deps/libghss_tracing*
+RUN cargo clippy $CARGO_FLAGS && \
+    cargo build $CARGO_FLAGS && \
+    rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/importer* && \
+    rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/website* && \
+    rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/libghss_github* && \
+    rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/libghss_influxdb* && \
+    rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/libghss_models* && \
+    rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/libghss_tracing*
 
 # Build
 COPY . .
-RUN cargo clippy --release --frozen -- -Dwarnings && \
-    cargo build --release
+RUN cargo clippy $CARGO_FLAGS --frozen -- -Dwarnings && \
+    cargo build $CARGO_FLAGS
