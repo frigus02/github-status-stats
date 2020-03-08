@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 bytes = "0.5.4"
-chrono = "0.4.10"
+chrono = "0.4.11"
 futures = "0.3.4"
 ghss_github = { path = "../packages/ghss_github" }
 ghss_influxdb = { path = "../packages/ghss_influxdb" }
