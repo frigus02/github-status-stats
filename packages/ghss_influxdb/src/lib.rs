@@ -4,10 +4,10 @@ mod query;
 mod timestamp;
 
 pub use field_value::FieldValue;
+use ghss_tracing::debug;
 pub use point::Point;
 use query::{Query, QueryResponse};
 use reqwest::Url;
-use tracing::debug;
 
 pub use timestamp::Timestamp;
 

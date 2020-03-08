@@ -9,13 +9,13 @@ mod templates;
 mod token;
 
 use bytes::Bytes;
+use ghss_models::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
+use ghss_tracing::{error, info, info_span, Instrument};
 use secstr::{SecStr, SecUtf8};
 use serde::{Deserialize, Serialize};
-use stats::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
-use tracing::{error, info, info_span, Instrument};
 use warp::{
     http::{Response, StatusCode, Uri},
     hyper::{self, header, service::Service, Body, Request},
@@ -30,7 +30,7 @@ lazy_static! {
     static ref GH_CLIENT_SECRET: SecUtf8 =
         SecUtf8::from(std::env::var("GH_CLIENT_SECRET").expect("env GH_CLIENT_SECRET"));
     static ref GH_LOGIN_URL: String =
-        github_client::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI)
+        ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI)
             .expect("construct GitHub login URL")
             .into_string();
     static ref GH_WEBHOOK_SECRET: SecStr =
@@ -111,7 +111,7 @@ struct ApiQueryParams {
 struct ApiQueryResponse {
     pub tags: Option<HashMap<String, String>>,
     pub columns: Vec<String>,
-    pub values: Vec<Vec<Option<influxdb_client::FieldValue>>>,
+    pub values: Vec<Vec<Option<ghss_influxdb::FieldValue>>>,
 }
 
 async fn api_query_route(
@@ -122,7 +122,7 @@ async fn api_query_route(
         Some(user) if user.repositories.iter().any(|r| r.id == params.repository) => {
             let influxdb_db = influxdb_name_unsafe(params.repository);
             let res: Result<Vec<ApiQueryResponse>, Box<dyn std::error::Error>> = async {
-                let client = influxdb_client::Client::new(
+                let client = ghss_influxdb::Client::new(
                     &*INFLUXDB_BASE_URL,
                     &influxdb_db,
                     &influxdb_read_user_unsafe(params.repository),
@@ -162,10 +162,10 @@ async fn api_query_route(
 }
 
 async fn setup_authorized_route(
-    info: github_client::oauth::AuthCodeQuery,
+    info: ghss_github::oauth::AuthCodeQuery,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let token = async {
-        let github_token = github_client::oauth::exchange_code(
+        let github_token = ghss_github::oauth::exchange_code(
             &*GH_CLIENT_ID,
             &*GH_CLIENT_SECRET.unsecure(),
             &*GH_REDIRECT_URI,
@@ -211,7 +211,7 @@ async fn hooks_route(
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
                 let influxdb_db = influxdb_name(&check_run.repository);
-                let client = influxdb_client::Client::new(
+                let client = ghss_influxdb::Client::new(
                     &*INFLUXDB_BASE_URL,
                     &influxdb_db,
                     &*INFLUXDB_ADMIN_USERNAME,
@@ -219,9 +219,9 @@ async fn hooks_route(
                 )?;
                 client
                     .write(vec![
-                        stats::Hook {
+                        ghss_models::Hook {
                             time: check_run.check_run.started_at,
-                            r#type: stats::HookType::CheckRun,
+                            r#type: ghss_models::HookType::CheckRun,
                             commit_sha: check_run.check_run.head_sha.clone(),
                         }
                         .into(),
@@ -235,16 +235,16 @@ async fn hooks_route(
             github_hooks::Payload::Ping(_ping) => {}
             github_hooks::Payload::Status(status) => {
                 let influxdb_db = influxdb_name(&status.repository);
-                let client = influxdb_client::Client::new(
+                let client = ghss_influxdb::Client::new(
                     &*INFLUXDB_BASE_URL,
                     &influxdb_db,
                     &*INFLUXDB_ADMIN_USERNAME,
                     &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
                 )?;
                 client
-                    .write(vec![stats::Hook {
+                    .write(vec![ghss_models::Hook {
                         time: status.created_at,
-                        r#type: stats::HookType::Status,
+                        r#type: ghss_models::HookType::Status,
                         commit_sha: status.sha,
                     }
                     .into()])
@@ -272,7 +272,7 @@ pub fn optional_token() -> impl Filter<Extract = (Option<token::User>,), Error =
             let user = token::validate(&t, TOKEN_SECRET.unsecure());
             match user {
                 Ok(user) => {
-                    tracing::Span::current().record("user_id", &user.id.as_str());
+                    ghss_tracing::Span::current().record("user_id", &user.id.as_str());
                     Some(user)
                 }
                 Err(err) => {
@@ -286,7 +286,7 @@ pub fn optional_token() -> impl Filter<Extract = (Option<token::User>,), Error =
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing::setup(tracing::Config {
+    ghss_tracing::setup(ghss_tracing::Config {
         honeycomb_api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
         honeycomb_dataset: HONEYCOMB_DATASET.clone(),
         service_name: "website".to_owned(),
@@ -316,7 +316,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let setup_authorized = warp::get()
         .and(warp::path!("setup" / "authorized"))
-        .and(warp::query::<github_client::oauth::AuthCodeQuery>())
+        .and(warp::query::<ghss_github::oauth::AuthCodeQuery>())
         .and_then(setup_authorized_route);
 
     let logout = warp::get()
@@ -346,7 +346,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let svc = hyper::service::service_fn(move |req: Request<Body>| {
                 let mut warp_svc = warp_svc.clone();
                 async move {
-                    let span = info_span!("request", request_id = %tracing::uuid(), user_id = tracing::EmptyField);
+                    let span = info_span!("request", request_id = %ghss_tracing::uuid(), user_id = ghss_tracing::EmptyField);
                     let method = req.method().clone();
                     let path = req.uri().path().to_owned();
                     let user_agent = req

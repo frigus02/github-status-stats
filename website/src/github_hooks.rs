@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use github_client::{CheckRunEvent, GitHubAppAuthorizationEvent, PingEvent, StatusEvent};
+use ghss_github::{CheckRunEvent, GitHubAppAuthorizationEvent, PingEvent, StatusEvent};
 use hmac::{Hmac, Mac};
 use secstr::SecStr;
 use sha1::Sha1;

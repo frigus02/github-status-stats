@@ -1,5 +1,5 @@
 [package]
-name = "github_client"
+name = "ghss_influxdb"
 version = "0.1.0"
 authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
 edition = "2018"
@@ -7,9 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = { version = "0.4.10", features = ["serde"] }
-jsonwebtoken = "7.0.1"
-reqwest = { version = "0.10.3", features = ["json"] }
+base64 = "0.11.0"
+chrono = "0.4.10"
+ghss_tracing = { path = "../ghss_tracing" }
+reqwest = { version = "0.10.4", features = ["json"] }
 serde = { version = "1.0.104", features = ["derive"] }
+
+[dev-dependencies]
 serde_json = "1.0.48"
-tracing = { path = "../tracing" }

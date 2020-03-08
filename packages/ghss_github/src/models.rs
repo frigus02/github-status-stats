@@ -508,26 +508,26 @@ pub struct GitHubAppAuthorizationEvent {
 }
 
 #[derive(Debug, Serialize)]
-pub struct GraphQLQuery {
-    pub query: &'static str,
-    pub variables: Option<HashMap<&'static str, serde_json::Value>>,
+pub(crate) struct GraphQLQuery<'a> {
+    pub query: &'a str,
+    pub variables: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GraphQLLocation {
+pub(crate) struct GraphQLLocation {
     pub line: i32,
     pub column: i32,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-pub enum GraphQLPathFragment {
+pub(crate) enum GraphQLPathFragment {
     Key(String),
     Index(i32),
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GraphQLError {
+pub(crate) struct GraphQLError {
     pub message: String,
     pub locations: Option<Vec<GraphQLLocation>>,
     pub path: Option<Vec<GraphQLPathFragment>>,
@@ -535,38 +535,57 @@ pub struct GraphQLError {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GraphQLResponse<T> {
+pub(crate) struct GraphQLResponse<T> {
     pub data: Option<T>,
     pub errors: Option<Vec<GraphQLError>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GetMostRecentCommits {
+pub(crate) struct GetMostRecentCommits {
     pub repository: GetMostRecentCommitsRepository,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GetMostRecentCommitsRepository {
+pub(crate) struct GetMostRecentCommitsRepository {
     pub default_branch_ref: GetMostRecentCommitsDefaultBranchRef,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GetMostRecentCommitsDefaultBranchRef {
+pub(crate) struct GetMostRecentCommitsDefaultBranchRef {
     pub target: GetMostRecentCommitsTarget,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GetMostRecentCommitsTarget {
+pub(crate) struct GetMostRecentCommitsTarget {
     pub history: GetMostRecentCommitsHistory,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GetMostRecentCommitsHistory {
+pub(crate) struct GetMostRecentCommitsHistory {
     pub nodes: Vec<GetMostRecentCommitsNode>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GetMostRecentCommitsNode {
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GetMostRecentCommitsNode {
     pub oid: String,
+    pub committed_date: DateTime<FixedOffset>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct GetCommitDates {
+    pub repository: HashMap<String, GetCommitDatesNode>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GetCommitDatesNode {
+    pub committed_date: DateTime<FixedOffset>,
+}
+
+#[derive(Debug)]
+pub struct MostRecentCommit {
+    pub sha: String,
+    pub committed_date: DateTime<FixedOffset>,
 }

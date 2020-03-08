@@ -81,19 +81,18 @@ impl QueryResult {
         Ok(self.series.unwrap_or_else(Vec::new))
     }
 
-    pub fn into_single_series(self) -> Result<QuerySeries, String> {
-        self.into_series().and_then(|mut series_list| {
-            let series = series_list.pop();
-            if let Some(series) = series {
-                if series_list.is_empty() {
-                    Ok(series)
-                } else {
-                    Err("more than 1 series".to_owned())
-                }
+    pub fn into_single_series(self) -> Result<Option<QuerySeries>, String> {
+        let mut series_list = self.into_series()?;
+        let series = series_list.pop();
+        if let Some(series) = series {
+            if series_list.is_empty() {
+                Ok(Some(series))
             } else {
-                Err("zero series".to_owned())
+                Err("more than 1 series".to_owned())
             }
-        })
+        } else {
+            Ok(None)
+        }
     }
 }
 

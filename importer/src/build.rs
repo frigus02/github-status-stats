@@ -1,5 +1,10 @@
-use github_client::{CheckRun, Client, CommitStatus, CommitStatusState, Repository};
-use stats::Build;
+use chrono::{DateTime, FixedOffset};
+use ghss_github::{
+    CheckRun, Client, CommitStatus, CommitStatusState, MostRecentCommit, Repository,
+};
+use ghss_influxdb::Point;
+use ghss_models::{Build, Commit};
+use itertools::Itertools;
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -12,32 +17,26 @@ fn statuses_to_builds(mut statuses: Vec<CommitStatus>, commit_sha: &str) -> Vec<
 
     statuses
         .into_iter()
-        .fold(
-            Vec::<Vec<CommitStatus>>::new(),
-            |mut groups, curr_status| {
-                let index = groups
-                    .iter()
-                    .enumerate()
-                    .find(|group| {
-                        group.1.iter().all(|status| {
-                            status.context == curr_status.context
-                                && status.state == CommitStatusState::Pending
-                        })
-                    })
-                    .map(|group| group.0);
-                match index {
-                    Some(index) => groups[index].push(curr_status),
-                    None => groups.insert(0, vec![curr_status]),
-                };
-                groups
-            },
-        )
+        .group_by(|status| status.context.clone())
         .into_iter()
-        .rev()
-        .map(|statuses| {
-            let mut build: Build = statuses.into();
-            build.commit_sha = commit_sha.to_owned();
-            build
+        .flat_map(|group| {
+            let (_, statuses) = group;
+            statuses
+                .batching(|it| match it.next() {
+                    None => None,
+                    Some(x) => {
+                        let mut result: Vec<CommitStatus> = vec![x];
+                        while result.last().unwrap().state == CommitStatusState::Pending {
+                            match it.next() {
+                                Some(x) => result.push(x),
+                                None => break,
+                            };
+                        }
+                        Some(result)
+                    }
+                })
+                .map(|statuses| (commit_sha.to_owned(), statuses).into())
+                .collect_vec()
         })
         .collect()
 }
@@ -49,38 +48,66 @@ fn check_runs_to_builds(check_runs: Vec<CheckRun>) -> Vec<Build> {
         .collect()
 }
 
+fn builds_to_points(builds: Vec<Build>, committed_date: DateTime<FixedOffset>) -> Vec<Point> {
+    let mut points = Vec::new();
+    for (_, group) in &builds.iter().group_by(|build| build.name.clone()) {
+        points.push(Commit::from((committed_date, group.collect())).into());
+    }
+
+    for build in builds {
+        points.push(build.into());
+    }
+
+    points
+}
+
 pub async fn get_most_recent_builds(
     client: &Client,
     repository: &Repository,
-) -> Result<Vec<influxdb_client::Point>, BoxError> {
+) -> Result<Vec<ghss_influxdb::Point>, BoxError> {
     let commit_shas = client
         .get_most_recent_commits(&repository.owner.login, &repository.name)
         .await?;
     get_builds(client, repository, commit_shas).await
 }
 
-pub async fn get_builds(
+pub async fn get_builds_from_commit_shas(
     client: &Client,
     repository: &Repository,
     commit_shas: Vec<String>,
-) -> Result<Vec<influxdb_client::Point>, BoxError> {
+) -> Result<Vec<ghss_influxdb::Point>, BoxError> {
+    let commit_dates = client
+        .get_commit_dates(&repository.owner.login, &repository.name, &commit_shas)
+        .await?;
+    let commits = commit_shas
+        .into_iter()
+        .zip(commit_dates.into_iter())
+        .map(|(sha, committed_date)| MostRecentCommit {
+            sha,
+            committed_date,
+        })
+        .collect();
+    get_builds(client, repository, commits).await
+}
+
+async fn get_builds(
+    client: &Client,
+    repository: &Repository,
+    commits: Vec<MostRecentCommit>,
+) -> Result<Vec<ghss_influxdb::Point>, BoxError> {
     let mut points = Vec::new();
-    for commit_sha in commit_shas {
+    for commit in commits {
         let statuses = client
-            .get_statuses(&repository.owner.login, &repository.name, &commit_sha)
+            .get_statuses(&repository.owner.login, &repository.name, &commit.sha)
             .await?;
-        let builds = statuses_to_builds(statuses, &commit_sha);
-        for build in builds {
-            points.push(build.into());
-        }
+        let builds = statuses_to_builds(statuses, &commit.sha);
+        points.extend(builds_to_points(builds, commit.committed_date));
 
         let check_runs = client
-            .get_check_runs(&repository.owner.login, &repository.name, &commit_sha)
+            .get_check_runs(&repository.owner.login, &repository.name, &commit.sha)
             .await?;
         let builds = check_runs_to_builds(check_runs);
-        for build in builds {
-            points.push(build.into());
-        }
+        points.extend(builds_to_points(builds, commit.committed_date));
     }
 
     Ok(points)

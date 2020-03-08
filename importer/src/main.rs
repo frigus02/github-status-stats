@@ -4,12 +4,12 @@ extern crate lazy_static;
 mod build;
 mod influxdb;
 
-use build::{get_builds, get_most_recent_builds};
-use github_client::Client;
-use influxdb::{get_last_import, get_status_hook_commits_since, import};
+use build::{get_builds_from_commit_shas, get_most_recent_builds};
+use ghss_github::Client;
+use ghss_models::{influxdb_name, influxdb_read_user};
+use ghss_tracing::{error, info, info_span};
+use influxdb::{get_commits_since_from_hooks, get_last_import, import};
 use secstr::SecUtf8;
-use stats::{influxdb_name, influxdb_read_user};
-use tracing::{error, info, info_span};
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -53,7 +53,7 @@ async fn run() -> Result<(), BoxError> {
             info!(%repository.full_name, "start importing repository");
 
             let influxdb_db = influxdb_name(&repository);
-            let influxdb_client = influxdb_client::Client::new(
+            let influxdb_client = ghss_influxdb::Client::new(
                 &*INFLUXDB_BASE_URL,
                 &influxdb_db,
                 &*INFLUXDB_ADMIN_USERNAME,
@@ -69,9 +69,11 @@ async fn run() -> Result<(), BoxError> {
                 );
 
                 let commit_shas =
-                    get_status_hook_commits_since(&influxdb_client, &last_import).await?;
+                    get_commits_since_from_hooks(&influxdb_client, &last_import).await?;
                 if !commit_shas.is_empty() {
-                    let points = get_builds(&gh_inst_client, &repository, commit_shas).await?;
+                    let points =
+                        get_builds_from_commit_shas(&gh_inst_client, &repository, commit_shas)
+                            .await?;
                     import(&influxdb_client, points).await?;
                 }
             } else {
@@ -95,14 +97,14 @@ async fn run() -> Result<(), BoxError> {
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    tracing::setup(tracing::Config {
+    ghss_tracing::setup(ghss_tracing::Config {
         honeycomb_api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
         honeycomb_dataset: HONEYCOMB_DATASET.clone(),
         service_name: "importer".to_owned(),
     });
 
     let res = async {
-        let import_id = tracing::uuid();
+        let import_id = ghss_tracing::uuid();
         let span = info_span!("import", %import_id);
         let _guard = span.enter();
 
@@ -116,7 +118,7 @@ async fn main() -> Result<(), String> {
     }
     .await;
 
-    tracing::flush().await;
+    ghss_tracing::flush().await;
 
     res
 }
