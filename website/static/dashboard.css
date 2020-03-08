@@ -49,6 +49,7 @@
   position: absolute;
   align-self: center;
   font-size: 1.2rem;
+  z-index: 1;
 }
 
 .table-stat {
