@@ -111,7 +111,8 @@ const prepareData = (raw, valueTransform) => {
   return data;
 };
 
-const formatNumber = n => n.toFixed(2).replace(/(\.0)?0$/, "");
+const formatNumber = n =>
+  n == null ? "" : n.toFixed(2).replace(/(\.0)?0$/, "");
 
 const onResize = cb => window.addEventListener("resize", throttle(cb, 100));
 
@@ -168,7 +169,7 @@ const getUPlotSize = (element, height) => {
   };
 };
 
-const statPanel = async ({
+const statPanel = ({
   title,
   statQuery,
   backgroundQuery,
@@ -201,7 +202,7 @@ const statPanel = async ({
     axes: [{ show: false }, { show: false }]
   };
 
-  const plot = new uPlot.Line(opts, emptyData, element);
+  const plot = new uPlot(opts, emptyData, element);
   onResize(() => plot.setSize(getSize()));
 
   const loadData = async () => {
@@ -217,8 +218,9 @@ const statPanel = async ({
   onTimeRangeChange(loadData);
 };
 
-const graphPanel = async ({
+const graphPanel = ({
   title,
+  height,
   query,
   valueTransform,
   valueFormat,
@@ -227,7 +229,7 @@ const graphPanel = async ({
 }) => {
   const element = document.querySelector(elementSelector);
 
-  const getSize = () => getUPlotSize(element, 375);
+  const getSize = () => getUPlotSize(element, height);
 
   let plot;
   const recreatePlot = (raw, data) => {
@@ -253,7 +255,7 @@ const graphPanel = async ({
         }
       ]
     };
-    plot = new uPlot.Line(opts, data, element);
+    plot = new uPlot(opts, data, element);
   };
 
   recreatePlot([], emptyData);
@@ -268,7 +270,7 @@ const graphPanel = async ({
   onTimeRangeChange(loadData);
 };
 
-const tablePanel = async ({
+const tablePanel = ({
   title,
   query,
   values,
@@ -338,85 +340,103 @@ const tablePanel = async ({
   onTimeRangeChange(loadData);
 };
 
-statPanel({
-  title: "Overall success rate",
-  statQuery: `
-    SELECT mean("successful") AS value
-    FROM "build"
-    WHERE __time_filter__
-  `,
-  backgroundQuery: `
-    SELECT mean("successful") AS value
-    FROM "build"
-    WHERE __time_filter__
-    GROUP BY __time_group_sparse__
-  `,
-  valueTransform: value => value * 100,
-  valueFormat: value => `${formatNumber(value)}%`,
-  elementSelector: "#overall-success"
-});
+window.addEventListener("load", () => {
+  statPanel({
+    title: "Overall success rate",
+    statQuery: `
+      SELECT mean("successful") AS value
+      FROM "build"
+      WHERE __time_filter__
+    `,
+    backgroundQuery: `
+      SELECT mean("successful") AS value
+      FROM "build"
+      WHERE __time_filter__
+      GROUP BY __time_group_sparse__
+    `,
+    valueTransform: value => value * 100,
+    valueFormat: value => `${formatNumber(value)}%`,
+    elementSelector: "#overall-success"
+  });
 
-statPanel({
-  title: "Overall average duration",
-  statQuery: `
-    SELECT mean("duration_ms") AS value
-    FROM "build"
-    WHERE __time_filter__
-  `,
-  backgroundQuery: `
-    SELECT mean("duration_ms") AS value
-    FROM "build"
-    WHERE __time_filter__
-    GROUP BY __time_group_sparse__
-  `,
-  valueTransform: value => value / 1000 / 60,
-  valueFormat: value => `${formatNumber(value)} min`,
-  elementSelector: "#overall-duration"
-});
+  statPanel({
+    title: "Overall average duration",
+    statQuery: `
+      SELECT mean("duration_ms") AS value
+      FROM "build"
+      WHERE __time_filter__
+    `,
+    backgroundQuery: `
+      SELECT mean("duration_ms") AS value
+      FROM "build"
+      WHERE __time_filter__
+      GROUP BY __time_group_sparse__
+    `,
+    valueTransform: value => value / 1000 / 60,
+    valueFormat: value => `${formatNumber(value)} min`,
+    elementSelector: "#overall-duration"
+  });
 
-tablePanel({
-  title: "Statistics by pipeline",
-  query: `
-    SELECT count("commit") AS "count", mean("duration_ms") AS "duration_ms", mean("successful") AS "successful"
-    FROM "build"
-    WHERE __time_filter__
-    GROUP BY "name"
-  `,
-  values: [
-    {
-      name: "count",
-      columnName: "Count",
-      transform: value => value,
-      format: value => value
-    },
-    {
-      name: "duration_ms",
-      columnName: "Duration",
-      transform: value => value / 1000 / 60,
-      format: value => `${formatNumber(value)} min`
-    },
-    {
-      name: "successful",
-      columnName: "Success",
-      transform: value => value * 100,
-      format: value => `${formatNumber(value)}%`
-    }
-  ],
-  labelTag: "name",
-  labelColumnName: "Pipeline",
-  elementSelector: "#stats-by-pipeline"
-});
+  tablePanel({
+    title: "Statistics by pipeline",
+    query: `
+      SELECT count("commit") AS "count", mean("duration_ms") AS "duration_ms", mean("successful") AS "successful"
+      FROM "build"
+      WHERE __time_filter__
+      GROUP BY "name"
+    `,
+    values: [
+      {
+        name: "count",
+        columnName: "Count",
+        transform: value => value,
+        format: value => value
+      },
+      {
+        name: "duration_ms",
+        columnName: "Duration",
+        transform: value => value / 1000 / 60,
+        format: value => `${formatNumber(value)} min`
+      },
+      {
+        name: "successful",
+        columnName: "Success",
+        transform: value => value * 100,
+        format: value => `${formatNumber(value)}%`
+      }
+    ],
+    labelTag: "name",
+    labelColumnName: "Pipeline",
+    elementSelector: "#stats-by-pipeline"
+  });
 
-graphPanel({
-  title: "Duration",
-  query: `
-    SELECT mean("duration_ms") AS value
-    FROM "build"
-    WHERE __time_filter__
-    GROUP BY __time_group_detailed__, "name"
-  `,
-  valueTransform: value => value / 1000 / 60,
-  valueFormat: value => `${formatNumber(value)} min`,
-  labelTag: "name",
-  elementSelector: "#duration"
+  graphPanel({
+    title: "Duration",
+    height: 410,
+    query: `
+      SELECT mean("duration_ms") AS value
+      FROM "build"
+      WHERE __time_filter__
+      GROUP BY __time_group_detailed__, "name"
+    `,
+    valueTransform: value => value / 1000 / 60,
+    valueFormat: value => `${formatNumber(value)} min`,
+    labelTag: "name",
+    elementSelector: "#duration"
+  });
+
+  graphPanel({
+    title: "Attempts",
+    height: 220,
+    query: `
+      SELECT mean("builds") AS value
+      FROM "commit"
+      WHERE __time_filter__
+      GROUP BY __time_group_detailed__, "build_name"
+    `,
+    valueTransform: value => value,
+    valueFormat: value => formatNumber(value),
+    labelTag: "build_name",
+    elementSelector: "#attempts"
+  });
 });

@@ -19,6 +19,9 @@
 #duration {
   grid-area: 2 / 1 / 5 / 3;
 }
+#attempts {
+  grid-area: 3 / 3 / 5 / 5;
+}
 
 .timerange {
   border: none;
