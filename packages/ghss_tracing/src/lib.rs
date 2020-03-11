@@ -1,6 +1,5 @@
 use tracing::Subscriber;
 use tracing_log::LogTracer;
-use uuid::Uuid;
 
 pub use tracing::{
     debug, debug_span, error, error_span, field, field::Empty as EmptyField, info, info_span,
@@ -54,10 +53,4 @@ fn create_subscriber(config: Config) -> impl Subscriber {
         transmission_options: libhoney::transmission::Options::default(),
     };
     honeycomb_tracing::TelemetrySubscriber::new(config.service_name, honeycomb_config)
-}
-
-pub fn uuid() -> String {
-    let mut buf = vec![0; uuid::adapter::Simple::LENGTH];
-    Uuid::new_v4().to_simple().encode_lower(&mut buf);
-    String::from_utf8(buf).expect("uuid produced values outside  UTF-8 range")
 }

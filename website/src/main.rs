@@ -346,42 +346,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let svc = hyper::service::service_fn(move |req: Request<Body>| {
                 let mut warp_svc = warp_svc.clone();
                 async move {
-                    let span = info_span!("request", request_id = %ghss_tracing::uuid(), user_id = ghss_tracing::EmptyField);
-                    let method = req.method().clone();
-                    let path = req.uri().path().to_owned();
-                    let user_agent = req
-                        .headers()
-                        .get(header::USER_AGENT)
-                        .map(|v| v.to_str().expect("user agent to string"))
-                        .unwrap_or("")
-                        .to_owned();
+                    let span = info_span!(
+                        "request",
+                        method = req.method().as_str(),
+                        path = req.uri().path(),
+                        user_agent = req
+                            .headers()
+                            .get(header::USER_AGENT)
+                            .map(|v| v.to_str().expect("user agent to string"))
+                            .unwrap_or(""),
+                        user_id = ghss_tracing::EmptyField,
+                        status = ghss_tracing::EmptyField,
+                        duration_ms = ghss_tracing::EmptyField,
+                    );
+
                     let started = std::time::Instant::now();
-
                     let res = warp_svc.call(req).instrument(span.clone()).await;
-
                     let duration_ms = (std::time::Instant::now() - started).as_millis();
+
+                    span.record("duration_ms", &duration_ms.to_string().as_str());
+
                     let _guard = span.enter();
                     match res.as_ref() {
                         Ok(res) => {
-                            let status = res.status().as_u16();
-                            info!(
-                                %method,
-                                %path,
-                                %user_agent,
-                                status,
-                                %duration_ms,
-                                "request finished",
-                            );
+                            span.record("status", &res.status().as_str());
                         }
                         Err(err) => {
-                            error!(
-                                %method,
-                                %path,
-                                %user_agent,
-                                error = %err,
-                                %duration_ms,
-                                "request failed",
-                            );
+                            error!(error = %err,"request failed");
                         }
                     };
 
