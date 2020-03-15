@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: website
-          image: frigus02/github-status-stats-website
+          image: frigus02/ghss-website
           env:
             - name: HOST
               value: https://github-status-stats.kuehle.me

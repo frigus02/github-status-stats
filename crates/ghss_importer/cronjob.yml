@@ -10,7 +10,7 @@ spec:
         spec:
           containers:
             - name: importer
-              image: frigus02/github-status-stats-importer
+              image: frigus02/ghss-importer
               env:
                 - name: GH_APP_ID
                   value: "50487"

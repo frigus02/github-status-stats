@@ -19,7 +19,7 @@ chmod +x "$HOME/bin/kustomize"
 mkdir -p "$HOME/.kube"
 echo "$KUBE_CONFIG" >"$HOME/.kube/config"
 
-PREFIX=frigus02/github-status-stats
+PREFIX=frigus02/ghss
 IMPORTER=$PREFIX-importer
 WEBSITE=$PREFIX-website
 TAG=$(git rev-parse HEAD)

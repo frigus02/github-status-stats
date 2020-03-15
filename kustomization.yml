@@ -1,13 +1,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- importer/cronjob.yml
+- crates/ghss_importer/cronjob.yml
+- crates/ghss_website/deployment.yml
+- crates/ghss_website/ingress.yml
+- crates/ghss_website/service.yml
 - influxdb/deployment.yml
 - influxdb/pvc.yml
 - influxdb/service.yml
-- website/deployment.yml
-- website/ingress.yml
-- website/service.yml
 commonLabels:
   group: github-status-stats
 configMapGenerator:

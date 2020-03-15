@@ -11,6 +11,6 @@ cargo install cargo-watch
 Then start
 
 ```
-cd website/
+cd crates/ghss_website/
 cargo watch -x run
 ```

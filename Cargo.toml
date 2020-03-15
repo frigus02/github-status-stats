@@ -1,9 +1,5 @@
 [workspace]
-members = [
-    "importer",
-    "packages/*",
-    "website",
-]
+members = [ "crates/*" ]
 
 [patch.crates-io]
 # Current version of libhoney-rust on crates.io uses fixed version numbers for
