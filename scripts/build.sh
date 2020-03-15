@@ -9,7 +9,7 @@ else
 fi
 
 BASE=$PREFIX-base
-docker pull $BASE
+docker pull $BASE || true
 docker build --cache-from=$BASE -t $BASE -f docker-base/Dockerfile .
 
 IMPORTER=$PREFIX-importer
