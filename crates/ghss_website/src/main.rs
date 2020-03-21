@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+mod config;
 mod cookie;
 mod ctrlc;
 mod github_hooks;
@@ -9,13 +10,14 @@ mod templates;
 mod token;
 
 use bytes::Bytes;
+use config::with_config;
 use ghss_models::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
 use ghss_tracing::{error, info, info_span, Instrument};
-use secstr::{SecStr, SecUtf8};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::convert::TryFrom;
+use std::sync::Arc;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
 use token::{optional_token, OptionalToken};
 use warp::{
@@ -24,33 +26,9 @@ use warp::{
     Filter,
 };
 
-const COOKIE_NAME: &str = "token";
-lazy_static! {
-    static ref HOST: String = std::env::var("HOST").expect("env HOST");
-    static ref GH_REDIRECT_URI: String = format!("{}/setup/authorized", *HOST);
-    static ref GH_CLIENT_ID: String = std::env::var("GH_CLIENT_ID").expect("env GH_CLIENT_ID");
-    static ref GH_CLIENT_SECRET: SecUtf8 =
-        SecUtf8::from(std::env::var("GH_CLIENT_SECRET").expect("env GH_CLIENT_SECRET"));
-    static ref GH_WEBHOOK_SECRET: SecStr =
-        SecStr::from(std::env::var("GH_WEBHOOK_SECRET").expect("env GH_WEBHOOK_SECRET"));
-    static ref INFLUXDB_BASE_URL: String =
-        std::env::var("INFLUXDB_BASE_URL").expect("env INFLUXDB_BASE_URL");
-    static ref INFLUXDB_ADMIN_USERNAME: String =
-        std::env::var("INFLUXDB_ADMIN_USERNAME").expect("env INFLUXDB_ADMIN_USERNAME");
-    static ref INFLUXDB_ADMIN_PASSWORD: SecUtf8 = SecUtf8::from(
-        std::env::var("INFLUXDB_ADMIN_PASSWORD").expect("env INFLUXDB_ADMIN_PASSWORD")
-    );
-    static ref INFLUXDB_READ_PASSWORD: SecUtf8 =
-        SecUtf8::from(std::env::var("INFLUXDB_READ_PASSWORD").expect("env INFLUXDB_READ_PASSWORD"));
-    static ref TOKEN_SECRET: SecStr =
-        SecStr::from(std::env::var("TOKEN_SECRET").expect("env TOKEN_SECRET"));
-    static ref HONEYCOMB_API_KEY: SecUtf8 =
-        SecUtf8::from(std::env::var("HONEYCOMB_API_KEY").expect("env HONEYCOMB_API_KEY"));
-    static ref HONEYCOMB_DATASET: String =
-        std::env::var("HONEYCOMB_DATASET").expect("env HONEYCOMB_DATASET");
-}
+type Config = Arc<config::Config>;
 
-async fn index_route(token: OptionalToken) -> Result<impl warp::Reply, Infallible> {
+async fn index_route(token: OptionalToken, config: Config) -> Result<impl warp::Reply, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         OptionalToken::Some(user) => {
             let data = IndexTemplate::LoggedIn {
@@ -60,20 +38,29 @@ async fn index_route(token: OptionalToken) -> Result<impl warp::Reply, Infallibl
                     .into_iter()
                     .map(|repo| RepositoryAccess { name: repo.name })
                     .collect(),
-                login_url: ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None),
+                login_url: ghss_github::oauth::login_url(
+                    &config.gh_client_id,
+                    &config.gh_redirect_uri,
+                    None,
+                ),
             };
             let render = templates::render_index(&data);
             Box::new(warp::reply::html(render))
         }
         OptionalToken::Expired => {
-            let login_url = ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None);
+            let login_url =
+                ghss_github::oauth::login_url(&config.gh_client_id, &config.gh_redirect_uri, None);
             Box::new(warp::redirect::temporary(
                 Uri::try_from(login_url).expect("Url to Uri"),
             ))
         }
         OptionalToken::None => {
             let data = IndexTemplate::Anonymous {
-                login_url: ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None),
+                login_url: ghss_github::oauth::login_url(
+                    &config.gh_client_id,
+                    &config.gh_redirect_uri,
+                    None,
+                ),
             };
             let render = templates::render_index(&data);
             Box::new(warp::reply::html(render))
@@ -87,6 +74,7 @@ async fn dashboard_route(
     owner: String,
     repo: String,
     token: OptionalToken,
+    config: Config,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let name = format!("{}/{}", owner, repo);
     let reply: Box<dyn warp::Reply> = match token {
@@ -108,8 +96,8 @@ async fn dashboard_route(
         }
         OptionalToken::Expired | OptionalToken::None => {
             let login_url = ghss_github::oauth::login_url(
-                &*GH_CLIENT_ID,
-                &GH_REDIRECT_URI,
+                &config.gh_client_id,
+                &config.gh_redirect_uri,
                 Some(path_to_state(format!("/d/{}/{}", owner, repo))),
             );
             Box::new(warp::redirect::temporary(
@@ -136,6 +124,7 @@ struct ApiQueryResponse {
 async fn api_query_route(
     params: ApiQueryParams,
     token: OptionalToken,
+    config: Config,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         OptionalToken::Some(user)
@@ -144,10 +133,10 @@ async fn api_query_route(
             let influxdb_db = influxdb_name_unsafe(params.repository);
             let res: Result<Vec<ApiQueryResponse>, Box<dyn std::error::Error>> = async {
                 let client = ghss_influxdb::Client::new(
-                    &*INFLUXDB_BASE_URL,
+                    &config.influxdb_base_url,
                     &influxdb_db,
                     &influxdb_read_user_unsafe(params.repository),
-                    &*INFLUXDB_READ_PASSWORD.unsecure(),
+                    &config.influxdb_read_password.unsecure(),
                 )?;
                 let res = client
                     .query(&params.query)
@@ -184,16 +173,17 @@ async fn api_query_route(
 
 async fn setup_authorized_route(
     info: ghss_github::oauth::AuthCodeQuery,
+    config: Config,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let token = async {
         let github_token = ghss_github::oauth::exchange_code(
-            &*GH_CLIENT_ID,
-            &*GH_CLIENT_SECRET.unsecure(),
-            &*GH_REDIRECT_URI,
+            &config.gh_client_id,
+            &config.gh_client_secret.unsecure(),
+            &config.gh_redirect_uri,
             &info,
         )
         .await?;
-        token::generate(&github_token.access_token, TOKEN_SECRET.unsecure()).await
+        token::generate(&github_token.access_token, config.token_secret.unsecure()).await
     }
     .await;
 
@@ -204,7 +194,7 @@ async fn setup_authorized_route(
                 Response::builder()
                     .status(StatusCode::TEMPORARY_REDIRECT)
                     .header("location", redirect_path)
-                    .header("set-cookie", cookie::set(COOKIE_NAME, &token))
+                    .header("set-cookie", cookie::set(config.cookie_name, &token))
                     .body(Body::empty())
                     .unwrap(),
             ))
@@ -213,11 +203,11 @@ async fn setup_authorized_route(
     }
 }
 
-async fn logout_route() -> Result<impl warp::Reply, Infallible> {
+async fn logout_route(config: Config) -> Result<impl warp::Reply, Infallible> {
     Ok(Response::builder()
         .status(StatusCode::TEMPORARY_REDIRECT)
         .header("location", "/")
-        .header("set-cookie", cookie::remove(COOKIE_NAME))
+        .header("set-cookie", cookie::remove(config.cookie_name))
         .body(Body::empty())
         .unwrap())
 }
@@ -226,20 +216,25 @@ async fn hooks_route(
     signature: String,
     event: String,
     body: Bytes,
+    config: Config,
 ) -> Result<impl warp::Reply, Infallible> {
     let res: Result<(), Box<dyn std::error::Error>> = async {
-        let payload =
-            github_hooks::deserialize(signature, event, body, &*GH_WEBHOOK_SECRET.unsecure())?;
+        let payload = github_hooks::deserialize(
+            signature,
+            event,
+            body,
+            &config.gh_webhook_secret.unsecure(),
+        )?;
 
         info!("Hook: {:?}", payload);
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
                 let influxdb_db = influxdb_name(&check_run.repository);
                 let client = ghss_influxdb::Client::new(
-                    &*INFLUXDB_BASE_URL,
+                    &config.influxdb_base_url,
                     &influxdb_db,
-                    &*INFLUXDB_ADMIN_USERNAME,
-                    &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
+                    &config.influxdb_admin_username,
+                    &config.influxdb_admin_password.unsecure(),
                 )?;
                 client
                     .write(vec![
@@ -260,10 +255,10 @@ async fn hooks_route(
             github_hooks::Payload::Status(status) => {
                 let influxdb_db = influxdb_name(&status.repository);
                 let client = ghss_influxdb::Client::new(
-                    &*INFLUXDB_BASE_URL,
+                    &config.influxdb_base_url,
                     &influxdb_db,
-                    &*INFLUXDB_ADMIN_USERNAME,
-                    &*INFLUXDB_ADMIN_PASSWORD.unsecure(),
+                    &config.influxdb_admin_username,
+                    &config.influxdb_admin_password.unsecure(),
                 )?;
                 client
                     .write(vec![ghss_models::Hook {
@@ -315,15 +310,22 @@ pub fn path_from_state(state: String) -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = config::load();
+    let config = Arc::new(config);
+
     ghss_tracing::setup(ghss_tracing::Config {
-        honeycomb_api_key: HONEYCOMB_API_KEY.unsecure().to_owned(),
-        honeycomb_dataset: HONEYCOMB_DATASET.clone(),
+        honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
+        honeycomb_dataset: config.honeycomb_dataset.clone(),
         service_name: "website".to_owned(),
     });
 
     let index = warp::get()
         .and(warp::path::end())
-        .and(optional_token(COOKIE_NAME, TOKEN_SECRET.unsecure()))
+        .and(optional_token(
+            config.cookie_name,
+            config.token_secret.unsecure().into(),
+        ))
+        .and(with_config(config.clone()))
         .and_then(index_route);
 
     let favicon = warp::get()
@@ -334,22 +336,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let dashboard = warp::get()
         .and(warp::path!("d" / String / String))
-        .and(optional_token(COOKIE_NAME, TOKEN_SECRET.unsecure()))
+        .and(optional_token(
+            config.cookie_name,
+            config.token_secret.unsecure().into(),
+        ))
+        .and(with_config(config.clone()))
         .and_then(dashboard_route);
 
     let api_query = warp::get()
         .and(warp::path!("api" / "query"))
         .and(warp::query())
-        .and(optional_token(COOKIE_NAME, TOKEN_SECRET.unsecure()))
+        .and(optional_token(
+            config.cookie_name,
+            config.token_secret.unsecure().into(),
+        ))
+        .and(with_config(config.clone()))
         .and_then(api_query_route);
 
     let setup_authorized = warp::get()
         .and(warp::path!("setup" / "authorized"))
         .and(warp::query::<ghss_github::oauth::AuthCodeQuery>())
+        .and(with_config(config.clone()))
         .and_then(setup_authorized_route);
 
     let logout = warp::get()
         .and(warp::path!("logout"))
+        .and(with_config(config.clone()))
         .and_then(logout_route);
 
     let hooks = warp::post()
@@ -357,6 +369,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::header("X-Hub-Signature"))
         .and(warp::header("X-GitHub-Event"))
         .and(warp::body::bytes())
+        .and(with_config(config.clone()))
         .and_then(hooks_route);
 
     let routes = index

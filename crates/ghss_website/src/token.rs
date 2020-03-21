@@ -98,11 +98,11 @@ pub enum OptionalToken {
 
 pub fn optional_token(
     cookie_name: &'static str,
-    token_secret: &'static [u8],
+    token_secret: Vec<u8>,
 ) -> impl Filter<Extract = (OptionalToken,), Error = Infallible> + Clone {
     warp::cookie::optional(cookie_name).map(move |raw_token: Option<String>| match raw_token {
         Some(raw_token) => {
-            let user = validate(&raw_token, token_secret);
+            let user = validate(&raw_token, token_secret.as_slice());
             match user {
                 Ok(user) => {
                     ghss_tracing::Span::current().record("user_id", &user.id.as_str());
