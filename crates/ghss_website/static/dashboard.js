@@ -12,7 +12,7 @@ const startOfDay = date => {
   d.setMinutes(0);
   d.setSeconds(0);
   d.setMilliseconds(0);
-  return d;
+  return d.getTime();
 };
 
 const endOfDay = date => {
@@ -21,7 +21,7 @@ const endOfDay = date => {
   d.setMinutes(59);
   d.setSeconds(59);
   d.setMilliseconds(999);
-  return d;
+  return d.getTime();
 };
 
 const closestDurationUnit = ms => {
@@ -51,9 +51,14 @@ const closestDurationUnit = ms => {
 };
 
 const timeRange = () => {
-  const startDate = startOfDay(startDateInput.valueAsDate);
-  const endDate = endOfDay(endDateInput.valueAsDate);
-  const range = endDate.getTime() - startDate.getTime();
+  const start = startOfDay(startDateInput.valueAsNumber);
+  const end = endOfDay(endDateInput.valueAsNumber);
+  return { start, end };
+};
+
+const timeRangeFilter = () => {
+  const { start, end } = timeRange();
+  const range = end - start;
   if (range <= 0) {
     throw new Error(
       `Invalid time range ${range}ms. Select an end date, with is equal to or after the start date.`
@@ -61,7 +66,7 @@ const timeRange = () => {
   }
 
   return {
-    filter: `time >= ${startDate.getTime()}ms AND time <= ${endDate.getTime()}ms`,
+    filter: `time >= ${start}ms AND time <= ${end}ms`,
     // Roughly 720 entries
     groupByDetailed: `time(${closestDurationUnit(range / 720)})`,
     // Roughly 120 entries
@@ -70,7 +75,7 @@ const timeRange = () => {
 };
 
 const queryData = async rawQuery => {
-  const time = timeRange();
+  const time = timeRangeFilter();
   const query = rawQuery
     .replace("__time_filter__", time.filter)
     .replace("__time_group_sparse__", time.groupBySparse)
@@ -91,11 +96,17 @@ const queryData = async rawQuery => {
   return res.json();
 };
 
-const emptyData = [[0], [Number.NaN]];
+const emptyData = () => {
+  const { start, end } = timeRange();
+  return [
+    [start / 1000, end / 1000],
+    [null, null]
+  ];
+};
 
 const prepareData = (raw, valueTransform) => {
   if (raw.length === 0) {
-    return emptyData;
+    return emptyData();
   }
 
   const x = raw[0].columns.indexOf("time");
@@ -182,7 +193,7 @@ const statPanel = ({
   const statEl = document.createElement("div");
   element.appendChild(statEl);
   statEl.className = "single-stat";
-  statEl.textContent = valueFormat(emptyData[1][0]);
+  statEl.textContent = valueFormat(emptyData()[1][0]);
 
   const getSize = () => getUPlotSize(element, 100);
   const opts = {
@@ -202,7 +213,7 @@ const statPanel = ({
     axes: [{ show: false }, { show: false }]
   };
 
-  const plot = new uPlot(opts, emptyData, element);
+  const plot = new uPlot(opts, emptyData(), element);
   onResize(() => plot.setSize(getSize()));
 
   const loadData = async () => {
@@ -258,7 +269,7 @@ const graphPanel = ({
     plot = new uPlot(opts, data, element);
   };
 
-  recreatePlot([], emptyData);
+  recreatePlot([], emptyData());
   onResize(() => plot.setSize(getSize()));
 
   const loadData = async () => {
