@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>GitHub Status Stats</title>
+    <title>Status Stats for GitHub</title>
     <link rel="stylesheet" href="/static/base.css" />
     <link rel="stylesheet" href="/static/index.css" />
   </head>
   <body>
     <header>
-      <h1>GitHub Status Stats</h1>
+      <h1>Status Stats for GitHub</h1>
       {{#if LoggedIn}}
       <div class="user">
         <div>Logged in as</div>
@@ -21,7 +21,7 @@
       <a href="{{Anonymous.login_url}}">Login with GitHub</a>
       {{/if}}{{#if LoggedIn}}
       <h2>Repositories</h2>
-      <p>GitHub Status Stats is setup for the following repositories:</p>
+      <p>Status Stats for GitHub is setup for the following repositories:</p>
       <ul>
         {{#each LoggedIn.repositories}}
         <li>

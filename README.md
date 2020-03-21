@@ -1,4 +1,4 @@
-# GitHub Status Stats
+# Status Stats for GitHub
 
 If you're using any CI system on your GitHub repository, chances are it pushes commit statuses to GitHub. The most recent ones are shown on the commit, as a :heavy_check_mark: tick or :x: cross.
 
