@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::convert::TryFrom;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
+use token::{optional_token, OptionalToken};
 use warp::{
     http::{Response, StatusCode, Uri},
     hyper::{self, header, service::Service, Body, Request},
@@ -49,34 +50,47 @@ lazy_static! {
         std::env::var("HONEYCOMB_DATASET").expect("env HONEYCOMB_DATASET");
 }
 
-async fn index_route(token: Option<token::User>) -> Result<impl warp::Reply, Infallible> {
-    let data = match token {
-        Some(user) => IndexTemplate::LoggedIn {
-            user: user.name,
-            repositories: user
-                .repositories
-                .into_iter()
-                .map(|repo| RepositoryAccess { name: repo.name })
-                .collect(),
-            login_url: ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None),
-        },
-        None => IndexTemplate::Anonymous {
-            login_url: ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None),
-        },
+async fn index_route(token: OptionalToken) -> Result<impl warp::Reply, Infallible> {
+    let reply: Box<dyn warp::Reply> = match token {
+        OptionalToken::Some(user) => {
+            let data = IndexTemplate::LoggedIn {
+                user: user.name,
+                repositories: user
+                    .repositories
+                    .into_iter()
+                    .map(|repo| RepositoryAccess { name: repo.name })
+                    .collect(),
+                login_url: ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None),
+            };
+            let render = templates::render_index(&data);
+            Box::new(warp::reply::html(render))
+        }
+        OptionalToken::Expired => {
+            let login_url = ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None);
+            Box::new(warp::redirect::temporary(
+                Uri::try_from(login_url).expect("Url to Uri"),
+            ))
+        }
+        OptionalToken::None => {
+            let data = IndexTemplate::Anonymous {
+                login_url: ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None),
+            };
+            let render = templates::render_index(&data);
+            Box::new(warp::reply::html(render))
+        }
     };
 
-    let render = templates::render_index(&data);
-    Ok(warp::reply::html(render))
+    Ok(reply)
 }
 
 async fn dashboard_route(
     owner: String,
     repo: String,
-    token: Option<token::User>,
+    token: OptionalToken,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let name = format!("{}/{}", owner, repo);
     let reply: Box<dyn warp::Reply> = match token {
-        Some(user) => {
+        OptionalToken::Some(user) => {
             let data = match user.repositories.into_iter().find(|r| r.name == name) {
                 Some(repo) => DashboardData::Data {
                     repository_id: repo.id,
@@ -85,7 +99,6 @@ async fn dashboard_route(
                     message: "Not found".to_string(),
                 },
             };
-
             let render = templates::render_dashboard(&DashboardTemplate {
                 user: user.name,
                 repository_name: name,
@@ -93,7 +106,7 @@ async fn dashboard_route(
             });
             Box::new(warp::reply::html(render))
         }
-        None => {
+        OptionalToken::Expired | OptionalToken::None => {
             let login_url = ghss_github::oauth::login_url(
                 &*GH_CLIENT_ID,
                 &GH_REDIRECT_URI,
@@ -122,10 +135,12 @@ struct ApiQueryResponse {
 
 async fn api_query_route(
     params: ApiQueryParams,
-    token: Option<token::User>,
+    token: OptionalToken,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
-        Some(user) if user.repositories.iter().any(|r| r.id == params.repository) => {
+        OptionalToken::Some(user)
+            if user.repositories.iter().any(|r| r.id == params.repository) =>
+        {
             let influxdb_db = influxdb_name_unsafe(params.repository);
             let res: Result<Vec<ApiQueryResponse>, Box<dyn std::error::Error>> = async {
                 let client = ghss_influxdb::Client::new(
@@ -298,25 +313,6 @@ pub fn path_from_state(state: String) -> String {
     result.unwrap_or_else(|_| "/".to_owned())
 }
 
-pub fn optional_token() -> impl Filter<Extract = (Option<token::User>,), Error = Infallible> + Clone
-{
-    warp::cookie::optional(COOKIE_NAME).map(|raw_token: Option<String>| {
-        raw_token.and_then(|t| {
-            let user = token::validate(&t, TOKEN_SECRET.unsecure());
-            match user {
-                Ok(user) => {
-                    ghss_tracing::Span::current().record("user_id", &user.id.as_str());
-                    Some(user)
-                }
-                Err(err) => {
-                    error!(error = %err, "token validation failed");
-                    None
-                }
-            }
-        })
-    })
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ghss_tracing::setup(ghss_tracing::Config {
@@ -327,7 +323,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let index = warp::get()
         .and(warp::path::end())
-        .and(optional_token())
+        .and(optional_token(COOKIE_NAME, TOKEN_SECRET.unsecure()))
         .and_then(index_route);
 
     let favicon = warp::get()
@@ -338,13 +334,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let dashboard = warp::get()
         .and(warp::path!("d" / String / String))
-        .and(optional_token())
+        .and(optional_token(COOKIE_NAME, TOKEN_SECRET.unsecure()))
         .and_then(dashboard_route);
 
     let api_query = warp::get()
         .and(warp::path!("api" / "query"))
         .and(warp::query())
-        .and(optional_token())
+        .and(optional_token(COOKIE_NAME, TOKEN_SECRET.unsecure()))
         .and_then(api_query_route);
 
     let setup_authorized = warp::get()
