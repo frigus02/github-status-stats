@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate lazy_static;
-
 mod config;
 mod cookie;
 mod ctrlc;
@@ -18,7 +15,9 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::convert::TryFrom;
 use std::sync::Arc;
-use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
+use templates::{
+    with_templates, DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess,
+};
 use token::{optional_token, OptionalToken};
 use warp::{
     http::{Response, StatusCode, Uri},
@@ -27,8 +26,13 @@ use warp::{
 };
 
 type Config = Arc<config::Config>;
+type Templates = Arc<templates::Templates<'static>>;
 
-async fn index_route(token: OptionalToken, config: Config) -> Result<impl warp::Reply, Infallible> {
+async fn index_route(
+    token: OptionalToken,
+    templates: Templates,
+    config: Config,
+) -> Result<impl warp::Reply, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         OptionalToken::Some(user) => {
             let data = IndexTemplate::LoggedIn {
@@ -44,7 +48,7 @@ async fn index_route(token: OptionalToken, config: Config) -> Result<impl warp::
                     None,
                 ),
             };
-            let render = templates::render_index(&data);
+            let render = templates.render_index(&data);
             Box::new(warp::reply::html(render))
         }
         OptionalToken::Expired => {
@@ -62,7 +66,7 @@ async fn index_route(token: OptionalToken, config: Config) -> Result<impl warp::
                     None,
                 ),
             };
-            let render = templates::render_index(&data);
+            let render = templates.render_index(&data);
             Box::new(warp::reply::html(render))
         }
     };
@@ -74,6 +78,7 @@ async fn dashboard_route(
     owner: String,
     repo: String,
     token: OptionalToken,
+    templates: Templates,
     config: Config,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let name = format!("{}/{}", owner, repo);
@@ -87,7 +92,7 @@ async fn dashboard_route(
                     message: "Not found".to_string(),
                 },
             };
-            let render = templates::render_dashboard(&DashboardTemplate {
+            let render = templates.render_dashboard(&DashboardTemplate {
                 user: user.name,
                 repository_name: name,
                 data,
@@ -312,6 +317,8 @@ pub fn path_from_state(state: String) -> String {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::load();
     let config = Arc::new(config);
+    let templates = templates::load();
+    let templates = Arc::new(templates);
 
     ghss_tracing::setup(ghss_tracing::Config {
         honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
@@ -325,6 +332,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.cookie_name,
             config.token_secret.unsecure().into(),
         ))
+        .and(with_templates(templates.clone()))
         .and(with_config(config.clone()))
         .and_then(index_route);
 
@@ -340,6 +348,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.cookie_name,
             config.token_secret.unsecure().into(),
         ))
+        .and(with_templates(templates.clone()))
         .and(with_config(config.clone()))
         .and_then(dashboard_route);
 
