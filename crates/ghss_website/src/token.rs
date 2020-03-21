@@ -1,7 +1,13 @@
 use super::github_queries::{get_github_user, GitHubUser};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use ghss_tracing::error;
+use jsonwebtoken::{
+    decode, encode, errors::Error as TokenError, Algorithm, DecodingKey, EncodingKey, Header,
+    Validation,
+};
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
 use std::time::SystemTime;
+use warp::Filter;
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -63,7 +69,7 @@ pub struct User {
     pub repositories: Vec<Repository>,
 }
 
-pub fn validate(token: &str, secret: &[u8]) -> Result<User, BoxError> {
+fn validate(token: &str, secret: &[u8]) -> Result<User, TokenError> {
     let token = decode::<Claims>(
         &token,
         &DecodingKey::from_secret(secret),
@@ -81,5 +87,34 @@ pub fn validate(token: &str, secret: &[u8]) -> Result<User, BoxError> {
                 name: r.name,
             })
             .collect(),
+    })
+}
+
+pub enum OptionalToken {
+    Some(User),
+    Expired,
+    None,
+}
+
+pub fn optional_token(
+    cookie_name: &'static str,
+    token_secret: Vec<u8>,
+) -> impl Filter<Extract = (OptionalToken,), Error = Infallible> + Clone {
+    warp::cookie::optional(cookie_name).map(move |raw_token: Option<String>| match raw_token {
+        Some(raw_token) => {
+            let user = validate(&raw_token, token_secret.as_slice());
+            match user {
+                Ok(user) => {
+                    ghss_tracing::Span::current().record("user_id", &user.id.as_str());
+                    OptionalToken::Some(user)
+                }
+                Err(err) if err.to_string() == "ExpiredSignature" => OptionalToken::Expired,
+                Err(err) => {
+                    error!(error = %err, "token validation failed");
+                    OptionalToken::None
+                }
+            }
+        }
+        None => OptionalToken::None,
     })
 }

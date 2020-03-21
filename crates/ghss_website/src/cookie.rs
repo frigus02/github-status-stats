@@ -1,13 +1,25 @@
-use chrono::{Duration, Utc};
+use chrono::{
+    format::{DelayedFormat, StrftimeItems},
+    DateTime, Duration, Utc,
+};
+
+fn expires(date: DateTime<Utc>) -> DelayedFormat<StrftimeItems<'static>> {
+    date.format("%a, %d %b %Y %H:%M:%S GMT")
+}
 
 pub fn set(name: &str, value: &str) -> String {
-    format!("{}={}; Path=/; SameSite=Lax; Secure; HttpOnly", name, value)
+    format!(
+        "{}={}; Path=/; Expires={}; SameSite=Lax; Secure; HttpOnly",
+        name,
+        value,
+        expires(Utc::now() + Duration::days(1))
+    )
 }
 
 pub fn remove(name: &str) -> String {
     format!(
         "{}=; Path=/; Expires={}",
         name,
-        (Utc::now() - Duration::days(1)).format("%a, %d %b %Y %H:%M:%S GMT")
+        expires(Utc::now() - Duration::days(1))
     )
 }
