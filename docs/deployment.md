@@ -63,5 +63,5 @@ See [scripts/build.sh](../scripts/build.sh) for detailed steps.
 - Create localhost ingress for website.
 
   ```sh
-  kubectl apply -f website/ingress-localhost.yml
+  kubectl apply -f crates/ghss_website/ingress-localhost.yml
   ```

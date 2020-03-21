@@ -15,6 +15,7 @@ use secstr::{SecStr, SecUtf8};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::convert::TryFrom;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
 use warp::{
     http::{Response, StatusCode, Uri},
@@ -29,10 +30,6 @@ lazy_static! {
     static ref GH_CLIENT_ID: String = std::env::var("GH_CLIENT_ID").expect("env GH_CLIENT_ID");
     static ref GH_CLIENT_SECRET: SecUtf8 =
         SecUtf8::from(std::env::var("GH_CLIENT_SECRET").expect("env GH_CLIENT_SECRET"));
-    static ref GH_LOGIN_URL: String =
-        ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI)
-            .expect("construct GitHub login URL")
-            .into_string();
     static ref GH_WEBHOOK_SECRET: SecStr =
         SecStr::from(std::env::var("GH_WEBHOOK_SECRET").expect("env GH_WEBHOOK_SECRET"));
     static ref INFLUXDB_BASE_URL: String =
@@ -61,10 +58,10 @@ async fn index_route(token: Option<token::User>) -> Result<impl warp::Reply, Inf
                 .into_iter()
                 .map(|repo| RepositoryAccess { name: repo.name })
                 .collect(),
-            login_url: GH_LOGIN_URL.clone(),
+            login_url: ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None),
         },
         None => IndexTemplate::Anonymous {
-            login_url: GH_LOGIN_URL.clone(),
+            login_url: ghss_github::oauth::login_url(&*GH_CLIENT_ID, &GH_REDIRECT_URI, None),
         },
     };
 
@@ -96,7 +93,16 @@ async fn dashboard_route(
             });
             Box::new(warp::reply::html(render))
         }
-        None => Box::new(warp::redirect::temporary(Uri::from_static("/"))),
+        None => {
+            let login_url = ghss_github::oauth::login_url(
+                &*GH_CLIENT_ID,
+                &GH_REDIRECT_URI,
+                Some(path_to_state(format!("/d/{}/{}", owner, repo))),
+            );
+            Box::new(warp::redirect::temporary(
+                Uri::try_from(login_url).expect("Url to Uri"),
+            ))
+        }
     };
     Ok(reply)
 }
@@ -169,7 +175,7 @@ async fn setup_authorized_route(
             &*GH_CLIENT_ID,
             &*GH_CLIENT_SECRET.unsecure(),
             &*GH_REDIRECT_URI,
-            info,
+            &info,
         )
         .await?;
         token::generate(&github_token.access_token, TOKEN_SECRET.unsecure()).await
@@ -177,14 +183,17 @@ async fn setup_authorized_route(
     .await;
 
     match token {
-        Ok(token) => Ok(Box::new(
-            Response::builder()
-                .status(StatusCode::TEMPORARY_REDIRECT)
-                .header("location", "/")
-                .header("set-cookie", cookie::set(COOKIE_NAME, &token))
-                .body(Body::empty())
-                .unwrap(),
-        )),
+        Ok(token) => {
+            let redirect_path = info.state.map_or("/".to_owned(), path_from_state);
+            Ok(Box::new(
+                Response::builder()
+                    .status(StatusCode::TEMPORARY_REDIRECT)
+                    .header("location", redirect_path)
+                    .header("set-cookie", cookie::set(COOKIE_NAME, &token))
+                    .body(Body::empty())
+                    .unwrap(),
+            ))
+        }
         Err(_) => Ok(Box::new(StatusCode::INTERNAL_SERVER_ERROR)),
     }
 }
@@ -263,6 +272,30 @@ async fn hooks_route(
             Ok(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+pub fn path_to_state(path: String) -> String {
+    base64::encode(path)
+}
+
+pub fn path_from_state(state: String) -> String {
+    let result: Result<String, Box<dyn std::error::Error>> = base64::decode(state)
+        .map_err(|err| err.into())
+        .and_then(|bytes| Ok(Uri::try_from(bytes.as_slice())?))
+        .and_then(|uri| {
+            if uri.scheme().is_some() {
+                return Err("only path allowed but found scheme".into());
+            }
+            if uri.authority().is_some() {
+                return Err("only path allowed but found authority".into());
+            }
+
+            Ok(uri
+                .path_and_query()
+                .ok_or("path required but not found")?
+                .to_string())
+        });
+    result.unwrap_or_else(|_| "/".to_owned())
 }
 
 pub fn optional_token() -> impl Filter<Extract = (Option<token::User>,), Error = Infallible> + Clone
@@ -346,42 +379,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let svc = hyper::service::service_fn(move |req: Request<Body>| {
                 let mut warp_svc = warp_svc.clone();
                 async move {
-                    let span = info_span!("request", request_id = %ghss_tracing::uuid(), user_id = ghss_tracing::EmptyField);
-                    let method = req.method().clone();
-                    let path = req.uri().path().to_owned();
-                    let user_agent = req
-                        .headers()
-                        .get(header::USER_AGENT)
-                        .map(|v| v.to_str().expect("user agent to string"))
-                        .unwrap_or("")
-                        .to_owned();
+                    let span = info_span!(
+                        "request",
+                        method = req.method().as_str(),
+                        path = req.uri().path(),
+                        user_agent = req
+                            .headers()
+                            .get(header::USER_AGENT)
+                            .map(|v| v.to_str().expect("user agent to string"))
+                            .unwrap_or(""),
+                        user_id = ghss_tracing::EmptyField,
+                        status = ghss_tracing::EmptyField,
+                        duration_ms = ghss_tracing::EmptyField,
+                    );
+
                     let started = std::time::Instant::now();
-
                     let res = warp_svc.call(req).instrument(span.clone()).await;
-
                     let duration_ms = (std::time::Instant::now() - started).as_millis();
+
+                    span.record("duration_ms", &duration_ms.to_string().as_str());
+
                     let _guard = span.enter();
                     match res.as_ref() {
                         Ok(res) => {
-                            let status = res.status().as_u16();
-                            info!(
-                                %method,
-                                %path,
-                                %user_agent,
-                                status,
-                                %duration_ms,
-                                "request finished",
-                            );
+                            span.record("status", &res.status().as_str());
                         }
                         Err(err) => {
-                            error!(
-                                %method,
-                                %path,
-                                %user_agent,
-                                error = %err,
-                                %duration_ms,
-                                "request failed",
-                            );
+                            error!(error = %err,"request failed");
                         }
                     };
 

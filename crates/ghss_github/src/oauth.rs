@@ -16,18 +16,24 @@ pub struct AuthToken {
     pub token_type: String,
 }
 
-pub fn login_url(client_id: &str, redirect_uri: &str) -> Result<Url, BoxError> {
-    Ok(Url::parse_with_params(
+pub fn login_url(client_id: &str, redirect_uri: &str, state: Option<String>) -> String {
+    Url::parse_with_params(
         "https://github.com/login/oauth/authorize",
-        &[("client_id", client_id), ("redirect_uri", redirect_uri)],
-    )?)
+        &[
+            ("client_id", client_id),
+            ("redirect_uri", redirect_uri),
+            ("state", state.as_ref().unwrap_or(&"".to_owned())),
+        ],
+    )
+    .expect("cannot parse GitHub base url")
+    .into_string()
 }
 
 pub async fn exchange_code(
     client_id: &str,
     client_secret: &str,
     redirect_uri: &str,
-    code: AuthCodeQuery,
+    code: &AuthCodeQuery,
 ) -> Result<AuthToken, BoxError> {
     let url = Url::parse("https://github.com/login/oauth/access_token")?;
     let res = Client::new()

@@ -104,15 +104,17 @@ async fn main() -> Result<(), String> {
     });
 
     let res = async {
-        let import_id = ghss_tracing::uuid();
-        let span = info_span!("import", %import_id);
+        let span = info_span!("import");
         let _guard = span.enter();
 
         match run().await {
             Ok(_) => Ok(()),
             Err(err) => {
                 error!(error = %err, "import failed");
-                Err(format!("Import {} failed", import_id))
+                Err(format!(
+                    "Import {} failed",
+                    span.id().map_or(0, |id| id.into_u64())
+                ))
             }
         }
     }
