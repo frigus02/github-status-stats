@@ -12,7 +12,7 @@ pub fn set(name: &str, value: &str) -> String {
         "{}={}; Path=/; Expires={}; SameSite=Lax; Secure; HttpOnly",
         name,
         value,
-        expires(Utc::now() + Duration::days(1))
+        expires(Utc::now() + Duration::days(30))
     )
 }
 
