@@ -29,9 +29,15 @@
 .panel {
   position: relative;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   background-color: #fff;
   padding: 1rem;
+}
+
+.panel h2 {
+  font-size: 1.2rem;
+  margin: 0;
 }
 
 #dashboard .uplot {
@@ -39,27 +45,16 @@
   line-height: inherit;
 }
 
-#dashboard .uplot .title {
-  font-size: 1.2rem;
-  margin-bottom: 0.8rem;
-}
-
 .single-stat {
   position: absolute;
-  align-self: center;
-  font-size: 1.2rem;
-  z-index: 1;
+  top: 50%;
+  font-size: 1.5rem;
 }
 
 .table-stat {
   width: 100%;
   border-collapse: collapse;
-}
-
-.table-stat caption {
-  font-size: 1.2rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
+  margin-top: 1rem;
 }
 
 .table-stat th {

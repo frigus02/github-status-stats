@@ -180,6 +180,20 @@ const getUPlotSize = (element, height) => {
   };
 };
 
+const createElement = (name, props = {}, children = []) => {
+  const element = document.createElement(name);
+  for (const [key, value] of Object.entries(props)) {
+    if (key.includes("-")) {
+      element.setAttribute(key, value);
+    } else {
+      element[key] = value;
+    }
+  }
+
+  element.append(...children);
+  return element;
+};
+
 const statPanel = ({
   title,
   statQuery,
@@ -190,14 +204,14 @@ const statPanel = ({
 }) => {
   const element = document.querySelector(elementSelector);
 
-  const statEl = document.createElement("div");
-  element.appendChild(statEl);
-  statEl.className = "single-stat";
-  statEl.textContent = valueFormat(emptyData()[1][0]);
+  element.appendChild(
+    createElement("h2", {
+      textContent: title
+    })
+  );
 
   const getSize = () => getUPlotSize(element, 100);
   const opts = {
-    title,
     ...getSize(),
     legend: { show: false },
     cursor: { show: false },
@@ -212,9 +226,14 @@ const statPanel = ({
     scales: { x: { time: false } },
     axes: [{ show: false }, { show: false }]
   };
-
   const plot = new uPlot(opts, emptyData(), element);
   onResize(() => plot.setSize(getSize()));
+
+  const statEl = createElement("div", {
+    className: "single-stat",
+    textContent: valueFormat(emptyData()[1][0])
+  });
+  element.appendChild(statEl);
 
   const loadData = async () => {
     const rawStat = await queryData(statQuery);
@@ -240,6 +259,12 @@ const graphPanel = ({
 }) => {
   const element = document.querySelector(elementSelector);
 
+  element.appendChild(
+    createElement("h2", {
+      textContent: title
+    })
+  );
+
   const getSize = () => getUPlotSize(element, height);
 
   let plot;
@@ -249,7 +274,6 @@ const graphPanel = ({
     }
 
     const opts = {
-      title,
       ...getSize(),
       series: [
         {},
@@ -289,33 +313,43 @@ const tablePanel = ({
   labelColumnName,
   elementSelector
 }) => {
-  const caption = document.createElement("caption");
-  caption.textContent = title;
+  const element = document.querySelector(elementSelector);
 
-  const trHead = document.createElement("tr");
-  const thLabel = document.createElement("th");
-  thLabel.scope = "col";
-  thLabel.textContent = labelColumnName;
-  trHead.append(
-    thLabel,
-    ...values.map(value => {
-      const thValue = document.createElement("th");
-      thValue.scope = "col";
-      thValue.textContent = value.columnName;
-      return thValue;
+  const headingId = `panel-headline-${title
+    .toLowerCase()
+    .replace(/[^a-z]/g, "-")}`;
+  element.appendChild(
+    createElement("h2", {
+      id: headingId,
+      textContent: title
     })
   );
 
-  const thead = document.createElement("thead");
-  thead.append(trHead);
+  const trHead = createElement("tr", {}, [
+    createElement("th", {
+      scope: "col",
+      textContent: labelColumnName
+    }),
+    ...values.map(value =>
+      createElement("th", {
+        scope: "col",
+        textContent: value.columnName
+      })
+    )
+  ]);
+  const thead = createElement("thead", {}, [trHead]);
 
-  const tbody = document.createElement("tbody");
+  const tbody = createElement("tbody");
 
-  const table = document.createElement("table");
-  table.className = "table-stat";
-  table.append(caption, thead, tbody);
+  const table = createElement(
+    "table",
+    {
+      "aria-labelledby": headingId,
+      className: "table-stat"
+    },
+    [thead, tbody]
+  );
 
-  const element = document.querySelector(elementSelector);
   element.append(table);
 
   const loadData = async () => {
@@ -326,25 +360,23 @@ const tablePanel = ({
     }
 
     tbody.append(
-      ...raw.map((series, i) => {
-        const tr = document.createElement("tr");
-        const thLabel = document.createElement("th");
-        thLabel.scope = "row";
-        thLabel.textContent = series.tags[labelTag];
-        tr.append(
-          thLabel,
-          ...values.map(value => {
-            const tdValue = document.createElement("td");
-            tdValue.textContent = value.format(
-              value.transform(
-                series.values[0][series.columns.indexOf(value.name)]
+      ...raw.map((series, i) =>
+        createElement("tr", {}, [
+          createElement("th", {
+            scope: "row",
+            textContent: series.tags[labelTag]
+          }),
+          ...values.map(value =>
+            createElement("td", {
+              textContent: value.format(
+                value.transform(
+                  series.values[0][series.columns.indexOf(value.name)]
+                )
               )
-            );
-            return tdValue;
-          })
-        );
-        return tr;
-      })
+            })
+          )
+        ])
+      )
     );
   };
   loadData();
