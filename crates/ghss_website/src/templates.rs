@@ -1,7 +1,6 @@
 use handlebars::Handlebars;
 use serde::Serialize;
 use std::convert::Infallible;
-use std::fs;
 use std::sync::Arc;
 use warp::Filter;
 
@@ -42,13 +41,13 @@ pub struct Templates<'a> {
 impl<'a> Templates<'a> {
     pub fn render_index(&self, data: &IndexTemplate) -> String {
         self.hb
-            .render("index.html", data)
+            .render("index", data)
             .unwrap_or_else(|err| err.to_string())
     }
 
     pub fn render_dashboard(&self, data: &DashboardTemplate) -> String {
         self.hb
-            .render("dashboard.html", data)
+            .render("dashboard", data)
             .unwrap_or_else(|err| err.to_string())
     }
 }
@@ -56,19 +55,12 @@ impl<'a> Templates<'a> {
 pub fn load() -> Templates<'static> {
     let mut hb = Handlebars::new();
 
-    let index_template: String =
-        String::from_utf8_lossy(&fs::read("templates/index.html").unwrap())
-            .parse()
-            .unwrap();
-    hb.register_template_string("index.html", index_template)
-        .expect("register index.html");
-
-    let dashboard_template: String =
-        String::from_utf8_lossy(&fs::read("templates/dashboard.html").unwrap())
-            .parse()
-            .unwrap();
-    hb.register_template_string("dashboard.html", dashboard_template)
-        .expect("register dashboard.html");
+    hb.register_template_file("layout", "templates/_layout.handlebars")
+        .expect("register layout");
+    hb.register_template_file("index", "templates/index.handlebars")
+        .expect("register index");
+    hb.register_template_file("dashboard", "templates/dashboard.handlebars")
+        .expect("register dashboard");
 
     Templates { hb }
 }
