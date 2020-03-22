@@ -35,12 +35,12 @@
   padding: 1rem;
 }
 
-.uplot {
+#dashboard .uplot {
   font-family: inherit;
   line-height: inherit;
 }
 
-.uplot .title {
+#dashboard .uplot .title {
   font-size: 1.2rem;
   margin-bottom: 0.8rem;
 }
