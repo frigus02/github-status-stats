@@ -4,7 +4,6 @@
   grid-template-rows: repeat(4, 1fr);
   grid-column-gap: 1rem;
   grid-row-gap: 1rem;
-  margin: 1rem;
 }
 
 #overall-success {
@@ -88,4 +87,9 @@
 .table-stat tbody th,
 .table-stat tbody td {
   border-bottom: 2px solid rgb(var(--color-light));
+}
+
+.error {
+  background-color: #fff;
+  padding: 1rem;
 }

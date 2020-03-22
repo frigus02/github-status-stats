@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>{{#if title}}{{title}} - {{/if}}Status Stats for GitHub</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  {{> add-head}}
+</head>
+
+<body>
+  <header>
+    <div class="title">
+      {{#if title}}
+      <a href="/">Status Stats for GitHub</a>
+      <h1>{{title}}</h1>
+      {{else}}
+      <h1>Status Stats for GitHub</h1>
+      {{/if}}
+    </div>
+    {{> add-header}}
+    {{#if user}}
+    <div class="user">
+      <div>Logged in as</div>
+      <div class="user__name">{{user}}</div>
+      <a href="/logout">Logout</a>
+    </div>
+    {{/if}}
+  </header>
+  <main>
+    {{> main}}
+  </main>
+  <footer>
+    <a class="sourcelink" href="https://github.com/frigus02/github-status-stats">Browse source on GitHub</a>
+  </footer>
+</body>
+
+</html>
