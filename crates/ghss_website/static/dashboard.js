@@ -194,6 +194,87 @@ const createElement = (name, props = {}, children = []) => {
   return element;
 };
 
+const accessibilityPlugin = ({ ariaLabelledBy }) => {
+  const thead = createElement("thead");
+  const tbody = createElement("tbody");
+  const table = createElement("table", { "aria-labelledby": ariaLabelledBy }, [
+    thead,
+    tbody
+  ]);
+  const tableContainer = createElement(
+    "div",
+    {
+      style:
+        "position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;"
+    },
+    [table]
+  );
+
+  const init = u => {
+    u.root.setAttribute("aria-hidden", "true");
+    u.root.parentElement.append(tableContainer);
+  };
+
+  const setData = u => {
+    while (thead.firstChild) {
+      tbody.removeChild(tbody.firstChild);
+    }
+
+    while (tbody.firstChild) {
+      tbody.removeChild(tbody.firstChild);
+    }
+
+    const rows = u.series.map(series =>
+      createElement("tr", {}, [
+        createElement("th", {
+          scope: "row",
+          textContent: series.label
+        })
+      ])
+    );
+    thead.append(rows[0]);
+    tbody.append(...rows.slice(1));
+
+    for (let idx = 0; idx <= u.data[0].length; idx++) {
+      const isAllNull = u.data
+        .slice(1)
+        .every(s => s[idx] == null || s[idx] === 0);
+      if (!isAllNull) {
+        rows[0].appendChild(
+          createElement("th", {
+            scope: "col",
+            textContent: u.series[0].value(u, u.data[0][idx], 0, idx)
+          })
+        );
+        for (let seriesIdx = 1; seriesIdx < rows.length; seriesIdx++) {
+          rows[seriesIdx].appendChild(
+            createElement("td", {
+              textContent: u.series[seriesIdx].value(
+                u,
+                u.data[seriesIdx][idx],
+                seriesIdx,
+                idx
+              )
+            })
+          );
+        }
+      }
+    }
+  };
+
+  const destroy = _u => {
+    tableContainer.remove();
+  };
+
+  return {
+    hooks: {
+      init,
+      setData,
+      destroy
+    }
+  };
+};
+
 const statPanel = ({
   title,
   statQuery,
@@ -259,8 +340,12 @@ const graphPanel = ({
 }) => {
   const element = document.querySelector(elementSelector);
 
+  const headingId = `panel-headline-${title
+    .toLowerCase()
+    .replace(/[^a-z]/g, "-")}`;
   element.appendChild(
     createElement("h2", {
+      id: headingId,
       textContent: title
     })
   );
@@ -275,6 +360,7 @@ const graphPanel = ({
 
     const opts = {
       ...getSize(),
+      plugins: [accessibilityPlugin({ ariaLabelledBy: headingId })],
       series: [
         {},
         ...raw.map((series, i) => ({
@@ -477,7 +563,7 @@ window.addEventListener("load", () => {
       WHERE __time_filter__
       GROUP BY __time_group_detailed__, "build_name"
     `,
-    valueTransform: value => value,
+    valueTransform: value => (value == null ? 0 : value),
     valueFormat: value => formatNumber(value),
     labelTag: "build_name",
     elementSelector: "#attempts"
