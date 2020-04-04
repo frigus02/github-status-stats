@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ghss-copy-pvc
+spec:
+  template:
+    spec:
+      containers:
+        - name: copy
+          image: debian:buster-slim
+          command: ["bash", "-c", "cp -r /data-old/* /data-new/"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 50m
+              memory: 50Mi
+          volumeMounts:
+            - name: data-old
+              mountPath: /data-old
+            - name: data-new
+              mountPath: /data-new
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+      volumes:
+        - name: data-old
+          persistentVolumeClaim:
+            claimName: ghss-influxdb
+        - name: data-new
+          persistentVolumeClaim:
+            claimName: ghss-influxdb-rwo-10g
+      restartPolicy: OnFailure
