@@ -10,14 +10,17 @@ RUN apt-get update && \
         && \
     rm -rf /var/lib/apt/lists/*
 
-ENV OPENSSL_VERSION 1.0.2r
+ENV OPENSSL_VERSION 1.1.1f
 ENV CC musl-gcc
 ENV PREFIX /usr/local
 ENV PATH /usr/local/bin:$PATH
 ENV PKG_CONFIG_PATH /usr/local/lib/pkgconfig
+# TODO: Disabling secure memory here to make it easier to build OpenSSL for MUSL.
+#       Would be good to find a proper solution. See issue:
+#       https://github.com/openssl/openssl/issues/7207
 RUN curl -sL http://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz | tar xz && \
     cd openssl-$OPENSSL_VERSION && \
-    ./Configure no-shared --prefix=$PREFIX --openssldir=$PREFIX/ssl no-zlib linux-x86_64 -fPIC && \
+    ./Configure --prefix=$PREFIX --openssldir=$PREFIX/ssl linux-x86_64 no-shared no-engine no-zlib -DOPENSSL_NO_SECURE_MEMORY && \
     make -j$(nproc) && \
     make install && \
     cd .. && \
