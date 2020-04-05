@@ -47,4 +47,4 @@ spec:
             name: ghss-influxdb
         - name: data
           persistentVolumeClaim:
-            claimName: ghss-influxdb
+            claimName: ghss-influxdb-rwo-10g

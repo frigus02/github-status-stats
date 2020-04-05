@@ -1,0 +1,42 @@
+# PVC seems to use a fuse file system locally, so `du` needs `-b`
+#
+#     du -bsh /data-new
+#     du -bsh /data-old
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghss-debug-pvc
+spec:
+  selector:
+    matchLabels:
+      app: ghss-debug-pvc
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ghss-debug-pvc
+    spec:
+      containers:
+        - name: debian
+          image: debian:buster-slim
+          command: ["sleep", "infinity"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 50m
+              memory: 50Mi
+          volumeMounts:
+            - name: data-old
+              mountPath: /data-old
+            - name: data-new
+              mountPath: /data-new
+      volumes:
+        - name: data-old
+          persistentVolumeClaim:
+            claimName: ghss-influxdb
+        - name: data-new
+          persistentVolumeClaim:
+            claimName: ghss-influxdb-rwo-10g
