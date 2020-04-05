@@ -6,7 +6,7 @@ startDateInput.valueAsNumber = Date.now() - 2592000000; // 30 days in millisecon
 const endDateInput = document.querySelector("#enddate");
 endDateInput.valueAsNumber = Date.now();
 
-const startOfDay = date => {
+const startOfDay = (date) => {
   const d = new Date(date);
   d.setHours(0);
   d.setMinutes(0);
@@ -15,7 +15,7 @@ const startOfDay = date => {
   return d.getTime();
 };
 
-const endOfDay = date => {
+const endOfDay = (date) => {
   const d = new Date(date);
   d.setHours(23);
   d.setMinutes(59);
@@ -24,7 +24,7 @@ const endOfDay = date => {
   return d.getTime();
 };
 
-const closestDurationUnit = ms => {
+const closestDurationUnit = (ms) => {
   const s = Math.round(ms / 1000);
 
   const m = Math.round(s / 60);
@@ -70,11 +70,11 @@ const timeRangeFilter = () => {
     // Roughly 720 entries
     groupByDetailed: `time(${closestDurationUnit(range / 720)})`,
     // Roughly 120 entries
-    groupBySparse: `time(${closestDurationUnit(range / 120)})`
+    groupBySparse: `time(${closestDurationUnit(range / 120)})`,
   };
 };
 
-const queryData = async rawQuery => {
+const queryData = async (rawQuery) => {
   const time = timeRangeFilter();
   const query = rawQuery
     .replace("__time_filter__", time.filter)
@@ -100,7 +100,7 @@ const emptyData = () => {
   const { start, end } = timeRange();
   return [
     [start / 1000, end / 1000],
-    [null, null]
+    [null, null],
   ];
 };
 
@@ -113,21 +113,21 @@ const prepareData = (raw, valueTransform) => {
   const y = raw[0].columns.indexOf("value");
   const data = [];
   data.push(
-    raw[0].values.map(row => Math.round(new Date(row[x]).getTime() / 1000))
+    raw[0].values.map((row) => Math.round(new Date(row[x]).getTime() / 1000))
   );
   for (const series of raw) {
-    data.push(series.values.map(row => valueTransform(row[y])));
+    data.push(series.values.map((row) => valueTransform(row[y])));
   }
 
   return data;
 };
 
-const formatNumber = n =>
+const formatNumber = (n) =>
   n == null ? "" : n.toFixed(2).replace(/(\.0)?0$/, "");
 
-const onResize = cb => window.addEventListener("resize", throttle(cb, 100));
+const onResize = (cb) => window.addEventListener("resize", throttle(cb, 100));
 
-const onTimeRangeChange = cb => {
+const onTimeRangeChange = (cb) => {
   let running = false;
   let again = false;
   const onChange = async () => {
@@ -176,7 +176,7 @@ const getUPlotSize = (element, height) => {
       element.clientWidth -
       parseInt(style.paddingLeft, 10) -
       parseInt(style.paddingRight, 10),
-    height
+    height,
   };
 };
 
@@ -199,23 +199,23 @@ const accessibilityPlugin = ({ ariaLabelledBy }) => {
   const tbody = createElement("tbody");
   const table = createElement("table", { "aria-labelledby": ariaLabelledBy }, [
     thead,
-    tbody
+    tbody,
   ]);
   const tableContainer = createElement(
     "div",
     {
       style:
-        "position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;"
+        "position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;",
     },
     [table]
   );
 
-  const init = u => {
+  const init = (u) => {
     u.root.setAttribute("aria-hidden", "true");
     u.root.parentElement.append(tableContainer);
   };
 
-  const setData = u => {
+  const setData = (u) => {
     while (thead.firstChild) {
       tbody.removeChild(tbody.firstChild);
     }
@@ -224,12 +224,12 @@ const accessibilityPlugin = ({ ariaLabelledBy }) => {
       tbody.removeChild(tbody.firstChild);
     }
 
-    const rows = u.series.map(series =>
+    const rows = u.series.map((series) =>
       createElement("tr", {}, [
         createElement("th", {
           scope: "row",
-          textContent: series.label
-        })
+          textContent: series.label,
+        }),
       ])
     );
     thead.append(rows[0]);
@@ -238,12 +238,12 @@ const accessibilityPlugin = ({ ariaLabelledBy }) => {
     for (let idx = 0; idx <= u.data[0].length; idx++) {
       const isAllNull = u.data
         .slice(1)
-        .every(s => s[idx] == null || s[idx] === 0);
+        .every((s) => s[idx] == null || s[idx] === 0);
       if (!isAllNull) {
         rows[0].appendChild(
           createElement("th", {
             scope: "col",
-            textContent: u.series[0].value(u, u.data[0][idx], 0, idx)
+            textContent: u.series[0].value(u, u.data[0][idx], 0, idx),
           })
         );
         for (let seriesIdx = 1; seriesIdx < rows.length; seriesIdx++) {
@@ -254,7 +254,7 @@ const accessibilityPlugin = ({ ariaLabelledBy }) => {
                 u.data[seriesIdx][idx],
                 seriesIdx,
                 idx
-              )
+              ),
             })
           );
         }
@@ -262,7 +262,7 @@ const accessibilityPlugin = ({ ariaLabelledBy }) => {
     }
   };
 
-  const destroy = _u => {
+  const destroy = (_u) => {
     tableContainer.remove();
   };
 
@@ -270,8 +270,8 @@ const accessibilityPlugin = ({ ariaLabelledBy }) => {
     hooks: {
       init,
       setData,
-      destroy
-    }
+      destroy,
+    },
   };
 };
 
@@ -281,13 +281,13 @@ const statPanel = ({
   backgroundQuery,
   valueTransform,
   valueFormat,
-  elementSelector
+  elementSelector,
 }) => {
   const element = document.querySelector(elementSelector);
 
   element.appendChild(
     createElement("h2", {
-      textContent: title
+      textContent: title,
     })
   );
 
@@ -301,18 +301,18 @@ const statPanel = ({
       {
         spanGaps: true,
         stroke: color(0),
-        fill: color(0, 0.1)
-      }
+        fill: color(0, 0.1),
+      },
     ],
     scales: { x: { time: false } },
-    axes: [{ show: false }, { show: false }]
+    axes: [{ show: false }, { show: false }],
   };
   const plot = new uPlot(opts, emptyData(), element);
   onResize(() => plot.setSize(getSize()));
 
   const statEl = createElement("div", {
     className: "single-stat",
-    textContent: valueFormat(emptyData()[1][0])
+    textContent: valueFormat(emptyData()[1][0]),
   });
   element.appendChild(statEl);
 
@@ -336,7 +336,7 @@ const graphPanel = ({
   valueTransform,
   valueFormat,
   labelTag,
-  elementSelector
+  elementSelector,
 }) => {
   const element = document.querySelector(elementSelector);
 
@@ -346,7 +346,7 @@ const graphPanel = ({
   element.appendChild(
     createElement("h2", {
       id: headingId,
-      textContent: title
+      textContent: title,
     })
   );
 
@@ -366,15 +366,15 @@ const graphPanel = ({
         ...raw.map((series, i) => ({
           label: series.tags[labelTag],
           value: (_self, rawValue) => valueFormat(rawValue),
-          stroke: color(i)
-        }))
+          stroke: color(i),
+        })),
       ],
       axes: [
         {},
         {
-          values: (_self, ticks) => ticks.map(valueFormat)
-        }
-      ]
+          values: (_self, ticks) => ticks.map(valueFormat),
+        },
+      ],
     };
     plot = new uPlot(opts, data, element);
   };
@@ -397,7 +397,7 @@ const tablePanel = ({
   values,
   labelTag,
   labelColumnName,
-  elementSelector
+  elementSelector,
 }) => {
   const element = document.querySelector(elementSelector);
 
@@ -407,21 +407,21 @@ const tablePanel = ({
   element.appendChild(
     createElement("h2", {
       id: headingId,
-      textContent: title
+      textContent: title,
     })
   );
 
   const trHead = createElement("tr", {}, [
     createElement("th", {
       scope: "col",
-      textContent: labelColumnName
+      textContent: labelColumnName,
     }),
-    ...values.map(value =>
+    ...values.map((value) =>
       createElement("th", {
         scope: "col",
-        textContent: value.columnName
+        textContent: value.columnName,
       })
-    )
+    ),
   ]);
   const thead = createElement("thead", {}, [trHead]);
 
@@ -431,7 +431,7 @@ const tablePanel = ({
     "table",
     {
       "aria-labelledby": headingId,
-      className: "table-stat"
+      className: "table-stat",
     },
     [thead, tbody]
   );
@@ -450,17 +450,17 @@ const tablePanel = ({
         createElement("tr", {}, [
           createElement("th", {
             scope: "row",
-            textContent: series.tags[labelTag]
+            textContent: series.tags[labelTag],
           }),
-          ...values.map(value =>
+          ...values.map((value) =>
             createElement("td", {
               textContent: value.format(
                 value.transform(
                   series.values[0][series.columns.indexOf(value.name)]
                 )
-              )
+              ),
             })
-          )
+          ),
         ])
       )
     );
@@ -483,9 +483,9 @@ window.addEventListener("load", () => {
       WHERE __time_filter__
       GROUP BY __time_group_sparse__
     `,
-    valueTransform: value => value * 100,
-    valueFormat: value => `${formatNumber(value)}%`,
-    elementSelector: "#overall-success"
+    valueTransform: (value) => value * 100,
+    valueFormat: (value) => `${formatNumber(value)}%`,
+    elementSelector: "#overall-success",
   });
 
   statPanel({
@@ -501,9 +501,9 @@ window.addEventListener("load", () => {
       WHERE __time_filter__
       GROUP BY __time_group_sparse__
     `,
-    valueTransform: value => value / 1000 / 60,
-    valueFormat: value => `${formatNumber(value)} min`,
-    elementSelector: "#overall-duration"
+    valueTransform: (value) => value / 1000 / 60,
+    valueFormat: (value) => `${formatNumber(value)} min`,
+    elementSelector: "#overall-duration",
   });
 
   tablePanel({
@@ -518,25 +518,25 @@ window.addEventListener("load", () => {
       {
         name: "count",
         columnName: "Count",
-        transform: value => value,
-        format: value => value
+        transform: (value) => value,
+        format: (value) => value,
       },
       {
         name: "duration_ms",
         columnName: "Duration",
-        transform: value => value / 1000 / 60,
-        format: value => `${formatNumber(value)} min`
+        transform: (value) => value / 1000 / 60,
+        format: (value) => `${formatNumber(value)} min`,
       },
       {
         name: "successful",
         columnName: "Success",
-        transform: value => value * 100,
-        format: value => `${formatNumber(value)}%`
-      }
+        transform: (value) => value * 100,
+        format: (value) => `${formatNumber(value)}%`,
+      },
     ],
     labelTag: "name",
     labelColumnName: "Pipeline",
-    elementSelector: "#stats-by-pipeline"
+    elementSelector: "#stats-by-pipeline",
   });
 
   graphPanel({
@@ -548,10 +548,10 @@ window.addEventListener("load", () => {
       WHERE __time_filter__
       GROUP BY __time_group_detailed__, "name"
     `,
-    valueTransform: value => value / 1000 / 60,
-    valueFormat: value => `${formatNumber(value)} min`,
+    valueTransform: (value) => value / 1000 / 60,
+    valueFormat: (value) => `${formatNumber(value)} min`,
     labelTag: "name",
-    elementSelector: "#duration"
+    elementSelector: "#duration",
   });
 
   graphPanel({
@@ -563,9 +563,9 @@ window.addEventListener("load", () => {
       WHERE __time_filter__
       GROUP BY __time_group_detailed__, "build_name"
     `,
-    valueTransform: value => (value == null ? 0 : value),
-    valueFormat: value => formatNumber(value),
+    valueTransform: (value) => (value == null ? 0 : value),
+    valueFormat: (value) => formatNumber(value),
     labelTag: "build_name",
-    elementSelector: "#attempts"
+    elementSelector: "#attempts",
   });
 });
