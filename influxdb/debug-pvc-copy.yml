@@ -21,9 +21,6 @@ spec:
               mountPath: /data-old
             - name: data-new
               mountPath: /data-new
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
       volumes:
         - name: data-old
           persistentVolumeClaim:
