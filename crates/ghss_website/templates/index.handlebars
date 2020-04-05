@@ -9,9 +9,8 @@
 <a href="{{Anonymous.login_url}}">Login with GitHub</a>
 {{/if}}
 {{#if LoggedIn}}
-<h2 id="repositories-heading">Repositories</h2>
 <p>Status Stats for GitHub is setup for the following repositories:</p>
-<nav aria-labelledby="repositories-heading">
+<nav aria-label="Repositories">
   <ul>
     {{#each LoggedIn.repositories}}
     <li>

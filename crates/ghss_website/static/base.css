@@ -1,7 +1,7 @@
 html {
-  --color-accent: 65, 88, 255;
-  --color-dark: 72, 69, 84;
-  --color-light: 173, 169, 187;
+  --color-accent: 255, 7, 58;
+  --color-dark: 0, 2, 46;
+  --color-light: 2, 6, 111;
 }
 
 * {
@@ -11,7 +11,6 @@ html {
 body {
   padding: 0;
   margin: 0;
-  background-color: rgba(var(--color-light), 0.3);
   font-family: sans-serif;
 }
 
@@ -30,6 +29,10 @@ header h1 {
   margin: 0;
 }
 
+header .breadcrumbs {
+  font-size: smaller;
+}
+
 header .user {
   font-size: 0.7rem;
   text-align: end;
@@ -40,21 +43,19 @@ header .user__name {
 }
 
 header a {
-  display: block;
-}
-
-header a,
-header a:visited {
   color: #fff;
 }
 
-main {
-  margin: 1rem;
+header a:visited {
+  color: rgb(240, 181, 255);
 }
 
-a,
+a {
+  color: rgb(var(--color-light));
+}
+
 a:visited {
-  color: rgb(var(--color-accent));
+  color: rgb(111, 2, 99);
 }
 
 .sourcelink {

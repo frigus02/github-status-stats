@@ -1,25 +1,48 @@
 #dashboard {
   display: grid;
-  grid-template-columns: repeat(4, calc(25% - 0.75rem));
-  grid-template-rows: repeat(4, 1fr);
-  grid-column-gap: 1rem;
-  grid-row-gap: 1rem;
+  --dashboard-columns: 2;
+  --panel-padding: 1rem;
+  grid-template-columns: repeat(var(--dashboard-columns), minmax(150px, 1fr));
 }
 
 #overall-success {
-  grid-area: 1 / 1 / 2 / 2;
+  border-right: 1px solid rgba(var(--color-light), 0.5);
 }
-#overall-duration {
-  grid-area: 1 / 2 / 2 / 3;
-}
+
 #stats-by-pipeline {
-  grid-area: 1 / 3 / 3 / 5;
+  grid-column: span 2;
+  grid-row: span 2;
+  border-top: 1px solid rgba(var(--color-light), 0.5);
 }
+
 #duration {
-  grid-area: 2 / 1 / 5 / 3;
+  grid-column: span 2;
+  grid-row: span 3;
+  border-top: 1px solid rgba(var(--color-light), 0.5);
 }
+
 #attempts {
-  grid-area: 3 / 3 / 5 / 5;
+  grid-column: span 2;
+  border-top: 1px solid rgba(var(--color-light), 0.5);
+}
+
+@media (min-width: 900px) {
+  #dashboard {
+    --dashboard-columns: 4;
+    --panel-padding: 2rem;
+  }
+
+  #overall-duration {
+    border-right: 1px solid rgba(var(--color-light), 0.5);
+  }
+
+  #stats-by-pipeline {
+    border-top: none;
+  }
+
+  #duration {
+    border-right: 1px solid rgba(var(--color-light), 0.5);
+  }
 }
 
 .repo-link {
@@ -30,8 +53,30 @@
   vertical-align: bottom;
 }
 
+.filters {
+  background-color: rgb(var(--color-light));
+  color: #fff;
+  padding: 0.7rem 1rem;
+}
+
 .timerange {
   border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timerange legend {
+  float: left;
+  padding: 0;
+}
+
+.timerange legend::after {
+  content: ":";
+  margin-right: 0.2em;
+}
+
+.timerange input {
+  vertical-align: middle;
 }
 
 .panel {
@@ -40,11 +85,12 @@
   flex-direction: column;
   align-items: center;
   background-color: #fff;
-  padding: 1rem;
+  padding: var(--panel-padding);
 }
 
 .panel h2 {
   font-size: 1.2rem;
+  font-weight: normal;
   margin: 0;
 }
 
@@ -75,21 +121,21 @@
   padding: 0.2rem 0.3rem;
 }
 
-.table-stat thead {
-  border-top: 2px solid rgb(var(--color-light));
-  border-bottom: 2px solid rgb(var(--color-light));
+.table-stat thead th {
+  border-left: 1px solid rgb(var(--color-light));
+}
+
+.table-stat thead th:first-child {
+  border-left: none;
 }
 
 .table-stat tbody td {
-  border-left: 2px solid rgb(var(--color-light));
-}
-.table-stat tbody td:first-child {
-  border-left: none;
+  border-left: 1px solid rgb(var(--color-light));
 }
 
 .table-stat tbody th,
 .table-stat tbody td {
-  border-bottom: 2px solid rgb(var(--color-light));
+  border-top: 1px solid rgb(var(--color-light));
 }
 
 .error {

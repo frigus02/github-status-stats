@@ -1,5 +1,4 @@
-const repository = document.querySelector('script[src="/static/dashboard.js"]')
-  .dataset.repository;
+const repository = document.querySelector("#dashboard").dataset.repository;
 
 const startDateInput = document.querySelector("#startdate");
 startDateInput.valueAsNumber = Date.now() - 2592000000; // 30 days in milliseconds
@@ -154,7 +153,7 @@ const onTimeRangeChange = (cb) => {
 };
 
 const color = (index, alpha = 1) =>
-  `hsla(${index * 222.5}, 75%, 50%, ${alpha})`;
+  `hsla(${index * 222.5 + 348}, 100%, 51.4%, ${alpha})`;
 
 const throttle = (cb, limit) => {
   let wait = false;
