@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+  <meta name="viewport" content="width=device-width">
   <title>{{#if title}}{{title}} - {{/if}}Status Stats for GitHub</title>
   <link rel="stylesheet" href="/static/base.css">
   {{> add-head}}
@@ -10,15 +11,12 @@
 <body>
   <header>
     <div class="title">
-      {{#if title}}
-      <a href="/">Status Stats for GitHub</a>
-      <h1>{{title}}</h1>
-      {{else}}
-      <h1>Status Stats for GitHub</h1>
-      {{/if}}
+      <div class="breadcrumbs">
+        Status Stats for GitHub{{#if title}} &rsaquo; <a href="/">Repositories</a>{{/if}}
+      </div>
+      <h1>{{#if title}}{{title}}{{else}}Repositories{{/if}}</h1>
       {{> add-title}}
     </div>
-    {{> add-header}}
     {{#if user}}
     <div class="user">
       <div>Logged in as</div>

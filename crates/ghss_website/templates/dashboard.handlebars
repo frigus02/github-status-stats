@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="/static/dashboard.css">
 <link rel="stylesheet" href="/static/uPlot.min.css">
 <script src="/static/uPlot.iife.min.js" defer></script>
-<script src="/static/dashboard.js" type="module" data-repository="{{data.Data.repository_id}}"></script>
+<script src="/static/dashboard.js" type="module"></script>
 {{/if}}
 {{/inline}}
 
@@ -14,17 +14,16 @@
     alt="Repository on GitHub" title="Repository on GitHub"></a>
 {{/inline}}
 
-{{#*inline "add-header"}}
-<fieldset class="timerange">
-  <legend>Time range</legend>
-  <input id="startdate" type="date" aria-label="Start date"> to
-  <input id="enddate" type="date" aria-label="End date">
-</fieldset>
-{{/inline}}
-
 {{#*inline "main"}}
 {{#if data.Data}}
-<div id="dashboard">
+<div class="filters">
+  <fieldset class="timerange">
+    <legend>Time range</legend>
+    <input id="startdate" type="date" aria-label="Start date"> to
+    <input id="enddate" type="date" aria-label="End date">
+  </fieldset>
+</div>
+<div id="dashboard" data-repository="{{data.Data.repository_id}}">
   <div class="panel" id="overall-success"></div>
   <div class="panel" id="overall-duration"></div>
   <div class="panel" id="stats-by-pipeline"></div>
