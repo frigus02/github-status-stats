@@ -1,5 +1,5 @@
 use super::page_links;
-use ghss_tracing::debug;
+use ghss_tracing::info;
 use reqwest::header::{ACCEPT, LINK};
 use reqwest::{Client, Request, Url};
 use serde::de::DeserializeOwned;
@@ -18,7 +18,7 @@ async fn call_api<T: DeserializeOwned>(
     client: &Client,
     request: Request,
 ) -> Result<Response<T>, Box<dyn Error>> {
-    debug!(request.method = %request.method(), request.url = %request.url(), "github request");
+    info!(request.method = %request.method(), request.url = %request.url(), "github request");
     let res = client.execute(request).await?.error_for_status()?;
     let next_page_url = match res.headers().get(LINK) {
         Some(value) => {

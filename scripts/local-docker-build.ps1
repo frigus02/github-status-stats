@@ -1,3 +1,5 @@
+Param([Switch]$Release)
+
 $ErrorActionPreference = "Stop"
 function ExitIfNativeCallFailed($NativeCallSuccess)
 {
@@ -17,17 +19,24 @@ if (!$?)
 
 # Build images
 $PREFIX="localhost:5000/ghss"
+$CARGO_FLAGS=""
+$CARGO_MODE="debug"
+if ($Release)
+{
+	$CARGO_FLAGS="--release"
+	$CARGO_MODE="release"
+}
 
 $BASE="$PREFIX-base"
-docker build --build-arg CARGO_FLAGS= --build-arg CARGO_MODE=debug -t $BASE -f docker-base/Dockerfile .
+docker build --build-arg CARGO_FLAGS=$CARGO_FLAGS --build-arg CARGO_MODE=$CARGO_MODE -t $BASE -f docker-base/Dockerfile .
 ExitIfNativeCallFailed $?
 
 $IMPORTER="$PREFIX-importer"
-docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=debug -t ${IMPORTER} -f crates/ghss_importer/Dockerfile .
+docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=$CARGO_MODE -t ${IMPORTER} -f crates/ghss_importer/Dockerfile .
 ExitIfNativeCallFailed $?
 
 $WEBSITE="$PREFIX-website"
-docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=debug -t ${WEBSITE} -f crates/ghss_website/Dockerfile .
+docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=$CARGO_MODE -t ${WEBSITE} -f crates/ghss_website/Dockerfile .
 ExitIfNativeCallFailed $?
 
 docker push ${IMPORTER}

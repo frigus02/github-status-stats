@@ -323,7 +323,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ghss_tracing::setup(ghss_tracing::Config {
         honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
         honeycomb_dataset: config.honeycomb_dataset.clone(),
-        service_name: "website".to_owned(),
+        service_name: "website",
     });
 
     let index = warp::get()
@@ -421,9 +421,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match res.as_ref() {
                         Ok(res) => {
                             span.record("status", &res.status().as_str());
+                            info!("request finished");
                         }
                         Err(err) => {
-                            error!(error = %err,"request failed");
+                            error!(error = %err, "request failed");
                         }
                     };
 

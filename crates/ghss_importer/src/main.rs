@@ -81,7 +81,7 @@ async fn main() -> Result<(), String> {
     ghss_tracing::setup(ghss_tracing::Config {
         honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
         honeycomb_dataset: config.honeycomb_dataset.clone(),
-        service_name: "importer".to_owned(),
+        service_name: "importer",
     });
 
     let res = async {
