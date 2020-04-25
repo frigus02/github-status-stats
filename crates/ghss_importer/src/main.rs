@@ -6,7 +6,7 @@ use build::{get_builds_from_commit_shas, get_most_recent_builds};
 use config::Config;
 use ghss_github::Client;
 use ghss_models::{influxdb_name, influxdb_read_user};
-use ghss_tracing::{error, info, info_span};
+use ghss_tracing::{error, info, info_span, register_tracing_root};
 use influxdb::{get_commits_since_from_hooks, get_last_import, import};
 
 type BoxError = Box<dyn std::error::Error>;
@@ -87,6 +87,7 @@ async fn main() -> Result<(), String> {
     let res = async {
         let span = info_span!("import");
         let _guard = span.enter();
+        register_tracing_root();
 
         match run(config).await {
             Ok(_) => Ok(()),

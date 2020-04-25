@@ -37,6 +37,15 @@ pub fn setup(config: Config) {
 }
 
 #[cfg(debug_assertions)]
+pub fn register_tracing_root() {}
+
+#[cfg(not(debug_assertions))]
+pub fn register_tracing_root() {
+    tracing_honeycomb::register_dist_tracing_root(tracing_honeycomb::TraceId::generate(), None)
+        .expect("register tracing root");
+}
+
+#[cfg(debug_assertions)]
 pub async fn flush() {}
 
 #[cfg(not(debug_assertions))]

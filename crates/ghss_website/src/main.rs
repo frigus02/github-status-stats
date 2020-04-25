@@ -9,7 +9,7 @@ mod token;
 use bytes::Bytes;
 use config::with_config;
 use ghss_models::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
-use ghss_tracing::{error, info, info_span, Instrument};
+use ghss_tracing::{error, info, info_span, register_tracing_root, Instrument};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -410,6 +410,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         status = ghss_tracing::EmptyField,
                         duration_ms = ghss_tracing::EmptyField,
                     );
+                    {
+                        // TODO: This seems weird. Need to understand why that's
+                        // necessary or how to do it better.
+                        let _guard = span.enter();
+                        register_tracing_root();
+                    }
 
                     let started = std::time::Instant::now();
                     let res = warp_svc.call(req).instrument(span.clone()).await;
