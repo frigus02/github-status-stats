@@ -20,7 +20,7 @@ hmac = "0.7.1"
 jsonwebtoken = "7.1.0"
 secstr = "0.4.0"
 serde = { version = "1.0.106", features = ["derive"] }
-serde_json = "1.0.51"
+serde_json = "1.0.52"
 sha-1 = "0.8.2"
-tokio = { version = "0.2.19", features = ["macros", "signal"] }
+tokio = { version = "0.2.20", features = ["macros", "signal"] }
 warp = "0.2.2"
