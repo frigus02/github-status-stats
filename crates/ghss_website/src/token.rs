@@ -1,5 +1,4 @@
 use super::github_queries::{get_github_user, GitHubUser};
-use ghss_tracing::error;
 use jsonwebtoken::{
     decode, encode, errors::Error as TokenError, Algorithm, DecodingKey, EncodingKey, Header,
     Validation,
@@ -7,6 +6,7 @@ use jsonwebtoken::{
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::time::SystemTime;
+use tracing::error;
 use warp::Filter;
 
 type BoxError = Box<dyn std::error::Error>;
@@ -105,7 +105,7 @@ pub fn optional_token(
             let user = validate(&raw_token, token_secret.as_slice());
             match user {
                 Ok(user) => {
-                    ghss_tracing::Span::current().record("user_id", &user.id.as_str());
+                    tracing::Span::current().record("user_id", &user.id.as_str());
                     OptionalToken::Some(user)
                 }
                 Err(err) if err.to_string() == "ExpiredSignature" => OptionalToken::Expired,

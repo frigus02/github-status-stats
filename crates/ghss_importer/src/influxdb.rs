@@ -1,8 +1,8 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use ghss_influxdb::Client;
 use ghss_models::Import;
-use ghss_tracing::info;
 use serde::Deserialize;
+use tracing::info;
 
 type BoxError = Box<dyn std::error::Error>;
 

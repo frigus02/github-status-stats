@@ -9,7 +9,7 @@ mod token;
 use bytes::Bytes;
 use config::with_config;
 use ghss_models::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
-use ghss_tracing::{error, info, info_span, register_tracing_root, Instrument};
+use ghss_tracing::register_tracing_root;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -18,6 +18,8 @@ use std::sync::Arc;
 use templates::{
     with_templates, DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess,
 };
+use tracing::{error, info, info_span};
+use tracing_futures::Instrument;
 use token::{optional_token, OptionalToken};
 use warp::{
     http::{Response, StatusCode, Uri},
@@ -406,9 +408,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .get(header::USER_AGENT)
                             .map(|v| v.to_str().expect("user agent to string"))
                             .unwrap_or(""),
-                        user_id = ghss_tracing::EmptyField,
-                        status = ghss_tracing::EmptyField,
-                        duration_ms = ghss_tracing::EmptyField,
+                        user_id = tracing::field::Empty,
+                        status = tracing::field::Empty,
+                        duration_ms = tracing::field::Empty,
                     );
                     {
                         // TODO: This seems weird. Need to understand why that's

@@ -1,12 +1,6 @@
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::prelude::*;
 
-pub use tracing::{
-    debug, debug_span, error, error_span, field, field::Empty as EmptyField, info, info_span,
-    instrument, span::Span, trace, trace_span, warn, warn_span,
-};
-pub use tracing_futures::Instrument;
-
 pub struct Config {
     pub honeycomb_api_key: String,
     pub honeycomb_dataset: String,
