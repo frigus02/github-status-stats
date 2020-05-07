@@ -1,0 +1,47 @@
+syntax = "proto3";
+package store;
+
+service Store {
+	rpc InsertBuild (Build) returns (InsertReply);
+	rpc InsertCommit (Commit) returns (InsertReply);
+	rpc InsertImport (Import) returns (InsertReply);
+	rpc InsertHook (Hook) returns (InsertReply);
+}
+
+enum BuildSource {
+	STATUS = 0;
+	CHECK_RUN = 1;
+}
+
+message Build {
+	string name = 1;
+	BuildSource source = 2;
+	string commit = 3;
+	bool successful = 4;
+	bool failed = 5;
+	uint32 duration_ms = 6;
+	uint64 timestamp = 7;
+}
+
+message Commit {
+	string build_name = 1;
+	BuildSource build_source = 2;
+	string commit = 3;
+	uint32 builds = 4;
+	uint32 builds_successful = 5;
+	uint32 builds_failed = 6;
+	uint64 timestamp = 7;
+}
+
+message Import {
+	uint32 points = 1;
+	uint64 timestamp = 2;
+}
+
+message Hook {
+	BuildSource type = 1;
+	string commit = 2;
+	uint64 timestamp = 3;
+}
+
+message InsertReply {}
