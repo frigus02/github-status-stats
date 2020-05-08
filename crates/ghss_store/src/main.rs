@@ -1,30 +1,35 @@
+mod db;
+mod schema;
+
 use tonic::{transport::Server, Request, Response, Status};
 
 use proto::store_server::{Store, StoreServer};
-use proto::{Build, Commit, Import, Hook, InsertReply};
+use proto::{InsertBuildsRequest, InsertCommitsRequest, InsertImportsRequest, InsertHooksRequest, InsertReply};
 
-pub mod proto {
+pub(crate) mod proto {
     tonic::include_proto!("store");
 }
 
 #[derive(Debug, Default)]
-pub struct SQLiteStore {}
+struct SQLiteStore {}
 
 #[tonic::async_trait]
 impl Store for SQLiteStore {
-    async fn insert_build(&self, request: Request<Build>) -> Result<Response<InsertReply>, Status> {
+    async fn insert_builds(&self, request: Request<InsertBuildsRequest>) -> Result<Response<InsertReply>, Status> {
+        let request = request.into_inner();
+        let conn = db::open(format!("dbs/{}.db", request.repository_id))?;
         Ok(Response::new(InsertReply {}))
     }
 
-    async fn insert_commit(&self, request: Request<Commit>) -> Result<Response<InsertReply>, Status> {
+    async fn insert_commits(&self, request: Request<InsertCommitsRequest>) -> Result<Response<InsertReply>, Status> {
         Ok(Response::new(InsertReply {}))
     }
 
-    async fn insert_import(&self, request: Request<Import>) -> Result<Response<InsertReply>, Status> {
+    async fn insert_imports(&self, request: Request<InsertImportsRequest>) -> Result<Response<InsertReply>, Status> {
         Ok(Response::new(InsertReply {}))
     }
 
-    async fn insert_hook(&self, request: Request<Hook>) -> Result<Response<InsertReply>, Status> {
+    async fn insert_hooks(&self, request: Request<InsertHooksRequest>) -> Result<Response<InsertReply>, Status> {
         Ok(Response::new(InsertReply {}))
     }
 }

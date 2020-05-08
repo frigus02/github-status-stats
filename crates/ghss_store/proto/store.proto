@@ -1,13 +1,6 @@
 syntax = "proto3";
 package store;
 
-service Store {
-	rpc InsertBuild (Build) returns (InsertReply);
-	rpc InsertCommit (Commit) returns (InsertReply);
-	rpc InsertImport (Import) returns (InsertReply);
-	rpc InsertHook (Hook) returns (InsertReply);
-}
-
 enum BuildSource {
 	STATUS = 0;
 	CHECK_RUN = 1;
@@ -23,6 +16,11 @@ message Build {
 	uint64 timestamp = 7;
 }
 
+message InsertBuildsRequest {
+	string repository_id = 1;
+	repeated Build builds = 2;
+}
+
 message Commit {
 	string build_name = 1;
 	BuildSource build_source = 2;
@@ -33,9 +31,19 @@ message Commit {
 	uint64 timestamp = 7;
 }
 
+message InsertCommitsRequest {
+	string repository_id = 1;
+	repeated Commit commits = 2;
+}
+
 message Import {
 	uint32 points = 1;
 	uint64 timestamp = 2;
+}
+
+message InsertImportsRequest {
+	string repository_id = 1;
+	repeated Import imports = 2;
 }
 
 message Hook {
@@ -44,4 +52,16 @@ message Hook {
 	uint64 timestamp = 3;
 }
 
+message InsertHooksRequest {
+	string repository_id = 1;
+	repeated Hook hooks = 2;
+}
+
 message InsertReply {}
+
+service Store {
+	rpc InsertBuilds (InsertBuildsRequest) returns (InsertReply);
+	rpc InsertCommits (InsertCommitsRequest) returns (InsertReply);
+	rpc InsertImports (InsertImportsRequest) returns (InsertReply);
+	rpc InsertHooks (InsertHooksRequest) returns (InsertReply);
+}

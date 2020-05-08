@@ -10,6 +10,7 @@ edition = "2018"
 prost = "0.6.1"
 tokio = { version = "0.2", features = ["macros"] }
 tonic = "0.2.1"
+rusqlite = "0.23.1"
 
 [build-dependencies]
 tonic-build = "0.2.0"
