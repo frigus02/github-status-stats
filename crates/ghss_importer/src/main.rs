@@ -6,7 +6,7 @@ use build::{get_builds_from_commit_shas, get_most_recent_builds};
 use config::Config;
 use ghss_github::Client;
 use ghss_models::{influxdb_name, influxdb_read_user};
-use ghss_tracing::register_tracing_root;
+use ghss_tracing::register_new_tracing_root;
 use influxdb::{get_commits_since_from_hooks, get_last_import, import};
 use tracing::{error, info, info_span};
 
@@ -88,7 +88,7 @@ async fn main() -> Result<(), String> {
     let res = async {
         let span = info_span!("import");
         let _guard = span.enter();
-        register_tracing_root();
+        register_new_tracing_root();
 
         match run(config).await {
             Ok(_) => Ok(()),

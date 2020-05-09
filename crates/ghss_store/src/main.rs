@@ -1,3 +1,4 @@
+mod config;
 mod db;
 mod schema;
 
@@ -5,9 +6,11 @@ use tonic::{transport::Server, Code, Request, Response, Status};
 
 use chrono::Utc;
 use db::DB;
+use ghss_tracing::{register_new_tracing_root, register_tracing_root};
 use proto::store_server::{Store, StoreServer};
 use proto::{ImportReply, ImportRequest, RecordHookReply, RecordHookRequest};
 use std::convert::{From, TryInto};
+use tracing::{info, info_span};
 
 pub(crate) mod proto {
     tonic::include_proto!("store");
@@ -30,6 +33,7 @@ impl Store for SQLiteStore {
         &self,
         request: Request<ImportRequest>,
     ) -> Result<Response<ImportReply>, Status> {
+        info!("import");
         let request = request.into_inner();
         let mut db = DB::open(format!("dbs/{}.db", request.repository_id))?;
         let trx = db.transaction()?;
@@ -49,6 +53,7 @@ impl Store for SQLiteStore {
         &self,
         request: Request<RecordHookRequest>,
     ) -> Result<Response<RecordHookReply>, Status> {
+        info!("record hook");
         let request = request.into_inner();
         let mut db = DB::open(format!("dbs/{}.db", request.repository_id))?;
         let trx = db.transaction()?;
@@ -70,10 +75,39 @@ impl Store for SQLiteStore {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = config::load();
+
+    ghss_tracing::setup(ghss_tracing::Config {
+        honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
+        honeycomb_dataset: config.honeycomb_dataset.clone(),
+        service_name: "store",
+    });
+
     let addr = "[::1]:50051".parse()?;
     let store = SQLiteStore::default();
 
     Server::builder()
+        .trace_fn(|headers| {
+            let span = info_span!("request");
+            {
+                // TODO: This seems weird. Need to understand why that's
+                // necessary or how to do it better.
+                let _guard = span.enter();
+                match (
+                    headers.get(ghss_tracing::HEADER_TRACE_ID),
+                    headers.get(ghss_tracing::HEADER_PARENT_SPAN_ID),
+                ) {
+                    (Some(trace_id), Some(parent_span_id)) => {
+                        register_tracing_root(
+                            trace_id.to_str().unwrap(),
+                            parent_span_id.to_str().unwrap(),
+                        );
+                    }
+                    _ => register_new_tracing_root(),
+                };
+            }
+            span
+        })
         .add_service(StoreServer::new(store))
         .serve(addr)
         .await?;
