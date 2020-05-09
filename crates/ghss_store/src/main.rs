@@ -1,15 +1,13 @@
 mod db;
 mod schema;
 
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::{transport::Server, Code, Request, Response, Status};
 
+use chrono::Utc;
 use db::DB;
 use proto::store_server::{Store, StoreServer};
-use proto::{
-    InsertBuildsRequest, InsertCommitsRequest, InsertHooksRequest, InsertImportsRequest,
-    InsertReply,
-};
-use std::convert::From;
+use proto::{ImportReply, ImportRequest, RecordHookReply, RecordHookRequest};
+use std::convert::{From, TryInto};
 
 pub(crate) mod proto {
     tonic::include_proto!("store");
@@ -18,9 +16,7 @@ pub(crate) mod proto {
 impl From<db::Error> for Status {
     fn from(err: db::Error) -> Self {
         match err {
-            db::Error::SQLite(err) => {
-                Status::new(tonic::Code::Internal, format!("SQL error: {}", err))
-            }
+            db::Error::SQLite(err) => Status::new(Code::Internal, format!("SQL error: {}", err)),
         }
     }
 }
@@ -30,44 +26,45 @@ struct SQLiteStore {}
 
 #[tonic::async_trait]
 impl Store for SQLiteStore {
-    async fn insert_builds(
+    async fn import(
         &self,
-        request: Request<InsertBuildsRequest>,
-    ) -> Result<Response<InsertReply>, Status> {
+        request: Request<ImportRequest>,
+    ) -> Result<Response<ImportReply>, Status> {
         let request = request.into_inner();
-        let db = DB::open(format!("dbs/{}.db", request.repository_id))?;
-        db.insert_builds(&request.builds)?;
-        Ok(Response::new(InsertReply {}))
+        let mut db = DB::open(format!("dbs/{}.db", request.repository_id))?;
+        let trx = db.transaction()?;
+        trx.upsert_builds(&request.builds)?;
+        trx.upsert_commits(&request.commits)?;
+        trx.insert_import(
+            Utc::now().timestamp_millis(),
+            (request.builds.len() + request.commits.len())
+                .try_into()
+                .map_err(|_| Status::new(Code::InvalidArgument, "Too many builds and commits"))?,
+        )?;
+        trx.commit()?;
+        Ok(Response::new(ImportReply {}))
     }
 
-    async fn insert_commits(
+    async fn record_hook(
         &self,
-        request: Request<InsertCommitsRequest>,
-    ) -> Result<Response<InsertReply>, Status> {
+        request: Request<RecordHookRequest>,
+    ) -> Result<Response<RecordHookReply>, Status> {
         let request = request.into_inner();
-        let db = DB::open(format!("dbs/{}.db", request.repository_id))?;
-        db.insert_commits(&request.commits)?;
-        Ok(Response::new(InsertReply {}))
-    }
-
-    async fn insert_imports(
-        &self,
-        request: Request<InsertImportsRequest>,
-    ) -> Result<Response<InsertReply>, Status> {
-        let request = request.into_inner();
-        let db = DB::open(format!("dbs/{}.db", request.repository_id))?;
-        db.insert_imports(&request.imports)?;
-        Ok(Response::new(InsertReply {}))
-    }
-
-    async fn insert_hooks(
-        &self,
-        request: Request<InsertHooksRequest>,
-    ) -> Result<Response<InsertReply>, Status> {
-        let request = request.into_inner();
-        let db = DB::open(format!("dbs/{}.db", request.repository_id))?;
-        db.insert_hooks(&request.hooks)?;
-        Ok(Response::new(InsertReply {}))
+        let mut db = DB::open(format!("dbs/{}.db", request.repository_id))?;
+        let trx = db.transaction()?;
+        if let Some(hook) = request.hook {
+            trx.insert_hook(&hook)?;
+        } else {
+            return Err(Status::new(
+                Code::InvalidArgument,
+                "Hook is a mandatory field",
+            ));
+        }
+        if let Some(build) = request.build {
+            trx.upsert_builds(&[build])?;
+        }
+        trx.commit()?;
+        Ok(Response::new(RecordHookReply {}))
     }
 }
 

@@ -16,11 +16,6 @@ message Build {
 	int64 timestamp = 7;
 }
 
-message InsertBuildsRequest {
-	string repository_id = 1;
-	repeated Build builds = 2;
-}
-
 message Commit {
 	string build_name = 1;
 	BuildSource build_source = 2;
@@ -31,20 +26,13 @@ message Commit {
 	int64 timestamp = 7;
 }
 
-message InsertCommitsRequest {
+message ImportRequest {
 	string repository_id = 1;
-	repeated Commit commits = 2;
+	repeated Build builds = 2;
+	repeated Commit commits = 3;
 }
 
-message Import {
-	uint32 points = 1;
-	int64 timestamp = 2;
-}
-
-message InsertImportsRequest {
-	string repository_id = 1;
-	repeated Import imports = 2;
-}
+message ImportReply {}
 
 message Hook {
 	BuildSource type = 1;
@@ -52,16 +40,15 @@ message Hook {
 	int64 timestamp = 3;
 }
 
-message InsertHooksRequest {
+message RecordHookRequest {
 	string repository_id = 1;
-	repeated Hook hooks = 2;
+	Hook hook = 2;
+	Build build = 3;
 }
 
-message InsertReply {}
+message RecordHookReply {}
 
 service Store {
-	rpc InsertBuilds (InsertBuildsRequest) returns (InsertReply);
-	rpc InsertCommits (InsertCommitsRequest) returns (InsertReply);
-	rpc InsertImports (InsertImportsRequest) returns (InsertReply);
-	rpc InsertHooks (InsertHooksRequest) returns (InsertReply);
+	rpc Import (ImportRequest) returns (ImportReply);
+	rpc RecordHook (RecordHookRequest) returns (RecordHookReply);
 }
