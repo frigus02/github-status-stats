@@ -45,6 +45,7 @@ RUN USER=root cargo new --lib crates/ghss_github && \
     USER=root cargo new --bin crates/ghss_importer && \
     USER=root cargo new --lib crates/ghss_influxdb && \
     USER=root cargo new --lib crates/ghss_models && \
+    USER=root cargo new --bin crates/ghss_store && \
     USER=root cargo new --lib crates/ghss_tracing && \
     USER=root cargo new --bin crates/ghss_website
 COPY Cargo.toml Cargo.lock ./
@@ -52,11 +53,13 @@ COPY crates/ghss_github/Cargo.toml ./crates/ghss_github/
 COPY crates/ghss_importer/Cargo.toml ./crates/ghss_importer/
 COPY crates/ghss_influxdb/Cargo.toml ./crates/ghss_influxdb/
 COPY crates/ghss_models/Cargo.toml ./crates/ghss_models/
+COPY crates/ghss_store/Cargo.toml ./crates/ghss_store/
 COPY crates/ghss_tracing/Cargo.toml ./crates/ghss_tracing/
 COPY crates/ghss_website/Cargo.toml ./crates/ghss_website/
 RUN cargo clippy $CARGO_FLAGS && \
     cargo build $CARGO_FLAGS && \
     rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/ghss_importer* && \
+    rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/ghss_store* && \
     rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/ghss_website* && \
     rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/libghss_github* && \
     rm target/x86_64-unknown-linux-musl/$CARGO_MODE/deps/libghss_influxdb* && \
