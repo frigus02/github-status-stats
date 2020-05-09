@@ -3,7 +3,7 @@ use rusqlite::{Connection, Result};
 pub fn up(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "BEGIN;
-        CREATE TABLE builds (
+        CREATE TABLE IF NOT EXISTS builds (
             timestamp   INTEGER NOT NULL,
             name        TEXT NOT NULL,
             source      INTEGER NOT NULL,
@@ -13,9 +13,9 @@ pub fn up(conn: &Connection) -> Result<()> {
             duration_ms INTEGER NOT NULL,
             PRIMARY KEY(timestamp, name, source)
         ) WITHOUT ROWID;
-        CREATE TABLE commits (
+        CREATE TABLE IF NOT EXISTS commits (
             timestamp         INTEGER NOT NULL,
-            build_nam         TEXT NOT NULL,
+            build_name        TEXT NOT NULL,
             build_source      INTEGER NOT NULL,
             commit            TEXT NOT NULL,
             builds            INTEGER NOT NULL,
@@ -23,11 +23,11 @@ pub fn up(conn: &Connection) -> Result<()> {
             builds_failed     INTEGER NOT NULL,
             PRIMARY KEY(timestamp, name, source)
         ) WITHOUT ROWID;
-        CREATE TABLE imports (
+        CREATE TABLE IF NOT EXISTS imports (
             timestamp INTEGER PRIMARY KEY,
             points    INTEGER NOT NULL,
         ) WITHOUT ROWID;
-        CREATE TABLE hooks (
+        CREATE TABLE IF NOT EXISTS hooks (
             timestamp INTEGER NOT NULL,
             type      INTEGER NOT NULL,
             commit    TEXT NOT NULL,
