@@ -28,10 +28,10 @@ impl DB {
 
     pub fn insert_builds(&self, builds: &[Build]) -> Result<()> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO builds(timestamp, name, source, commit, successful, failed, duration_ms)
+            "INSERT INTO builds(timestamp, name, source, \"commit\", successful, failed, duration_ms)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(timestamp, name, source) DO UPDATE SET
-                commit = excluded.commit,
+                \"commit\" = excluded.\"commit\",
                 successful = excluded.successful,
                 failed = excluded.failed,
                 duration_ms = excluded.duration_ms",
@@ -52,10 +52,10 @@ impl DB {
 
     pub fn insert_commits(&self, commits: &[Commit]) -> Result<()> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO commits(timestamp, build_name, build_source, commit, builds, builds_successful, builds_failed)
+            "INSERT INTO commits(timestamp, build_name, build_source, \"commit\", builds, builds_successful, builds_failed)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(timestamp, build_name, build_source) DO UPDATE SET
-                commit = excluded.commit,
+                \"commit\" = excluded.\"commit\",
                 builds = excluded.builds,
                 builds_successful = excluded.builds_successful,
                 builds_failed = excluded.builds_failed",
@@ -89,10 +89,10 @@ impl DB {
 
     pub fn insert_hooks(&self, hooks: &[Hook]) -> Result<()> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO hooks(timestamp, type, commit)
+            "INSERT INTO hooks(timestamp, type, \"commit\")
             VALUES (?, ?, ?)
             ON CONFLICT(timestamp, type) DO UPDATE SET
-                commit = excluded.commit",
+                \"commit\" = excluded.\"commit\"",
         )?;
         for hook in hooks {
             stmt.execute(params![hook.timestamp, hook.r#type, hook.commit])?;
