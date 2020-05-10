@@ -24,8 +24,16 @@ impl From<db::Error> for Status {
     }
 }
 
-#[derive(Debug, Default)]
-struct SQLiteStore {}
+#[derive(Debug)]
+struct SQLiteStore {
+    database_directory: String,
+}
+
+impl SQLiteStore {
+    fn open_db(&self, repository_id: String) -> db::Result<DB> {
+        DB::open(format!("{}/{}.db", self.database_directory, repository_id))
+    }
+}
 
 #[tonic::async_trait]
 impl Store for SQLiteStore {
@@ -35,7 +43,7 @@ impl Store for SQLiteStore {
     ) -> Result<Response<ImportReply>, Status> {
         info!("import");
         let request = request.into_inner();
-        let mut db = DB::open(format!("dbs/{}.db", request.repository_id))?;
+        let mut db = self.open_db(request.repository_id)?;
         let trx = db.transaction()?;
         trx.upsert_builds(&request.builds)?;
         trx.upsert_commits(&request.commits)?;
@@ -55,7 +63,7 @@ impl Store for SQLiteStore {
     ) -> Result<Response<RecordHookReply>, Status> {
         info!("record hook");
         let request = request.into_inner();
-        let mut db = DB::open(format!("dbs/{}.db", request.repository_id))?;
+        let mut db = self.open_db(request.repository_id)?;
         let trx = db.transaction()?;
         if let Some(hook) = request.hook {
             trx.insert_hook(&hook)?;
@@ -84,7 +92,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let addr = "[::1]:50051".parse()?;
-    let store = SQLiteStore::default();
+    let store = SQLiteStore {
+        database_directory: config.database_directory,
+    };
 
     Server::builder()
         .trace_fn(|headers| {
