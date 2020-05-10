@@ -1,19 +1,7 @@
+use super::schema;
+use super::Result;
 use crate::proto::{Build, Commit, Hook};
-use crate::schema;
 use rusqlite::{params, Connection};
-use std::convert::From;
-
-pub enum Error {
-    SQLite(rusqlite::Error),
-}
-
-impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Self {
-        Error::SQLite(err)
-    }
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
 
 pub struct DB {
     conn: Connection,
@@ -85,12 +73,12 @@ impl Transaction<'_> {
         Ok(())
     }
 
-    pub fn insert_import(&self, timestamp: i64, points: i32) -> Result<()> {
+    pub fn insert_import(&self, timestamp: i64) -> Result<()> {
         let mut stmt = self.transaction.prepare(
-            "INSERT INTO imports(timestamp, points)
-            VALUES (?, ?)",
+            "INSERT INTO imports(timestamp)
+            VALUES (?)",
         )?;
-        stmt.execute(params![timestamp, points])?;
+        stmt.execute(params![timestamp])?;
         Ok(())
     }
 

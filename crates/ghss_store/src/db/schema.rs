@@ -24,8 +24,7 @@ pub fn up(conn: &Connection) -> Result<()> {
             PRIMARY KEY(\"commit\", build_name, build_source)
         ) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS imports (
-            timestamp INTEGER PRIMARY KEY,
-            points    INTEGER NOT NULL
+            timestamp INTEGER PRIMARY KEY
         ) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS hooks (
             timestamp  INTEGER PRIMARY KEY,

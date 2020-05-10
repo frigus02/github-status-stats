@@ -1,15 +1,15 @@
 mod config;
 mod db;
-mod schema;
 
 use tonic::{transport::Server, Code, Request, Response, Status};
 
-use chrono::Utc;
-use db::DB;
 use ghss_tracing::{register_new_tracing_root, register_tracing_root};
 use proto::store_server::{Store, StoreServer};
-use proto::{ImportReply, ImportRequest, RecordHookReply, RecordHookRequest};
-use std::convert::{From, TryInto};
+use proto::{
+    HookedCommitsReply, HookedCommitsRequest, ImportReply, ImportRequest, RecordHookReply,
+    RecordHookRequest,
+};
+use std::convert::From;
 use tracing::{info, info_span};
 
 pub(crate) mod proto {
@@ -19,6 +19,7 @@ pub(crate) mod proto {
 impl From<db::Error> for Status {
     fn from(err: db::Error) -> Self {
         match err {
+            db::Error::DBNotFound => Status::new(Code::FailedPrecondition, "DB not found"),
             db::Error::SQLite(err) => Status::new(Code::Internal, format!("SQL error: {}", err)),
         }
     }
@@ -30,8 +31,16 @@ struct SQLiteStore {
 }
 
 impl SQLiteStore {
-    fn open_db(&self, repository_id: String) -> db::Result<DB> {
-        DB::open(format!("{}/{}.db", self.database_directory, repository_id))
+    fn _db_name(&self, repository_id: String) -> String {
+        format!("{}/{}.db", self.database_directory, repository_id)
+    }
+
+    fn db_write(&self, repository_id: String) -> db::Result<db::write::DB> {
+        db::write::DB::open(self._db_name(repository_id))
+    }
+
+    fn db_read(&self, repository_id: String) -> db::Result<db::read::DB> {
+        db::read::DB::open(self._db_name(repository_id))
     }
 }
 
@@ -43,16 +52,11 @@ impl Store for SQLiteStore {
     ) -> Result<Response<ImportReply>, Status> {
         info!("import");
         let request = request.into_inner();
-        let mut db = self.open_db(request.repository_id)?;
+        let mut db = self.db_write(request.repository_id)?;
         let trx = db.transaction()?;
         trx.upsert_builds(&request.builds)?;
         trx.upsert_commits(&request.commits)?;
-        trx.insert_import(
-            Utc::now().timestamp_millis(),
-            (request.builds.len() + request.commits.len())
-                .try_into()
-                .map_err(|_| Status::new(Code::InvalidArgument, "Too many builds and commits"))?,
-        )?;
+        trx.insert_import(request.timestamp)?;
         trx.commit()?;
         Ok(Response::new(ImportReply {}))
     }
@@ -63,7 +67,7 @@ impl Store for SQLiteStore {
     ) -> Result<Response<RecordHookReply>, Status> {
         info!("record hook");
         let request = request.into_inner();
-        let mut db = self.open_db(request.repository_id)?;
+        let mut db = self.db_write(request.repository_id)?;
         let trx = db.transaction()?;
         if let Some(hook) = request.hook {
             trx.insert_hook(&hook)?;
@@ -78,6 +82,16 @@ impl Store for SQLiteStore {
         }
         trx.commit()?;
         Ok(Response::new(RecordHookReply {}))
+    }
+
+    async fn get_hooked_commits_since_last_import(
+        &self,
+        request: Request<HookedCommitsRequest>,
+    ) -> Result<Response<HookedCommitsReply>, Status> {
+        let request = request.into_inner();
+        let db = self.db_read(request.repository_id)?;
+        let commits = db.get_hooked_commits_since_last_import(request.until)?;
+        Ok(Response::new(HookedCommitsReply { commits }))
     }
 }
 
