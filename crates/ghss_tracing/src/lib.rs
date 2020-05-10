@@ -1,3 +1,5 @@
+pub mod tonic;
+
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::prelude::*;
 

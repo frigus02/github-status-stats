@@ -1,44 +1,25 @@
-use chrono::{DateTime, FixedOffset, Utc};
-use ghss_influxdb::Client;
-use ghss_models::Import;
+use chrono::{DateTime, FixedOffset};
+use ghss_store_client::{store_client::StoreClient, Channel};
+use ghss_store_client::{Build, Commit, ImportRequest};
 use serde::Deserialize;
 use tracing::info;
 
 type BoxError = Box<dyn std::error::Error>;
 
-pub async fn setup(
-    client: &ghss_influxdb::Client<'_>,
-    db: &str,
-    user: &str,
-    password: &str,
-) -> Result<(), BoxError> {
-    info!(influxdb.db = db, influxdb.user = user, "setup db");
-    client.query(&format!("CREATE DATABASE {}", db)).await?;
-    client
-        .query(&format!(
-            "CREATE USER {} WITH PASSWORD '{}'",
-            user, password
-        ))
-        .await?;
-    client
-        .query(&format!("GRANT READ ON {} TO {}", db, user))
-        .await?;
-    Ok(())
-}
-
 pub async fn import(
-    client: &ghss_influxdb::Client<'_>,
-    mut points: Vec<ghss_influxdb::Point>,
+    client: &StoreClient<Channel>,
+    repository_id: String,
+    builds: Vec<Build>,
+    commits: Vec<Commit>,
 ) -> Result<(), BoxError> {
-    info!(points_count = points.len(), "write points");
-    points.push(
-        Import {
-            time: Utc::now(),
-            points: points.len() as i64,
-        }
-        .into(),
-    );
-    client.write(points).await
+    info!(points_count = builds.len() + commits.len(), "write points");
+    let request = ghss_tracing::tonic::request(ImportRequest {
+        repository_id,
+        builds,
+        commits,
+    });
+    let _response = client.import(request).await?;
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -47,7 +28,7 @@ struct ImportRow {
 }
 
 pub async fn get_last_import(
-    client: &Client<'_>,
+    client: &StoreClient<Channel>,
 ) -> Result<Option<DateTime<FixedOffset>>, BoxError> {
     Ok(client
         .query("SELECT * FROM import ORDER BY time DESC LIMIT 1")
@@ -65,7 +46,7 @@ struct HookRow {
 }
 
 pub async fn get_commits_since_from_hooks(
-    client: &Client<'_>,
+    client: &StoreClient<Channel>,
     since: &DateTime<FixedOffset>,
 ) -> Result<Vec<String>, BoxError> {
     Ok(client

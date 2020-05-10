@@ -5,7 +5,7 @@ mod influxdb;
 use build::{get_builds_from_commit_shas, get_most_recent_builds};
 use config::Config;
 use ghss_github::Client;
-use ghss_models::{influxdb_name, influxdb_read_user};
+use ghss_store_client::store_client::StoreClient;
 use ghss_tracing::register_new_tracing_root;
 use influxdb::{get_commits_since_from_hooks, get_last_import, import};
 use tracing::{error, info, info_span};
@@ -15,6 +15,7 @@ type BoxError = Box<dyn std::error::Error>;
 #[allow(clippy::cognitive_complexity)]
 async fn run(config: Config) -> Result<(), BoxError> {
     let gh_app_client = Client::new_app_auth(&config.gh_app_id, &config.gh_private_key.unsecure())?;
+    let store_client = StoreClient::connect(config.store_url).await?;
 
     let installations = gh_app_client.get_app_installations().await?;
     for installation in installations {
@@ -32,15 +33,6 @@ async fn run(config: Config) -> Result<(), BoxError> {
 
             info!(%repository.full_name, "start importing repository");
 
-            let influxdb_db = influxdb_name(&repository);
-            let influxdb_client = ghss_influxdb::Client::new(
-                &config.influxdb_base_url,
-                &influxdb_db,
-                &config.influxdb_admin_username,
-                &config.influxdb_admin_password.unsecure(),
-            )?;
-            let influxdb_read_user = influxdb_read_user(&repository);
-
             let last_import = get_last_import(&influxdb_client).await?;
             if let Some(last_import) = last_import {
                 info!(
@@ -48,26 +40,18 @@ async fn run(config: Config) -> Result<(), BoxError> {
                     "found last import; importing since then"
                 );
 
-                let commit_shas =
-                    get_commits_since_from_hooks(&influxdb_client, &last_import).await?;
+                let commit_shas = get_commits_since_from_hooks(&store_client, &last_import).await?;
                 if !commit_shas.is_empty() {
                     let points =
                         get_builds_from_commit_shas(&gh_inst_client, &repository, commit_shas)
                             .await?;
-                    import(&influxdb_client, points).await?;
+                    import(&store_client, points).await?;
                 }
             } else {
                 info!("first import; setup db and perform initial import");
 
-                influxdb::setup(
-                    &influxdb_client,
-                    &influxdb_db,
-                    &influxdb_read_user,
-                    &config.influxdb_read_password.unsecure(),
-                )
-                .await?;
                 let points = get_most_recent_builds(&gh_inst_client, &repository).await?;
-                import(&influxdb_client, points).await?;
+                import(&store_client, points).await?;
             }
         }
     }

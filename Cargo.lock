@@ -447,8 +447,8 @@ version = "0.1.0"
 dependencies = [
  "chrono 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "ghss_github 0.1.0",
- "ghss_influxdb 0.1.0",
  "ghss_models 0.1.0",
+ "ghss_store_client 0.1.0",
  "ghss_tracing 0.1.0",
  "itertools 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "secstr 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -495,11 +495,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ghss_store_client"
+version = "0.1.0"
+dependencies = [
+ "prost 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic-build 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "ghss_tracing"
 version = "0.1.0"
 dependencies = [
  "libhoney-rust 0.1.3 (git+https://github.com/nlopes/libhoney-rust?rev=3acdc4021d08a9b78653c77bb4ff3dab3e2b9556)",
  "tokio 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-honeycomb 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-subscriber 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

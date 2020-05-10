@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 chrono = "0.4.11"
 ghss_github = { path = "../ghss_github" }
-ghss_influxdb = { path = "../ghss_influxdb" }
 ghss_models = { path = "../ghss_models" }
+ghss_store_client = { path = "../ghss_store_client" }
 ghss_tracing = { path = "../ghss_tracing" }
 itertools = "0.9.0"
 secstr = "0.4.0"
