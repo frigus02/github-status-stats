@@ -1,8 +1,6 @@
 mod config;
 mod db;
 
-use tonic::{transport::Server, Code, Request, Response, Status};
-
 use ghss_tracing::{register_new_tracing_root, register_tracing_root};
 use proto::store_server::{Store, StoreServer};
 use proto::{
@@ -10,6 +8,7 @@ use proto::{
     RecordHookRequest,
 };
 use std::convert::From;
+use tonic::{transport::Server, Code, Request, Response, Status};
 use tracing::{info, info_span};
 
 pub(crate) mod proto {
