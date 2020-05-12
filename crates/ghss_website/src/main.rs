@@ -8,7 +8,6 @@ mod token;
 
 use bytes::Bytes;
 use config::with_config;
-use ghss_models::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
 use ghss_tracing::register_new_tracing_root;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -18,9 +17,9 @@ use std::sync::Arc;
 use templates::{
     with_templates, DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess,
 };
+use token::{optional_token, OptionalToken};
 use tracing::{error, info, info_span};
 use tracing_futures::Instrument;
-use token::{optional_token, OptionalToken};
 use warp::{
     http::{Response, StatusCode, Uri},
     hyper::{self, header, service::Service, Body, Request},
@@ -236,45 +235,38 @@ async fn hooks_route(
         info!("Hook: {:?}", payload);
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
-                let influxdb_db = influxdb_name(&check_run.repository);
-                let client = ghss_influxdb::Client::new(
-                    &config.influxdb_base_url,
-                    &influxdb_db,
-                    &config.influxdb_admin_username,
-                    &config.influxdb_admin_password.unsecure(),
-                )?;
-                client
-                    .write(vec![
-                        ghss_models::Hook {
-                            time: check_run.check_run.started_at,
-                            r#type: ghss_models::HookType::CheckRun,
-                            commit_sha: check_run.check_run.head_sha.clone(),
-                        }
-                        .into(),
-                        Build::from(check_run.check_run).into(),
-                    ])
-                    .await?
+                let mut client =
+                    ghss_store_client::store_client::StoreClient::connect(config.store_url.clone())
+                        .await?;
+                let request = ghss_tracing::tonic::request(ghss_store_client::RecordHookRequest {
+                    repository_id: check_run.repository.id.to_string(),
+                    hook: Some(ghss_store_client::Hook {
+                        r#type: ghss_store_client::BuildSource::CheckRun as i32,
+                        commit: check_run.check_run.head_sha.clone(),
+                        timestamp: check_run.check_run.started_at.timestamp_millis(),
+                    }),
+                    build: Some(check_run.check_run.into()),
+                });
+                let _response = client.record_hook(request).await?;
             }
             github_hooks::Payload::GitHubAppAuthorization(_auth) => {}
             github_hooks::Payload::Installation => {}
             github_hooks::Payload::InstallationRepositories => {}
             github_hooks::Payload::Ping(_ping) => {}
             github_hooks::Payload::Status(status) => {
-                let influxdb_db = influxdb_name(&status.repository);
-                let client = ghss_influxdb::Client::new(
-                    &config.influxdb_base_url,
-                    &influxdb_db,
-                    &config.influxdb_admin_username,
-                    &config.influxdb_admin_password.unsecure(),
-                )?;
-                client
-                    .write(vec![ghss_models::Hook {
-                        time: status.created_at,
-                        r#type: ghss_models::HookType::Status,
-                        commit_sha: status.sha,
-                    }
-                    .into()])
-                    .await?
+                let mut client =
+                    ghss_store_client::store_client::StoreClient::connect(config.store_url.clone())
+                        .await?;
+                let request = ghss_tracing::tonic::request(ghss_store_client::RecordHookRequest {
+                    repository_id: status.repository.id.to_string(),
+                    hook: Some(ghss_store_client::Hook {
+                        r#type: ghss_store_client::BuildSource::Status as i32,
+                        commit: status.sha,
+                        timestamp: status.created_at.timestamp_millis(),
+                    }),
+                    build: None,
+                });
+                let _response = client.record_hook(request).await?;
             }
         };
 

@@ -470,15 +470,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ghss_models"
-version = "0.1.0"
-dependencies = [
- "chrono 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "ghss_github 0.1.0",
- "ghss_influxdb 0.1.0",
-]
-
-[[package]]
 name = "ghss_store"
 version = "0.1.0"
 dependencies = [
@@ -496,6 +487,7 @@ dependencies = [
 name = "ghss_store_client"
 version = "0.1.0"
 dependencies = [
+ "ghss_github 0.1.0",
  "prost 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic-build 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -521,8 +513,7 @@ dependencies = [
  "chrono 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "ghss_github 0.1.0",
- "ghss_influxdb 0.1.0",
- "ghss_models 0.1.0",
+ "ghss_store_client 0.1.0",
  "ghss_tracing 0.1.0",
  "handlebars 3.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hmac 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",

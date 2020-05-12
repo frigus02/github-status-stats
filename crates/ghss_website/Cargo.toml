@@ -12,8 +12,7 @@ bytes = "0.5.4"
 chrono = "0.4.11"
 futures = "0.3.4"
 ghss_github = { path = "../ghss_github" }
-ghss_influxdb = { path = "../ghss_influxdb" }
-ghss_models = { path = "../ghss_models" }
+ghss_store_client = { path = "../ghss_store_client" }
 ghss_tracing = { path = "../ghss_tracing" }
 handlebars = "3.0.1"
 hmac = "0.7.1"

@@ -1,7 +1,6 @@
 use chrono::{DateTime, FixedOffset};
 use ghss_github::{
-    CheckRun, CheckRunConclusion, Client, CommitStatus, CommitStatusState, MostRecentCommit,
-    Repository,
+    CheckRun, Client, CommitStatus, CommitStatusState, MostRecentCommit, Repository,
 };
 use ghss_store_client::{Build, BuildSource, Commit};
 use itertools::Itertools;
@@ -62,35 +61,11 @@ fn statuses_to_builds(mut statuses: Vec<CommitStatus>, commit_sha: &str) -> Vec<
         .collect()
 }
 
-fn check_run_to_build(check_run: CheckRun) -> Build {
-    Build {
-        name: check_run.name,
-        source: BuildSource::CheckRun as i32,
-        commit: check_run.head_sha,
-        successful: match &check_run.conclusion {
-            Some(conclusion) => conclusion == &CheckRunConclusion::Success,
-            None => false,
-        },
-        failed: match &check_run.conclusion {
-            Some(conclusion) => {
-                conclusion == &CheckRunConclusion::Failure
-                    || conclusion == &CheckRunConclusion::TimedOut
-            }
-            None => false,
-        },
-        duration_ms: match check_run.completed_at {
-            Some(completed_at) => (completed_at.timestamp_millis()
-                - check_run.started_at.timestamp_millis())
-            .try_into()
-            .expect("duration should fit into u32"),
-            None => 0,
-        },
-        timestamp: check_run.started_at.timestamp_millis(),
-    }
-}
-
 fn check_runs_to_builds(check_runs: Vec<CheckRun>) -> Vec<Build> {
-    check_runs.into_iter().map(check_run_to_build).collect()
+    check_runs
+        .into_iter()
+        .map(|check_run| check_run.into())
+        .collect()
 }
 
 fn builds_to_commit(builds: Vec<&Build>, timestamp: DateTime<FixedOffset>) -> Commit {
