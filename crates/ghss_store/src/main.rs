@@ -1,18 +1,18 @@
 mod config;
 mod db;
+mod query;
+mod store;
 
 use ghss_tracing::{register_new_tracing_root, register_tracing_root};
-use proto::store_server::{Store, StoreServer};
-use proto::{
-    HookedCommitsReply, HookedCommitsRequest, ImportReply, ImportRequest, RecordHookReply,
-    RecordHookRequest,
-};
+use proto::query_server::QueryServer;
+use proto::store_server::StoreServer;
 use std::convert::From;
-use tonic::{transport::Server, Code, Request, Response, Status};
-use tracing::{info, info_span};
+use tonic::{transport::Server, Code, Status};
+use tracing::info_span;
 
 pub(crate) mod proto {
     tonic::include_proto!("store");
+    tonic::include_proto!("query");
 }
 
 impl From<db::Error> for Status {
@@ -24,73 +24,18 @@ impl From<db::Error> for Status {
     }
 }
 
-#[derive(Debug)]
-struct SQLiteStore {
-    database_directory: String,
+#[derive(Debug, Clone)]
+pub(crate) struct SQLiteStore {
+    pub database_directory: String,
 }
 
 impl SQLiteStore {
-    fn _db_name(&self, repository_id: String) -> String {
-        format!("{}/{}.db", self.database_directory, repository_id)
-    }
-
     fn db_write(&self, repository_id: String) -> db::Result<db::write::DB> {
-        db::write::DB::open(self._db_name(repository_id))
+        db::write::DB::open(&self.database_directory, &repository_id)
     }
 
     fn db_read(&self, repository_id: String) -> db::Result<db::read::DB> {
-        db::read::DB::open(self._db_name(repository_id))
-    }
-}
-
-#[tonic::async_trait]
-impl Store for SQLiteStore {
-    async fn import(
-        &self,
-        request: Request<ImportRequest>,
-    ) -> Result<Response<ImportReply>, Status> {
-        info!("import");
-        let request = request.into_inner();
-        let mut db = self.db_write(request.repository_id)?;
-        let trx = db.transaction()?;
-        trx.upsert_builds(&request.builds)?;
-        trx.upsert_commits(&request.commits)?;
-        trx.insert_import(request.timestamp)?;
-        trx.commit()?;
-        Ok(Response::new(ImportReply {}))
-    }
-
-    async fn record_hook(
-        &self,
-        request: Request<RecordHookRequest>,
-    ) -> Result<Response<RecordHookReply>, Status> {
-        info!("record hook");
-        let request = request.into_inner();
-        let mut db = self.db_write(request.repository_id)?;
-        let trx = db.transaction()?;
-        if let Some(hook) = request.hook {
-            trx.insert_hook(&hook)?;
-        } else {
-            return Err(Status::new(
-                Code::InvalidArgument,
-                "Hook is a mandatory field",
-            ));
-        }
-        if let Some(build) = request.build {
-            trx.upsert_builds(&[build])?;
-        }
-        trx.commit()?;
-        Ok(Response::new(RecordHookReply {}))
-    }
-
-    async fn get_hooked_commits_since_last_import(
-        &self,
-        request: Request<HookedCommitsRequest>,
-    ) -> Result<Response<HookedCommitsReply>, Status> {
-        let request = request.into_inner();
-        let db = self.db_read(request.repository_id)?;
-        let commits = db.get_hooked_commits_since_last_import(request.until)?;
-        Ok(Response::new(HookedCommitsReply { commits }))
+        db::read::DB::open(&self.database_directory, &repository_id)
     }
 }
 
@@ -131,7 +76,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             span
         })
-        .add_service(StoreServer::new(store))
+        .add_service(StoreServer::new(store.clone()))
+        .add_service(QueryServer::new(store))
         .serve(addr)
         .await?;
 

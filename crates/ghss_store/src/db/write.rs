@@ -8,8 +8,9 @@ pub struct DB {
 }
 
 impl DB {
-    pub fn open(name: String) -> Result<DB> {
-        let conn = Connection::open(name)?;
+    pub fn open(directory: &str, repository_id: &str) -> Result<DB> {
+        let path = format!("{}/{}.db", directory, repository_id);
+        let conn = Connection::open(path)?;
         schema::up(&conn)?;
         Ok(DB { conn })
     }

@@ -1,0 +1,58 @@
+syntax = "proto3";
+package query;
+
+enum AggregateFunction {
+	AVG = 0;
+	COUNT = 1;
+}
+
+message Column {
+	string name = 1;
+	AggregateFunction aggregation = 2;
+}
+
+message TotalAggregatesRequest {
+	string table = 1;
+	repeated Column columns = 2;
+	int64 timestamp_from = 3;
+	int64 timestamp_to = 4;
+	repeated string group_by_columns = 5;
+}
+
+message TotalAggregatesReply {
+	message Row {
+		repeated int64 aggregates = 1;
+		repeated string groups = 2;
+	}
+	repeated string columns = 1;
+	repeated Row rows = 2;
+}
+
+enum IntervalType {
+	SPARSE = 0;
+	DETAILED = 1;
+}
+
+message IntervalAggregatesRequest {
+	string table = 1;
+	repeated Column columns = 2;
+	int64 timestamp_from = 3;
+	int64 timestamp_to = 4;
+	repeated string group_by_columns = 6;
+	IntervalType interval_type = 5;
+}
+
+message IntervalAggregatesReply {
+	message Row {
+		repeated int64 aggregates = 1;
+		repeated string groups = 2;
+		int64 timestamp = 3;
+	}
+	repeated string columns = 1;
+	repeated Row rows = 2;
+}
+
+service Query {
+	rpc GetTotalAggregates (TotalAggregatesRequest) returns (TotalAggregatesReply);
+	rpc GetIntervalAggregates (IntervalAggregatesRequest) returns (IntervalAggregatesReply);
+}
