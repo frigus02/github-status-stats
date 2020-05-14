@@ -4,8 +4,12 @@ pub mod write;
 
 use std::convert::From;
 
+#[derive(Debug)]
 pub enum Error {
     DBNotFound,
+    InvalidIdentifier(String),
+    EmptyColumns,
+    InvalidTimeRange,
     SQLite(rusqlite::Error),
 }
 

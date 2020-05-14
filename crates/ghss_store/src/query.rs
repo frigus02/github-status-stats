@@ -13,7 +13,15 @@ impl Query for SQLiteStore {
         request: Request<TotalAggregatesRequest>,
     ) -> Result<Response<TotalAggregatesReply>, Status> {
         info!("get_total_aggregates");
-        unimplemented!()
+        let request = request.into_inner();
+        let db = self.db_read(request.repository_id)?;
+        Ok(Response::new(db.get_total_aggregates(
+            request.table,
+            request.columns,
+            request.timestamp_from,
+            request.timestamp_to,
+            request.group_by_columns,
+        )?))
     }
 
     async fn get_interval_aggregates(
@@ -21,6 +29,16 @@ impl Query for SQLiteStore {
         request: Request<IntervalAggregatesRequest>,
     ) -> Result<Response<IntervalAggregatesReply>, Status> {
         info!("get_interval_aggregates");
-        unimplemented!()
+        let request = request.into_inner();
+        let interval_type = request.interval_type();
+        let db = self.db_read(request.repository_id)?;
+        Ok(Response::new(db.get_interval_aggregates(
+            request.table,
+            request.columns,
+            request.timestamp_from,
+            request.timestamp_to,
+            request.group_by_columns,
+            interval_type,
+        )?))
     }
 }

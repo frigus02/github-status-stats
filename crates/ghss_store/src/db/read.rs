@@ -1,9 +1,69 @@
-use super::Result;
-use crate::proto::HookedCommit;
+use super::{Error, Result};
+use crate::proto::{
+    interval_aggregates_reply, total_aggregates_reply, AggregateFunction, Column, HookedCommit,
+    IntervalAggregatesReply, IntervalType, TotalAggregatesReply,
+};
 use rusqlite::{params, Connection, OpenFlags};
 
 pub struct DB {
     conn: Connection,
+}
+
+fn validate_identifier(s: &str) -> Result<()> {
+    if s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        Ok(())
+    } else {
+        Err(Error::InvalidIdentifier(s.into()))
+    }
+}
+
+fn create_group_by(group_by_columns: Vec<String>) -> Result<Vec<String>> {
+    group_by_columns
+        .iter()
+        .map(|c| {
+            validate_identifier(&c)?;
+            Ok(format!("\"{}\"", c))
+        })
+        .collect()
+}
+
+fn create_projection(columns: Vec<Column>, group_by: Vec<String>) -> Vec<String> {
+    let mut projection = columns
+        .iter()
+        .map(|c| {
+            let agg = match c.aggregation() {
+                AggregateFunction::Avg => "avg",
+                AggregateFunction::Count => "count",
+            };
+            format!("{}(\"{}\")", agg, c.name)
+        })
+        .collect::<Vec<_>>();
+    if !group_by.is_empty() {
+        projection.extend(group_by);
+    }
+
+    projection
+}
+
+fn create_aggregate_query_sql(
+    projection: Vec<String>,
+    table: String,
+    from: i64,
+    to: i64,
+    group_by: Vec<String>,
+) -> String {
+    let mut sql = format!(
+        "SELECT {} FROM {} WHERE timestamp >= {} AND timestamp <= {}",
+        projection.join(", "),
+        table,
+        from,
+        to
+    );
+    if !group_by.is_empty() {
+        sql.push_str(&format!(" GROUP BY {}", group_by.join(", ")));
+    }
+
+    sql
 }
 
 impl DB {
@@ -34,5 +94,105 @@ impl DB {
             .map(|row| row.map_err(|err| err.into()))
             .collect::<Result<_>>()?;
         Ok(hooked_commits)
+    }
+
+    pub fn get_total_aggregates(
+        &self,
+        table: String,
+        columns: Vec<Column>,
+        from: i64,
+        to: i64,
+        group_by_columns: Vec<String>,
+    ) -> Result<TotalAggregatesReply> {
+        validate_identifier(&table)?;
+        if columns.is_empty() {
+            return Err(Error::EmptyColumns);
+        }
+
+        let group_by = create_group_by(group_by_columns)?;
+
+        let aggregates_range = 0..columns.len();
+        let groups_range = aggregates_range.end..aggregates_range.end + group_by.len();
+
+        let projection = create_projection(columns, group_by.clone());
+        let sql = create_aggregate_query_sql(projection, table, from, to, group_by);
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(params![], |row| {
+                Ok(total_aggregates_reply::Row {
+                    aggregates: aggregates_range
+                        .clone()
+                        .map(|i| row.get(i))
+                        .collect::<rusqlite::Result<_>>()?,
+                    groups: groups_range
+                        .clone()
+                        .map(|i| row.get(i))
+                        .collect::<rusqlite::Result<_>>()?,
+                })
+            })?
+            .map(|row| row.map_err(|err| err.into()))
+            .collect::<Result<_>>()?;
+
+        Ok(TotalAggregatesReply { rows })
+    }
+
+    pub fn get_interval_aggregates(
+        &self,
+        table: String,
+        columns: Vec<Column>,
+        from: i64,
+        to: i64,
+        group_by_columns: Vec<String>,
+        interval_type: IntervalType,
+    ) -> Result<IntervalAggregatesReply> {
+        validate_identifier(&table)?;
+        if columns.is_empty() {
+            return Err(Error::EmptyColumns);
+        }
+
+        let mut group_by = create_group_by(group_by_columns)?;
+
+        let aggregates_range = 0..columns.len();
+        let groups_range = aggregates_range.end..aggregates_range.end + group_by.len();
+        let timestamp_index = groups_range.end;
+
+        let mut projection = create_projection(columns, group_by.clone());
+
+        group_by.push("interval".into());
+        let time_range = to - from;
+        if time_range <= 0 {
+            return Err(Error::InvalidTimeRange);
+        }
+        let interval = match interval_type {
+            IntervalType::Sparse => time_range / 120,
+            IntervalType::Detailed => time_range / 720,
+        };
+        projection.push(format!(
+            "timestamp / {} * {} AS interval",
+            interval, interval
+        ));
+
+        let sql = create_aggregate_query_sql(projection, table, from, to, group_by);
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(params![], |row| {
+                Ok(interval_aggregates_reply::Row {
+                    aggregates: aggregates_range
+                        .clone()
+                        .map(|i| row.get(i))
+                        .collect::<rusqlite::Result<_>>()?,
+                    groups: groups_range
+                        .clone()
+                        .map(|i| row.get(i))
+                        .collect::<rusqlite::Result<_>>()?,
+                    timestamp: row.get(timestamp_index)?,
+                })
+            })?
+            .map(|row| row.map_err(|err| err.into()))
+            .collect::<Result<_>>()?;
+
+        Ok(IntervalAggregatesReply { rows })
     }
 }

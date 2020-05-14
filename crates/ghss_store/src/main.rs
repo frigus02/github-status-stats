@@ -19,6 +19,9 @@ impl From<db::Error> for Status {
     fn from(err: db::Error) -> Self {
         match err {
             db::Error::DBNotFound => Status::new(Code::FailedPrecondition, "DB not found"),
+            db::Error::InvalidIdentifier(_)
+            | db::Error::InvalidTimeRange
+            | db::Error::EmptyColumns => Status::new(Code::InvalidArgument, format!("{:?}", err)),
             db::Error::SQLite(err) => Status::new(Code::Internal, format!("SQL error: {}", err)),
         }
     }
