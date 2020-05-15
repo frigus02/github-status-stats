@@ -2,15 +2,6 @@
 
 ## Prerequisites
 
-- Generate secret for InfluxDB with random passwords.
-
-  ```sh
-  kubectl create secret generic ghss-influxdb \
-      --from-literal admin_username=admin \
-      --from-literal admin_password=$(openssl rand -base64 32) \
-      --from-literal read_password=$(openssl rand -base64 32)
-  ```
-
 - Create secret for communication with GitHub.
 
   1. Go to your GitHub app's settings page (e.g. https://github.com/settings/apps/status-stats).

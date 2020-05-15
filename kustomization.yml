@@ -5,12 +5,5 @@ resources:
 - crates/ghss_website/deployment.yml
 - crates/ghss_website/ingress.yml
 - crates/ghss_website/service.yml
-- influxdb/deployment.yml
-- influxdb/pvc.yml
-- influxdb/service.yml
 commonLabels:
   group: github-status-stats
-configMapGenerator:
-- files:
-  - influxdb/config/influxdb.conf
-  name: ghss-influxdb

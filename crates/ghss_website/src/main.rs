@@ -262,7 +262,7 @@ async fn api_query_route(
             match res {
                 Ok(res) => Box::new(warp::reply::json(&res)),
                 Err(err) => {
-                    error!(err = %err, "influxdb query failed");
+                    error!(err = %err, "query failed");
                     Box::new(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }
