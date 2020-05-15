@@ -8,9 +8,13 @@ mod token;
 
 use bytes::Bytes;
 use config::with_config;
+use ghss_store_client::{
+    interval_aggregates_reply, query_client::QueryClient, store_client::StoreClient,
+    total_aggregates_reply, AggregateFunction, BuildSource, Hook, IntervalAggregatesRequest,
+    IntervalType, RecordHookRequest, TotalAggregatesRequest,
+};
 use ghss_tracing::register_new_tracing_root;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::convert::Infallible;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -115,16 +119,93 @@ async fn dashboard_route(
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ApiQueryAggregateFunction {
+    Avg,
+    Count,
+}
+
+impl From<ApiQueryAggregateFunction> for AggregateFunction {
+    fn from(function: ApiQueryAggregateFunction) -> Self {
+        match function {
+            ApiQueryAggregateFunction::Avg => Self::Avg,
+            ApiQueryAggregateFunction::Count => Self::Count,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiQueryAggregate {
+    column: String,
+    function: ApiQueryAggregateFunction,
+}
+
+impl From<ApiQueryAggregate> for ghss_store_client::Column {
+    fn from(aggregate: ApiQueryAggregate) -> Self {
+        Self {
+            name: aggregate.column,
+            aggregation: AggregateFunction::from(aggregate.function) as i32,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ApiQueryInterval {
+    Sparse,
+    Detailed,
+}
+
+impl From<ApiQueryInterval> for IntervalType {
+    fn from(interval: ApiQueryInterval) -> Self {
+        match interval {
+            ApiQueryInterval::Sparse => Self::Sparse,
+            ApiQueryInterval::Detailed => Self::Detailed,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 struct ApiQueryParams {
     repository: i32,
-    query: String,
+    table: String,
+    aggregates: Vec<ApiQueryAggregate>,
+    from: i64,
+    to: i64,
+    group_by: Vec<String>,
+    interval: Option<ApiQueryInterval>,
+}
+
+#[derive(Debug, Serialize)]
+struct ApiQueryRow {
+    aggregates: Vec<i64>,
+    groups: Vec<String>,
+    timestamp: Option<i64>,
+}
+
+impl From<interval_aggregates_reply::Row> for ApiQueryRow {
+    fn from(row: interval_aggregates_reply::Row) -> Self {
+        Self {
+            aggregates: row.aggregates,
+            groups: row.groups,
+            timestamp: Some(row.timestamp),
+        }
+    }
+}
+
+impl From<total_aggregates_reply::Row> for ApiQueryRow {
+    fn from(row: total_aggregates_reply::Row) -> Self {
+        Self {
+            aggregates: row.aggregates,
+            groups: row.groups,
+            timestamp: None,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
 struct ApiQueryResponse {
-    pub tags: Option<HashMap<String, String>>,
-    pub columns: Vec<String>,
-    pub values: Vec<Vec<Option<ghss_influxdb::FieldValue>>>,
+    pub rows: Vec<ApiQueryRow>,
 }
 
 async fn api_query_route(
@@ -136,38 +217,52 @@ async fn api_query_route(
         OptionalToken::Some(user)
             if user.repositories.iter().any(|r| r.id == params.repository) =>
         {
-            let influxdb_db = influxdb_name_unsafe(params.repository);
-            let res: Result<Vec<ApiQueryResponse>, Box<dyn std::error::Error>> = async {
-                let client = ghss_influxdb::Client::new(
-                    &config.influxdb_base_url,
-                    &influxdb_db,
-                    &influxdb_read_user_unsafe(params.repository),
-                    &config.influxdb_read_password.unsecure(),
-                )?;
-                let res = client
-                    .query(&params.query)
-                    .await?
-                    .into_single_result()?
-                    .into_series()?
-                    .into_iter()
-                    .map(|s| ApiQueryResponse {
-                        tags: s.tags,
-                        columns: s.columns,
-                        values: s.values,
-                    })
-                    .collect();
-                Ok(res)
+            let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
+                let mut client = QueryClient::connect(config.store_url.clone()).await?;
+                let rows = match params.interval {
+                    Some(interval) => {
+                        let request = ghss_tracing::tonic::request(IntervalAggregatesRequest {
+                            repository_id: params.repository.to_string(),
+                            table: params.table,
+                            columns: params.aggregates.into_iter().map(|c| c.into()).collect(),
+                            timestamp_from: params.from,
+                            timestamp_to: params.to,
+                            group_by_columns: params.group_by,
+                            interval_type: IntervalType::from(interval) as i32,
+                        });
+                        let response = client.get_interval_aggregates(request).await?;
+                        response
+                            .into_inner()
+                            .rows
+                            .into_iter()
+                            .map(|r| r.into())
+                            .collect()
+                    }
+                    None => {
+                        let request = ghss_tracing::tonic::request(TotalAggregatesRequest {
+                            repository_id: params.repository.to_string(),
+                            table: params.table,
+                            columns: params.aggregates.into_iter().map(|c| c.into()).collect(),
+                            timestamp_from: params.from,
+                            timestamp_to: params.to,
+                            group_by_columns: params.group_by,
+                        });
+                        let response = client.get_total_aggregates(request).await?;
+                        response
+                            .into_inner()
+                            .rows
+                            .into_iter()
+                            .map(|r| r.into())
+                            .collect()
+                    }
+                };
+                Ok(ApiQueryResponse { rows })
             }
             .await;
             match res {
                 Ok(res) => Box::new(warp::reply::json(&res)),
                 Err(err) => {
-                    error!(
-                        influxdb.db = %influxdb_db,
-                        influxdb.query = %params.query,
-                        err = %err,
-                        "influxdb query failed",
-                    );
+                    error!(err = %err, "influxdb query failed");
                     Box::new(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }
@@ -235,13 +330,11 @@ async fn hooks_route(
         info!("Hook: {:?}", payload);
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
-                let mut client =
-                    ghss_store_client::store_client::StoreClient::connect(config.store_url.clone())
-                        .await?;
-                let request = ghss_tracing::tonic::request(ghss_store_client::RecordHookRequest {
+                let mut client = StoreClient::connect(config.store_url.clone()).await?;
+                let request = ghss_tracing::tonic::request(RecordHookRequest {
                     repository_id: check_run.repository.id.to_string(),
-                    hook: Some(ghss_store_client::Hook {
-                        r#type: ghss_store_client::BuildSource::CheckRun as i32,
+                    hook: Some(Hook {
+                        r#type: BuildSource::CheckRun as i32,
                         commit: check_run.check_run.head_sha.clone(),
                         timestamp: check_run.check_run.started_at.timestamp_millis(),
                     }),
@@ -254,13 +347,11 @@ async fn hooks_route(
             github_hooks::Payload::InstallationRepositories => {}
             github_hooks::Payload::Ping(_ping) => {}
             github_hooks::Payload::Status(status) => {
-                let mut client =
-                    ghss_store_client::store_client::StoreClient::connect(config.store_url.clone())
-                        .await?;
-                let request = ghss_tracing::tonic::request(ghss_store_client::RecordHookRequest {
+                let mut client = StoreClient::connect(config.store_url.clone()).await?;
+                let request = ghss_tracing::tonic::request(RecordHookRequest {
                     repository_id: status.repository.id.to_string(),
-                    hook: Some(ghss_store_client::Hook {
-                        r#type: ghss_store_client::BuildSource::Status as i32,
+                    hook: Some(Hook {
+                        r#type: BuildSource::Status as i32,
                         commit: status.sha,
                         timestamp: status.created_at.timestamp_millis(),
                     }),

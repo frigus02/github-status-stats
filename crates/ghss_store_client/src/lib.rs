@@ -3,6 +3,7 @@ use std::convert::TryInto;
 pub use tonic::{transport::channel::Channel, Code, Response, Status};
 
 tonic::include_proto!("store");
+tonic::include_proto!("query");
 
 impl From<CheckRun> for Build {
     fn from(check_run: CheckRun) -> Self {
