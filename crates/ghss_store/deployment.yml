@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghss-store
+spec:
+  selector:
+    matchLabels:
+      app: ghss-store
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ghss-store
+    spec:
+      containers:
+        - name: website
+          image: frigus02/ghss-store
+          env:
+            - name: DATABASE_DIRECTORY
+              value: /var/lib/store
+            - name: HONEYCOMB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-honeycomb
+                  key: API_KEY
+            - name: HONEYCOMB_DATASET
+              valueFrom:
+                secretKeyRef:
+                  name: ghss-honeycomb
+                  key: DATASET
+          ports:
+            - containerPort: 50051
+          readinessProbe:
+            exec:
+              command:
+                [
+                  "/grpc_health_probe",
+                  "-addr=:50051",
+                  "-service=gss.store.Store",
+                ]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 50Mi
+            limits:
+              cpu: 20m
+              memory: 50Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/store
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: ghss-store-rwo-10g

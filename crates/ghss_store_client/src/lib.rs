@@ -2,8 +2,7 @@ use ghss_github::{CheckRun, CheckRunConclusion};
 use std::convert::TryInto;
 pub use tonic::{transport::channel::Channel, Code, Response, Status};
 
-tonic::include_proto!("store");
-tonic::include_proto!("query");
+tonic::include_proto!("ghss.store");
 
 impl From<CheckRun> for Build {
     fn from(check_run: CheckRun) -> Self {

@@ -11,8 +11,7 @@ use tonic::{transport::Server, Code, Status};
 use tracing::info_span;
 
 pub(crate) mod proto {
-    tonic::include_proto!("store");
-    tonic::include_proto!("query");
+    tonic::include_proto!("ghss.store");
 }
 
 impl From<db::Error> for Status {
@@ -52,6 +51,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         service_name: "store",
     });
 
+    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<StoreServer<SQLiteStore>>()
+        .await;
+    health_reporter
+        .set_serving::<QueryServer<SQLiteStore>>()
+        .await;
+
     let addr = "[::1]:50051".parse()?;
     let store = SQLiteStore {
         database_directory: config.database_directory,
@@ -79,6 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             span
         })
+        .add_service(health_service)
         .add_service(StoreServer::new(store.clone()))
         .add_service(QueryServer::new(store))
         .serve(addr)

@@ -1,5 +1,5 @@
 syntax = "proto3";
-package store;
+package ghss.store;
 
 enum BuildSource {
 	STATUS = 0;

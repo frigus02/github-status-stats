@@ -1,5 +1,5 @@
 syntax = "proto3";
-package query;
+package ghss.store;
 
 enum AggregateFunction {
 	AVG = 0;
