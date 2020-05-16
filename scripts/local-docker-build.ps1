@@ -45,6 +45,8 @@ ExitIfNativeCallFailed $?
 
 docker push ${IMPORTER}
 ExitIfNativeCallFailed $?
+docker push ${STORE}
+ExitIfNativeCallFailed $?
 docker push ${WEBSITE}
 ExitIfNativeCallFailed $?
 

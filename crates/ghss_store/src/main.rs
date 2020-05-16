@@ -53,7 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         service_name: "store",
     });
 
-    let addr = "[::1]:50051".parse()?;
     let health_service = HealthService::default();
     let store = SQLiteStore {
         database_directory: config.database_directory,
@@ -84,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(HealthServer::new(health_service))
         .add_service(StoreServer::new(store.clone()))
         .add_service(QueryServer::new(store))
-        .serve(addr)
+        .serve(([0, 0, 0, 0], 50051).into())
         .await?;
 
     Ok(())

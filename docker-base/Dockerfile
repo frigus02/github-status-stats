@@ -37,7 +37,7 @@ ENV PKG_CONFIG_ALLOW_CROSS 1
 RUN rustup target add x86_64-unknown-linux-musl && \
     mkdir .cargo && \
     echo "[build]\ntarget = \"x86_64-unknown-linux-musl\"\n" > .cargo/config && \
-    rustup component add clippy
+    rustup component add clippy rustfmt
 
 # Download and build dependencies
 WORKDIR /src
