@@ -1,9 +1,11 @@
 mod config;
 mod db;
+mod health;
 mod query;
 mod store;
 
 use ghss_tracing::{register_new_tracing_root, register_tracing_root};
+use health::{HealthServer, HealthService};
 use proto::query_server::QueryServer;
 use proto::store_server::StoreServer;
 use std::convert::From;
@@ -51,15 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         service_name: "store",
     });
 
-    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
-    health_reporter
-        .set_serving::<StoreServer<SQLiteStore>>()
-        .await;
-    health_reporter
-        .set_serving::<QueryServer<SQLiteStore>>()
-        .await;
-
     let addr = "[::1]:50051".parse()?;
+    let health_service = HealthService::default();
     let store = SQLiteStore {
         database_directory: config.database_directory,
     };
@@ -86,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             span
         })
-        .add_service(health_service)
+        .add_service(HealthServer::new(health_service))
         .add_service(StoreServer::new(store.clone()))
         .add_service(QueryServer::new(store))
         .serve(addr)
