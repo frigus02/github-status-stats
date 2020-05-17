@@ -1,5 +1,7 @@
 pub mod tonic;
 
+#[cfg(not(debug_assertions))]
+use std::str::FromStr;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::prelude::*;
 
@@ -47,8 +49,8 @@ pub fn register_new_tracing_root() {
 #[cfg(not(debug_assertions))]
 pub fn register_tracing_root(trace_id: &str, parent_span_id: &str) {
     tracing_honeycomb::register_dist_tracing_root(
-        tracing_honeycomb::TraceId::from_str(trace_id),
-        Some(tracing_honeycomb::SpanId::from_str(parent_span_id)),
+        tracing_honeycomb::TraceId::from_str(trace_id).expect("parse traceid"),
+        Some(tracing_honeycomb::SpanId::from_str(parent_span_id).expect("parse spanid")),
     )
     .expect("register tracing root");
 }
