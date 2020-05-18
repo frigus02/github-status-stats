@@ -14,6 +14,7 @@ use ghss_store_client::{
     IntervalType, RecordHookRequest, TotalAggregatesRequest,
 };
 use ghss_tracing::register_new_tracing_root;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::convert::TryFrom;
@@ -165,20 +166,86 @@ impl From<ApiQueryInterval> for IntervalType {
     }
 }
 
+struct VecApiQueryAggregateVisitor;
+
+impl<'de> serde::de::Visitor<'de> for VecApiQueryAggregateVisitor {
+    type Value = Vec<ApiQueryAggregate>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a comma separated list of aggregate functions and columns")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        let re = Regex::new(r"(avg|count)\(([A-Za-z0-9_]+)\)").unwrap();
+        v.split(',')
+            .map(|part| {
+                re.captures(part)
+                    .ok_or_else(|| E::custom("invalid aggregate value"))
+                    .map(|cap| ApiQueryAggregate {
+                        column: cap[2].into(),
+                        function: match &cap[1] {
+                            "avg" => ApiQueryAggregateFunction::Avg,
+                            "count" => ApiQueryAggregateFunction::Count,
+                            _ => panic!("invalid aggregate function"),
+                        },
+                    })
+            })
+            .collect()
+    }
+}
+
+fn deserialize_api_query_aggregates<'de, D>(
+    deserializer: D,
+) -> Result<Vec<ApiQueryAggregate>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer.deserialize_str(VecApiQueryAggregateVisitor)
+}
+
+struct VecStringVisitor;
+
+impl<'de> serde::de::Visitor<'de> for VecStringVisitor {
+    type Value = Vec<String>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a comma separated list of strings")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(v.split(',').map(|part| part.into()).collect())
+    }
+}
+
+fn deserialize_strings<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer.deserialize_str(VecStringVisitor)
+}
+
 #[derive(Debug, Deserialize)]
 struct ApiQueryParams {
     repository: i32,
     table: String,
+    #[serde(deserialize_with = "deserialize_api_query_aggregates")]
     aggregates: Vec<ApiQueryAggregate>,
     from: i64,
     to: i64,
+    #[serde(deserialize_with = "deserialize_strings")]
     group_by: Vec<String>,
     interval: Option<ApiQueryInterval>,
 }
 
 #[derive(Debug, Serialize)]
 struct ApiQueryRow {
-    aggregates: Vec<i64>,
+    aggregates: Vec<f64>,
     groups: Vec<String>,
     timestamp: Option<i64>,
 }
