@@ -32,12 +32,7 @@ spec:
             - containerPort: 50051
           readinessProbe:
             exec:
-              command:
-                [
-                  "/grpc_health_probe",
-                  "-addr=:50051",
-                  "-service=gss.store.Store",
-                ]
+              command: ["/grpc_health_probe", "-addr=:50051"]
           resources:
             requests:
               cpu: 20m
