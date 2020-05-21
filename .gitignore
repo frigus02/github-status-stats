@@ -1,3 +1,4 @@
+/crates/ghss_store/dbs
 /target
 .env*
 !.env.example*
