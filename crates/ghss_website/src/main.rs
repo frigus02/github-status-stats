@@ -181,6 +181,7 @@ impl<'de> serde::de::Visitor<'de> for VecApiQueryAggregateVisitor {
     {
         let re = Regex::new(r"(avg|count)\(([A-Za-z0-9_]+)\)").unwrap();
         v.split(',')
+            .filter(|part| !part.is_empty())
             .map(|part| {
                 re.captures(part)
                     .ok_or_else(|| E::custom("invalid aggregate value"))
@@ -219,7 +220,10 @@ impl<'de> serde::de::Visitor<'de> for VecStringVisitor {
     where
         E: serde::de::Error,
     {
-        Ok(v.split(',').map(|part| part.into()).collect())
+        Ok(v.split(',')
+            .filter(|part| !part.is_empty())
+            .map(|part| part.into())
+            .collect())
     }
 }
 
