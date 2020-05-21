@@ -9,13 +9,13 @@ mod token;
 use bytes::Bytes;
 use config::with_config;
 use ghss_store_client::{
-    interval_aggregates_reply, query_client::QueryClient, store_client::StoreClient,
-    total_aggregates_reply, AggregateFunction, BuildSource, Hook, IntervalAggregatesRequest,
-    IntervalType, RecordHookRequest, TotalAggregatesRequest,
+    query_client::QueryClient, store_client::StoreClient, AggregateFunction, BuildSource, Hook,
+    IntervalAggregatesRequest, IntervalType, RecordHookRequest, TotalAggregatesRequest,
 };
 use ghss_tracing::register_new_tracing_root;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -244,35 +244,16 @@ struct ApiQueryParams {
 }
 
 #[derive(Debug, Serialize)]
-struct ApiQueryRow {
-    aggregates: Vec<f64>,
+struct ApiQueryResponseGroup {
     groups: Vec<String>,
-    timestamp: Option<i64>,
-}
-
-impl From<interval_aggregates_reply::Row> for ApiQueryRow {
-    fn from(row: interval_aggregates_reply::Row) -> Self {
-        Self {
-            aggregates: row.aggregates,
-            groups: row.groups,
-            timestamp: Some(row.timestamp),
-        }
-    }
-}
-
-impl From<total_aggregates_reply::Row> for ApiQueryRow {
-    fn from(row: total_aggregates_reply::Row) -> Self {
-        Self {
-            aggregates: row.aggregates,
-            groups: row.groups,
-            timestamp: None,
-        }
-    }
+    values: Vec<Option<Vec<f64>>>,
 }
 
 #[derive(Debug, Serialize)]
 struct ApiQueryResponse {
-    pub rows: Vec<ApiQueryRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timestamps: Option<Vec<i64>>,
+    groups: Vec<ApiQueryResponseGroup>,
 }
 
 async fn api_query_route(
@@ -286,7 +267,7 @@ async fn api_query_route(
         {
             let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
                 let mut client = QueryClient::connect(config.store_url.clone()).await?;
-                let rows = match params.interval {
+                let result = match params.interval {
                     Some(interval) => {
                         let request = ghss_tracing::tonic::request(IntervalAggregatesRequest {
                             repository_id: params.repository.to_string(),
@@ -297,13 +278,27 @@ async fn api_query_route(
                             group_by_columns: params.group_by,
                             interval_type: IntervalType::from(interval) as i32,
                         });
-                        let response = client.get_interval_aggregates(request).await?;
-                        response
-                            .into_inner()
-                            .rows
-                            .into_iter()
-                            .map(|r| r.into())
-                            .collect()
+                        let response = client.get_interval_aggregates(request).await?.into_inner();
+                        let mut timestamps = Vec::new();
+                        let mut groups = HashMap::new();
+                        for row in response.rows {
+                            if timestamps.last() != Some(&row.timestamp) {
+                                timestamps.push(row.timestamp);
+                            }
+
+                            let values: &mut Vec<Option<Vec<f64>>> =
+                                groups.entry(row.groups).or_default();
+                            values.resize(timestamps.len() - 1, None);
+                            values.push(Some(row.aggregates));
+                        }
+
+                        ApiQueryResponse {
+                            timestamps: Some(timestamps),
+                            groups: groups
+                                .into_iter()
+                                .map(|(groups, values)| ApiQueryResponseGroup { groups, values })
+                                .collect(),
+                        }
                     }
                     None => {
                         let request = ghss_tracing::tonic::request(TotalAggregatesRequest {
@@ -314,16 +309,22 @@ async fn api_query_route(
                             timestamp_to: params.to,
                             group_by_columns: params.group_by,
                         });
-                        let response = client.get_total_aggregates(request).await?;
-                        response
-                            .into_inner()
-                            .rows
-                            .into_iter()
-                            .map(|r| r.into())
-                            .collect()
+                        let response = client.get_total_aggregates(request).await?.into_inner();
+                        let mut groups = HashMap::new();
+                        for row in response.rows {
+                            groups.insert(row.groups, vec![Some(row.aggregates)]);
+                        }
+
+                        ApiQueryResponse {
+                            timestamps: None,
+                            groups: groups
+                                .into_iter()
+                                .map(|(groups, values)| ApiQueryResponseGroup { groups, values })
+                                .collect(),
+                        }
                     }
                 };
-                Ok(ApiQueryResponse { rows })
+                Ok(result)
             }
             .await;
             match res {

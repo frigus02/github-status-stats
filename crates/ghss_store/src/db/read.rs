@@ -51,6 +51,7 @@ fn create_aggregate_query_sql(
     from: i64,
     to: i64,
     group_by: Vec<String>,
+    order_by: Option<&'static str>,
 ) -> String {
     let mut sql = format!(
         "SELECT {} FROM {} WHERE timestamp >= {} AND timestamp <= {}",
@@ -61,6 +62,9 @@ fn create_aggregate_query_sql(
     );
     if !group_by.is_empty() {
         sql.push_str(&format!(" GROUP BY {}", group_by.join(", ")));
+    }
+    if let Some(order_by) = order_by {
+        sql.push_str(&format!(" ORDER BY {}", order_by));
     }
 
     sql
@@ -115,7 +119,7 @@ impl DB {
         let groups_range = aggregates_range.end..aggregates_range.end + group_by.len();
 
         let projection = create_projection(columns, group_by.clone());
-        let sql = create_aggregate_query_sql(projection, table, from, to, group_by);
+        let sql = create_aggregate_query_sql(projection, table, from, to, group_by, None);
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
@@ -173,7 +177,8 @@ impl DB {
             interval, interval
         ));
 
-        let sql = create_aggregate_query_sql(projection, table, from, to, group_by);
+        let sql =
+            create_aggregate_query_sql(projection, table, from, to, group_by, Some("interval"));
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
