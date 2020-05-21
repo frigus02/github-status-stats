@@ -248,8 +248,8 @@ struct ApiQueryParams {
 }
 
 #[derive(Debug, Serialize)]
-struct ApiQueryResponseGroup {
-    groups: Vec<String>,
+struct ApiQueryResponseSeries {
+    tags: Vec<String>,
     values: Vec<Option<Vec<f64>>>,
 }
 
@@ -257,7 +257,7 @@ struct ApiQueryResponseGroup {
 struct ApiQueryResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     timestamps: Option<Vec<i64>>,
-    groups: Vec<ApiQueryResponseGroup>,
+    series: Vec<ApiQueryResponseSeries>,
 }
 
 async fn api_query_route(
@@ -284,23 +284,23 @@ async fn api_query_route(
                         });
                         let response = client.get_interval_aggregates(request).await?.into_inner();
                         let mut timestamps = Vec::new();
-                        let mut groups = HashMap::new();
+                        let mut series = HashMap::new();
                         for row in response.rows {
                             if timestamps.last() != Some(&row.timestamp) {
                                 timestamps.push(row.timestamp);
                             }
 
                             let values: &mut Vec<Option<Vec<f64>>> =
-                                groups.entry(row.groups).or_default();
+                                series.entry(row.groups).or_default();
                             values.resize(timestamps.len() - 1, None);
                             values.push(Some(row.aggregates));
                         }
 
                         ApiQueryResponse {
                             timestamps: Some(timestamps),
-                            groups: groups
+                            series: series
                                 .into_iter()
-                                .map(|(groups, values)| ApiQueryResponseGroup { groups, values })
+                                .map(|(tags, values)| ApiQueryResponseSeries { tags, values })
                                 .collect(),
                         }
                     }
@@ -314,16 +314,16 @@ async fn api_query_route(
                             group_by_columns: params.group_by,
                         });
                         let response = client.get_total_aggregates(request).await?.into_inner();
-                        let mut groups = HashMap::new();
+                        let mut series = HashMap::new();
                         for row in response.rows {
-                            groups.insert(row.groups, vec![Some(row.aggregates)]);
+                            series.insert(row.groups, vec![Some(row.aggregates)]);
                         }
 
                         ApiQueryResponse {
                             timestamps: None,
-                            groups: groups
+                            series: series
                                 .into_iter()
-                                .map(|(groups, values)| ApiQueryResponseGroup { groups, values })
+                                .map(|(tags, values)| ApiQueryResponseSeries { tags, values })
                                 .collect(),
                         }
                     }

@@ -60,18 +60,14 @@ const emptyData = () => {
 };
 
 const prepareData = (raw, valueTransform) => {
-  if (raw.length === 0) {
+  if (raw.timestamps.length === 0) {
     return emptyData();
   }
 
-  const x = raw[0].columns.indexOf("time");
-  const y = raw[0].columns.indexOf("value");
   const data = [];
-  data.push(
-    raw[0].values.map((row) => Math.round(new Date(row[x]).getTime() / 1000))
-  );
-  for (const series of raw) {
-    data.push(series.values.map((row) => valueTransform(row[y])));
+  data.push(raw.timestamps.map((t) => t / 1000));
+  for (const series of raw.series) {
+    data.push(series.values.map((v) => valueTransform(v[0])));
   }
 
   return data;
@@ -273,8 +269,9 @@ const statPanel = ({
 
   const loadData = async () => {
     const rawStat = await queryData(statQuery);
-    const stat = prepareData(rawStat, valueTransform);
-    statEl.textContent = valueFormat(stat[1][0]);
+    statEl.textContent = valueFormat(
+      valueTransform(rawStat.series[0].values[0])
+    );
 
     const rawBackground = await queryData(backgroundQuery);
     const data = prepareData(rawBackground, valueTransform);
@@ -290,7 +287,6 @@ const graphPanel = ({
   query,
   valueTransform,
   valueFormat,
-  labelTag,
   elementSelector,
 }) => {
   const element = document.querySelector(elementSelector);
@@ -318,8 +314,8 @@ const graphPanel = ({
       plugins: [accessibilityPlugin({ ariaLabelledBy: headingId })],
       series: [
         {},
-        ...raw.map((series, i) => ({
-          label: series.tags[labelTag],
+        ...raw.series.map((series, i) => ({
+          label: series.tags[0],
           value: (_self, rawValue) => valueFormat(rawValue),
           stroke: color(i),
         })),
@@ -334,7 +330,7 @@ const graphPanel = ({
     plot = new uPlot(opts, data, element);
   };
 
-  recreatePlot([], emptyData());
+  recreatePlot({ series: [] }, emptyData());
   onResize(() => plot.setSize(getSize()));
 
   const loadData = async () => {
@@ -350,7 +346,6 @@ const tablePanel = ({
   title,
   query,
   values,
-  labelTag,
   labelColumnName,
   elementSelector,
 }) => {
@@ -401,19 +396,15 @@ const tablePanel = ({
     }
 
     tbody.append(
-      ...raw.map((series, i) =>
+      ...raw.series.map((series) =>
         createElement("tr", {}, [
           createElement("th", {
             scope: "row",
-            textContent: series.tags[labelTag],
+            textContent: series.tags[0],
           }),
-          ...values.map((value) =>
+          ...values.map((value, i) =>
             createElement("td", {
-              textContent: value.format(
-                value.transform(
-                  series.values[0][series.columns.indexOf(value.name)]
-                )
-              ),
+              textContent: value.format(value.transform(series.values[0][i])),
             })
           ),
         ])
@@ -466,25 +457,21 @@ window.addEventListener("load", () => {
     },
     values: [
       {
-        name: "count",
         columnName: "Count",
         transform: (value) => value,
         format: (value) => value,
       },
       {
-        name: "duration_ms",
         columnName: "Duration",
         transform: (value) => value / 1000 / 60,
         format: (value) => `${formatNumber(value)} min`,
       },
       {
-        name: "successful",
         columnName: "Success",
         transform: (value) => value * 100,
         format: (value) => `${formatNumber(value)}%`,
       },
     ],
-    labelTag: "name",
     labelColumnName: "Pipeline",
     elementSelector: "#stats-by-pipeline",
   });
@@ -500,7 +487,6 @@ window.addEventListener("load", () => {
     },
     valueTransform: (value) => value / 1000 / 60,
     valueFormat: (value) => `${formatNumber(value)} min`,
-    labelTag: "name",
     elementSelector: "#duration",
   });
 
@@ -515,7 +501,6 @@ window.addEventListener("load", () => {
     },
     valueTransform: (value) => (value == null ? 0 : value),
     valueFormat: (value) => formatNumber(value),
-    labelTag: "build_name",
     elementSelector: "#attempts",
   });
 });
