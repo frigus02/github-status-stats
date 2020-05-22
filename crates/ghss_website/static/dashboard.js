@@ -29,16 +29,18 @@ const timeRange = () => {
   return { start, end };
 };
 
-const queryData = async ({ table, aggregates, groupBy, interval }) => {
+const queryData = async ({ table, columns, groupBy, interval }) => {
   const time = timeRange();
 
   const url = new URL("/api/query", location);
   url.searchParams.append("repository", repository);
   url.searchParams.append("table", table);
-  url.searchParams.append("aggregates", aggregates.join(","));
-  url.searchParams.append("from", time.start);
-  url.searchParams.append("to", time.end);
-  url.searchParams.append("group_by", (groupBy || []).join(","));
+  url.searchParams.append("columns", columns.join(","));
+  url.searchParams.append("since", time.start);
+  url.searchParams.append("until", time.end);
+  if (groupBy && groupBy.length > 0) {
+    url.searchParams.append("group_by", groupBy.join(","));
+  }
   if (interval) {
     url.searchParams.append("interval", interval);
   }
@@ -420,11 +422,11 @@ window.addEventListener("load", () => {
     title: "Overall success rate",
     statQuery: {
       table: "builds",
-      aggregates: ["avg(successful)"],
+      columns: ["avg(successful)"],
     },
     backgroundQuery: {
       table: "builds",
-      aggregates: ["avg(successful)"],
+      columns: ["avg(successful)"],
       interval: "sparse",
     },
     valueTransform: (value) => value * 100,
@@ -436,11 +438,11 @@ window.addEventListener("load", () => {
     title: "Overall average duration",
     statQuery: {
       table: "builds",
-      aggregates: ["avg(duration_ms)"],
+      columns: ["avg(duration_ms)"],
     },
     backgroundQuery: {
       table: "builds",
-      aggregates: ["avg(duration_ms)"],
+      columns: ["avg(duration_ms)"],
       interval: "sparse",
     },
     valueTransform: (value) => value / 1000 / 60,
@@ -452,7 +454,7 @@ window.addEventListener("load", () => {
     title: "Statistics by pipeline",
     query: {
       table: "builds",
-      aggregates: ["count(commit)", "avg(duration_ms)", "avg(successful)"],
+      columns: ["count(commit)", "avg(duration_ms)", "avg(successful)"],
       groupBy: ["name"],
     },
     values: [
@@ -481,7 +483,7 @@ window.addEventListener("load", () => {
     height: 410,
     query: {
       table: "builds",
-      aggregates: ["avg(duration_ms)"],
+      columns: ["avg(duration_ms)"],
       groupBy: ["name"],
       interval: "detailed",
     },
@@ -495,7 +497,7 @@ window.addEventListener("load", () => {
     height: 220,
     query: {
       table: "commits",
-      aggregates: ["avg(builds)"],
+      columns: ["avg(builds)"],
       groupBy: ["build_name"],
       interval: "detailed",
     },

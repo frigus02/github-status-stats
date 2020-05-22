@@ -9,21 +9,21 @@ enum AggregateFunction {
 
 message Column {
 	string name = 1;
-	AggregateFunction aggregation = 2;
+	AggregateFunction agg_func = 2;
 }
 
 message TotalAggregatesRequest {
 	string repository_id = 1;
 	string table = 2;
 	repeated Column columns = 3;
-	int64 timestamp_from = 4;
-	int64 timestamp_to = 5;
-	repeated string group_by_columns = 6;
+	int64 since = 4;
+	int64 until = 5;
+	repeated string group_by = 6;
 }
 
 message TotalAggregatesReply {
 	message Row {
-		repeated double aggregates = 1;
+		repeated double values = 1;
 		repeated string groups = 2;
 	}
 	repeated Row rows = 1;
@@ -38,15 +38,15 @@ message IntervalAggregatesRequest {
 	string repository_id = 1;
 	string table = 2;
 	repeated Column columns = 3;
-	int64 timestamp_from = 4;
-	int64 timestamp_to = 5;
-	repeated string group_by_columns = 6;
-	IntervalType interval_type = 7;
+	int64 since = 4;
+	int64 until = 5;
+	repeated string group_by = 6;
+	IntervalType interval = 7;
 }
 
 message IntervalAggregatesReply {
 	message Row {
-		repeated double aggregates = 1;
+		repeated double values = 1;
 		repeated string groups = 2;
 		int64 timestamp = 3;
 	}

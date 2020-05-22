@@ -18,9 +18,9 @@ impl Query for SQLiteStore {
         Ok(Response::new(db.get_total_aggregates(
             request.table,
             request.columns,
-            request.timestamp_from,
-            request.timestamp_to,
-            request.group_by_columns,
+            request.since,
+            request.until,
+            request.group_by,
         )?))
     }
 
@@ -30,15 +30,15 @@ impl Query for SQLiteStore {
     ) -> Result<Response<IntervalAggregatesReply>, Status> {
         info!("get_interval_aggregates");
         let request = request.into_inner();
-        let interval_type = request.interval_type();
+        let interval = request.interval();
         let db = self.db_read(request.repository_id)?;
         Ok(Response::new(db.get_interval_aggregates(
             request.table,
             request.columns,
-            request.timestamp_from,
-            request.timestamp_to,
-            request.group_by_columns,
-            interval_type,
+            request.since,
+            request.until,
+            request.group_by,
+            interval,
         )?))
     }
 }

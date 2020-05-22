@@ -119,8 +119,7 @@ async fn dashboard_route(
     Ok(reply)
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug)]
 enum ApiQueryAggregateFunction {
     Avg,
     Count,
@@ -135,33 +134,33 @@ impl From<ApiQueryAggregateFunction> for AggregateFunction {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct ApiQueryAggregate {
-    column: String,
-    function: ApiQueryAggregateFunction,
+#[derive(Debug)]
+struct ApiQueryColumn {
+    name: String,
+    agg_func: ApiQueryAggregateFunction,
 }
 
-impl From<ApiQueryAggregate> for ghss_store_client::Column {
-    fn from(aggregate: ApiQueryAggregate) -> Self {
+impl From<ApiQueryColumn> for ghss_store_client::Column {
+    fn from(aggregate: ApiQueryColumn) -> Self {
         Self {
-            name: aggregate.column,
-            aggregation: AggregateFunction::from(aggregate.function) as i32,
+            name: aggregate.name,
+            agg_func: AggregateFunction::from(aggregate.agg_func) as i32,
         }
     }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum ApiQueryInterval {
+enum ApiQueryIntervalType {
     Sparse,
     Detailed,
 }
 
-impl From<ApiQueryInterval> for IntervalType {
-    fn from(interval: ApiQueryInterval) -> Self {
+impl From<ApiQueryIntervalType> for IntervalType {
+    fn from(interval: ApiQueryIntervalType) -> Self {
         match interval {
-            ApiQueryInterval::Sparse => Self::Sparse,
-            ApiQueryInterval::Detailed => Self::Detailed,
+            ApiQueryIntervalType::Sparse => Self::Sparse,
+            ApiQueryIntervalType::Detailed => Self::Detailed,
         }
     }
 }
@@ -169,7 +168,7 @@ impl From<ApiQueryInterval> for IntervalType {
 struct VecApiQueryAggregateVisitor;
 
 impl<'de> serde::de::Visitor<'de> for VecApiQueryAggregateVisitor {
-    type Value = Vec<ApiQueryAggregate>;
+    type Value = Vec<ApiQueryColumn>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("a comma separated list of aggregate functions and columns")
@@ -185,9 +184,9 @@ impl<'de> serde::de::Visitor<'de> for VecApiQueryAggregateVisitor {
             .map(|part| {
                 re.captures(part)
                     .ok_or_else(|| E::custom("invalid aggregate value"))
-                    .map(|cap| ApiQueryAggregate {
-                        column: cap[2].into(),
-                        function: match &cap[1] {
+                    .map(|cap| ApiQueryColumn {
+                        name: cap[2].into(),
+                        agg_func: match &cap[1] {
                             "avg" => ApiQueryAggregateFunction::Avg,
                             "count" => ApiQueryAggregateFunction::Count,
                             _ => panic!("invalid aggregate function"),
@@ -200,38 +199,47 @@ impl<'de> serde::de::Visitor<'de> for VecApiQueryAggregateVisitor {
 
 fn deserialize_api_query_aggregates<'de, D>(
     deserializer: D,
-) -> Result<Vec<ApiQueryAggregate>, D::Error>
+) -> Result<Vec<ApiQueryColumn>, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
     deserializer.deserialize_str(VecApiQueryAggregateVisitor)
 }
 
-struct VecStringVisitor;
+struct OptionVecStringVisitor;
 
-impl<'de> serde::de::Visitor<'de> for VecStringVisitor {
-    type Value = Vec<String>;
+impl<'de> serde::de::Visitor<'de> for OptionVecStringVisitor {
+    type Value = Option<Vec<String>>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("a comma separated list of strings")
+        formatter.write_str("null or a comma separated list of strings")
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(self)
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
-        Ok(v.split(',')
-            .filter(|part| !part.is_empty())
-            .map(|part| part.into())
-            .collect())
+        Ok(Some(
+            v.split(',')
+                .filter(|part| !part.is_empty())
+                .map(|part| part.into())
+                .collect(),
+        ))
     }
 }
 
-fn deserialize_strings<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+fn deserialize_option_strings<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
-    deserializer.deserialize_str(VecStringVisitor)
+    deserializer.deserialize_option(OptionVecStringVisitor)
 }
 
 #[derive(Debug, Deserialize)]
@@ -239,12 +247,12 @@ struct ApiQueryParams {
     repository: i32,
     table: String,
     #[serde(deserialize_with = "deserialize_api_query_aggregates")]
-    aggregates: Vec<ApiQueryAggregate>,
-    from: i64,
-    to: i64,
-    #[serde(deserialize_with = "deserialize_strings")]
-    group_by: Vec<String>,
-    interval: Option<ApiQueryInterval>,
+    columns: Vec<ApiQueryColumn>,
+    since: i64,
+    until: i64,
+    #[serde(default, deserialize_with = "deserialize_option_strings")]
+    group_by: Option<Vec<String>>,
+    interval: Option<ApiQueryIntervalType>,
 }
 
 #[derive(Debug, Serialize)]
@@ -271,16 +279,16 @@ async fn api_query_route(
         {
             let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
                 let mut client = QueryClient::connect(config.store_url.clone()).await?;
-                let result = match params.interval {
+                let response = match params.interval {
                     Some(interval) => {
                         let request = ghss_tracing::tonic::request(IntervalAggregatesRequest {
                             repository_id: params.repository.to_string(),
                             table: params.table,
-                            columns: params.aggregates.into_iter().map(|c| c.into()).collect(),
-                            timestamp_from: params.from,
-                            timestamp_to: params.to,
-                            group_by_columns: params.group_by,
-                            interval_type: IntervalType::from(interval) as i32,
+                            columns: params.columns.into_iter().map(|c| c.into()).collect(),
+                            since: params.since,
+                            until: params.until,
+                            group_by: params.group_by.unwrap_or_default(),
+                            interval: IntervalType::from(interval) as i32,
                         });
                         let response = client.get_interval_aggregates(request).await?.into_inner();
                         let mut timestamps = Vec::new();
@@ -293,7 +301,7 @@ async fn api_query_route(
                             let values: &mut Vec<Option<Vec<f64>>> =
                                 series.entry(row.groups).or_default();
                             values.resize(timestamps.len() - 1, None);
-                            values.push(Some(row.aggregates));
+                            values.push(Some(row.values));
                         }
 
                         ApiQueryResponse {
@@ -308,15 +316,15 @@ async fn api_query_route(
                         let request = ghss_tracing::tonic::request(TotalAggregatesRequest {
                             repository_id: params.repository.to_string(),
                             table: params.table,
-                            columns: params.aggregates.into_iter().map(|c| c.into()).collect(),
-                            timestamp_from: params.from,
-                            timestamp_to: params.to,
-                            group_by_columns: params.group_by,
+                            columns: params.columns.into_iter().map(|c| c.into()).collect(),
+                            since: params.since,
+                            until: params.until,
+                            group_by: params.group_by.unwrap_or_default(),
                         });
                         let response = client.get_total_aggregates(request).await?.into_inner();
                         let mut series = HashMap::new();
                         for row in response.rows {
-                            series.insert(row.groups, vec![Some(row.aggregates)]);
+                            series.insert(row.groups, vec![Some(row.values)]);
                         }
 
                         ApiQueryResponse {
@@ -328,7 +336,7 @@ async fn api_query_route(
                         }
                     }
                 };
-                Ok(result)
+                Ok(response)
             }
             .await;
             match res {

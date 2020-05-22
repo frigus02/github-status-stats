@@ -31,7 +31,7 @@ fn create_projection(columns: Vec<Column>, group_by: Vec<String>) -> Vec<String>
     let mut projection = columns
         .iter()
         .map(|c| {
-            let agg = match c.aggregation() {
+            let agg = match c.agg_func() {
                 AggregateFunction::Avg => "avg",
                 AggregateFunction::Count => "count",
             };
@@ -115,8 +115,8 @@ impl DB {
 
         let group_by = create_group_by(group_by_columns)?;
 
-        let aggregates_range = 0..columns.len();
-        let groups_range = aggregates_range.end..aggregates_range.end + group_by.len();
+        let values_range = 0..columns.len();
+        let groups_range = values_range.end..values_range.end + group_by.len();
 
         let projection = create_projection(columns, group_by.clone());
         let sql = create_aggregate_query_sql(projection, table, from, to, group_by, None);
@@ -125,7 +125,7 @@ impl DB {
         let rows = stmt
             .query_map(params![], |row| {
                 Ok(total_aggregates_reply::Row {
-                    aggregates: aggregates_range
+                    values: values_range
                         .clone()
                         .map(|i| row.get(i))
                         .collect::<rusqlite::Result<_>>()?,
@@ -157,8 +157,8 @@ impl DB {
 
         let mut group_by = create_group_by(group_by_columns)?;
 
-        let aggregates_range = 0..columns.len();
-        let groups_range = aggregates_range.end..aggregates_range.end + group_by.len();
+        let values_range = 0..columns.len();
+        let groups_range = values_range.end..values_range.end + group_by.len();
         let timestamp_index = groups_range.end;
 
         let mut projection = create_projection(columns, group_by.clone());
@@ -184,7 +184,7 @@ impl DB {
         let rows = stmt
             .query_map(params![], |row| {
                 Ok(interval_aggregates_reply::Row {
-                    aggregates: aggregates_range
+                    values: values_range
                         .clone()
                         .map(|i| row.get(i))
                         .collect::<rusqlite::Result<_>>()?,
