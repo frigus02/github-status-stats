@@ -25,7 +25,7 @@ const fetch = (url, options) =>
   });
 
 const baseUrl = "https://github-status-stats.kuehle.me/api/query";
-const repositories = [214288339, 161389555, 40908119];
+const repositories = [214288339, 161389555];
 const token = "xxx";
 
 const main = async () => {
@@ -74,17 +74,24 @@ const main = async () => {
 
     // Builds
     const builds = await fetch(
-      `${baseUrl}?repository=${repository}&query=SELECT+*+FROM+%22import%22`,
+      `${baseUrl}?repository=${repository}&query=SELECT+*+FROM+%22build%22`,
       { headers: { Cookie: `token=${token}` } }
     );
     let buildsCsv =
       "commit,name,source,timestamp,successful,failed,duration_ms\n";
+    const bCommit = builds[0].columns.indexOf("commit");
+    const bName = builds[0].columns.indexOf("name");
+    const bSource = builds[0].columns.indexOf("source");
+    const bTime = builds[0].columns.indexOf("time");
+    const bSuccessful = builds[0].columns.indexOf("successful");
+    const bFailed = builds[0].columns.indexOf("failed");
+    const bDuration = builds[0].columns.indexOf("duration_ms");
     for (const row of builds[0].values) {
-      buildsCsv += `${row[1]},${row[4]},${
-        row[5] === "check_run" ? 2 : 1
-      },${new Date(row[0]).getTime()},${row[6]},${
-        row[3] === null ? 0 : row[3]
-      },${row[2]}\n`;
+      buildsCsv += `${row[bCommit]},${row[bName]},${
+        row[bSource] === "check_run" ? 2 : 1
+      },${new Date(row[bTime]).getTime()},${row[bSuccessful]},${
+        row[bFailed] === null ? 0 : row[bFailed]
+      },${row[bDuration]}\n`;
     }
     fs.writeFileSync(`export-${repository}-builds.csv`, buildsCsv, "utf8");
   }
