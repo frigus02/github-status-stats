@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package ghss.store;
+
+enum BuildSource {
+	STATUS = 0;
+	CHECK_RUN = 1;
+}
+
+message Build {
+	string name = 1;
+	BuildSource source = 2;
+	string commit = 3;
+	bool successful = 4;
+	bool failed = 5;
+	uint32 duration_ms = 6;
+	int64 timestamp = 7;
+}
+
+message Commit {
+	string build_name = 1;
+	BuildSource build_source = 2;
+	string commit = 3;
+	uint32 builds = 4;
+	uint32 builds_successful = 5;
+	uint32 builds_failed = 6;
+	int64 timestamp = 7;
+}
+
+message ImportRequest {
+	string repository_id = 1;
+	repeated Build builds = 2;
+	repeated Commit commits = 3;
+	int64 timestamp = 4;
+}
+
+message ImportReply {}
+
+message Hook {
+	BuildSource type = 1;
+	string commit = 2;
+	int64 timestamp = 3;
+}
+
+message RecordHookRequest {
+	string repository_id = 1;
+	Hook hook = 2;
+	Build build = 3;
+}
+
+message RecordHookReply {}
+
+message HookedCommitsRequest {
+	string repository_id = 1;
+	int64 until = 2;
+}
+
+message HookedCommit {
+	string commit = 1;
+	repeated BuildSource types = 2;
+}
+
+message HookedCommitsReply {
+	repeated HookedCommit commits = 1;
+}
+
+service Store {
+	rpc Import (ImportRequest) returns (ImportReply);
+	rpc RecordHook (RecordHookRequest) returns (RecordHookReply);
+	rpc GetHookedCommitsSinceLastImport (HookedCommitsRequest) returns (HookedCommitsReply);
+}

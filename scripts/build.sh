@@ -15,6 +15,9 @@ docker build --cache-from=$BASE -t $BASE -f docker-base/Dockerfile .
 IMPORTER=$PREFIX-importer
 docker build --cache-from=$BASE -t "$IMPORTER:$TAG" -f crates/ghss_importer/Dockerfile .
 
+STORE=$PREFIX-store
+docker build --cache-from=$BASE -t "$STORE:$TAG" -f crates/ghss_store/Dockerfile .
+
 WEBSITE=$PREFIX-website
 docker build --cache-from=$BASE -t "$WEBSITE:$TAG" -f crates/ghss_website/Dockerfile .
 
@@ -22,5 +25,6 @@ if [ "$TAG" != "dev" ]; then
     docker login -u frigus02 -p "$DOCKER_PASSWORD"
     docker push $BASE
     docker push "$IMPORTER:$TAG"
+    docker push "$STORE:$TAG"
     docker push "$WEBSITE:$TAG"
 fi

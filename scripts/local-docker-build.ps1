@@ -35,11 +35,17 @@ $IMPORTER="$PREFIX-importer"
 docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=$CARGO_MODE -t ${IMPORTER} -f crates/ghss_importer/Dockerfile .
 ExitIfNativeCallFailed $?
 
+$STORE="$PREFIX-store"
+docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=$CARGO_MODE -t ${STORE} -f crates/ghss_store/Dockerfile .
+ExitIfNativeCallFailed $?
+
 $WEBSITE="$PREFIX-website"
 docker build --build-arg REGISTRY=localhost:5000 --build-arg CARGO_MODE=$CARGO_MODE -t ${WEBSITE} -f crates/ghss_website/Dockerfile .
 ExitIfNativeCallFailed $?
 
 docker push ${IMPORTER}
+ExitIfNativeCallFailed $?
+docker push ${STORE}
 ExitIfNativeCallFailed $?
 docker push ${WEBSITE}
 ExitIfNativeCallFailed $?
@@ -47,6 +53,7 @@ ExitIfNativeCallFailed $?
 # Deploy images
 kustomize edit set image `
     frigus02/ghss-importer="$(docker inspect --format '{{json .RepoDigests}}' ${IMPORTER} | jq -r '.[0]')" `
+    frigus02/ghss-store="$(docker inspect --format '{{json .RepoDigests}}' ${STORE} | jq -r '.[0]')" `
     frigus02/ghss-website="$(docker inspect --format '{{json .RepoDigests}}' ${WEBSITE} | jq -r '.[0]')"
 ExitIfNativeCallFailed $?
 

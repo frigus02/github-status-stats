@@ -2,15 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - crates/ghss_importer/cronjob.yml
+- crates/ghss_store/deployment.yml
+- crates/ghss_store/pvc.yml
+- crates/ghss_store/service.yml
 - crates/ghss_website/deployment.yml
 - crates/ghss_website/ingress.yml
 - crates/ghss_website/service.yml
-- influxdb/deployment.yml
-- influxdb/pvc.yml
-- influxdb/service.yml
 commonLabels:
   group: github-status-stats
-configMapGenerator:
-- files:
-  - influxdb/config/influxdb.conf
-  name: ghss-influxdb

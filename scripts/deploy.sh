@@ -21,11 +21,13 @@ echo "$KUBE_CONFIG" >"$HOME/.kube/config"
 
 PREFIX=frigus02/ghss
 IMPORTER=$PREFIX-importer
+STORE=$PREFIX-store
 WEBSITE=$PREFIX-website
 TAG=$(git rev-parse HEAD)
 
 kustomize edit set image \
     "$(docker inspect --format '{{json .RepoDigests}}' "$IMPORTER:$TAG" | jq -r '.[0]')" \
+    "$(docker inspect --format '{{json .RepoDigests}}' "$STORE:$TAG" | jq -r '.[0]')" \
     "$(docker inspect --format '{{json .RepoDigests}}' "$WEBSITE:$TAG" | jq -r '.[0]')"
 
 kustomize build | kubectl apply -f -

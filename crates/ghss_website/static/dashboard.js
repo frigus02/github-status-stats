@@ -23,73 +23,31 @@ const endOfDay = (date) => {
   return d.getTime();
 };
 
-const closestDurationUnit = (ms) => {
-  const s = Math.round(ms / 1000);
-
-  const m = Math.round(s / 60);
-  if (m === 0 || Math.abs(m * 60 - s) > 15) {
-    return `${s}s`;
-  }
-
-  const h = Math.round(m / 60);
-  if (h === 0 || Math.abs(h * 60 - m) > 15) {
-    return `${m}m`;
-  }
-
-  const d = Math.round(h / 24);
-  if (d === 0 || Math.abs(d * 24 - h) > 6) {
-    return `${h}h`;
-  }
-
-  const w = Math.round(d / 7);
-  if (w === 0 || Math.abs(w * 7 - d) > 2) {
-    return `${d}d`;
-  }
-
-  return `${w}w`;
-};
-
 const timeRange = () => {
   const start = startOfDay(startDateInput.valueAsNumber);
   const end = endOfDay(endDateInput.valueAsNumber);
   return { start, end };
 };
 
-const timeRangeFilter = () => {
-  const { start, end } = timeRange();
-  const range = end - start;
-  if (range <= 0) {
-    throw new Error(
-      `Invalid time range ${range}ms. Select an end date, with is equal to or after the start date.`
-    );
-  }
-
-  return {
-    filter: `time >= ${start}ms AND time <= ${end}ms`,
-    // Roughly 720 entries
-    groupByDetailed: `time(${closestDurationUnit(range / 720)})`,
-    // Roughly 120 entries
-    groupBySparse: `time(${closestDurationUnit(range / 120)})`,
-  };
-};
-
-const queryData = async (rawQuery) => {
-  const time = timeRangeFilter();
-  const query = rawQuery
-    .replace("__time_filter__", time.filter)
-    .replace("__time_group_sparse__", time.groupBySparse)
-    .replace("__time_group_detailed__", time.groupByDetailed)
-    .replace(/[\n\s]+/g, " ")
-    .trim();
+const queryData = async ({ table, columns, groupBy, interval }) => {
+  const time = timeRange();
 
   const url = new URL("/api/query", location);
   url.searchParams.append("repository", repository);
-  url.searchParams.append("query", query);
+  url.searchParams.append("table", table);
+  url.searchParams.append("columns", columns.join(","));
+  url.searchParams.append("since", time.start);
+  url.searchParams.append("until", time.end);
+  if (groupBy && groupBy.length > 0) {
+    url.searchParams.append("group_by", groupBy.join(","));
+  }
+  if (interval) {
+    url.searchParams.append("interval", interval);
+  }
+
   const res = await fetch(url.toString());
   if (!res.ok) {
-    throw new Error(
-      `Query failed eith ${res.status} ${res.statusText} (query=${query})`
-    );
+    throw new Error(`Query failed eith ${res.status} ${res.statusText}`);
   }
 
   return res.json();
@@ -104,18 +62,14 @@ const emptyData = () => {
 };
 
 const prepareData = (raw, valueTransform) => {
-  if (raw.length === 0) {
+  if (raw.timestamps.length === 0) {
     return emptyData();
   }
 
-  const x = raw[0].columns.indexOf("time");
-  const y = raw[0].columns.indexOf("value");
   const data = [];
-  data.push(
-    raw[0].values.map((row) => Math.round(new Date(row[x]).getTime() / 1000))
-  );
-  for (const series of raw) {
-    data.push(series.values.map((row) => valueTransform(row[y])));
+  data.push(raw.timestamps.map((t) => t / 1000));
+  for (const series of raw.series) {
+    data.push(series.values.map((v) => valueTransform(v[0])));
   }
 
   return data;
@@ -317,8 +271,9 @@ const statPanel = ({
 
   const loadData = async () => {
     const rawStat = await queryData(statQuery);
-    const stat = prepareData(rawStat, valueTransform);
-    statEl.textContent = valueFormat(stat[1][0]);
+    statEl.textContent = valueFormat(
+      valueTransform(rawStat.series[0].values[0])
+    );
 
     const rawBackground = await queryData(backgroundQuery);
     const data = prepareData(rawBackground, valueTransform);
@@ -334,7 +289,6 @@ const graphPanel = ({
   query,
   valueTransform,
   valueFormat,
-  labelTag,
   elementSelector,
 }) => {
   const element = document.querySelector(elementSelector);
@@ -362,8 +316,8 @@ const graphPanel = ({
       plugins: [accessibilityPlugin({ ariaLabelledBy: headingId })],
       series: [
         {},
-        ...raw.map((series, i) => ({
-          label: series.tags[labelTag],
+        ...raw.series.map((series, i) => ({
+          label: series.tags[0],
           value: (_self, rawValue) => valueFormat(rawValue),
           stroke: color(i),
         })),
@@ -378,7 +332,7 @@ const graphPanel = ({
     plot = new uPlot(opts, data, element);
   };
 
-  recreatePlot([], emptyData());
+  recreatePlot({ series: [] }, emptyData());
   onResize(() => plot.setSize(getSize()));
 
   const loadData = async () => {
@@ -394,7 +348,6 @@ const tablePanel = ({
   title,
   query,
   values,
-  labelTag,
   labelColumnName,
   elementSelector,
 }) => {
@@ -445,19 +398,15 @@ const tablePanel = ({
     }
 
     tbody.append(
-      ...raw.map((series, i) =>
+      ...raw.series.map((series) =>
         createElement("tr", {}, [
           createElement("th", {
             scope: "row",
-            textContent: series.tags[labelTag],
+            textContent: series.tags[0],
           }),
-          ...values.map((value) =>
+          ...values.map((value, i) =>
             createElement("td", {
-              textContent: value.format(
-                value.transform(
-                  series.values[0][series.columns.indexOf(value.name)]
-                )
-              ),
+              textContent: value.format(value.transform(series.values[0][i])),
             })
           ),
         ])
@@ -471,17 +420,15 @@ const tablePanel = ({
 window.addEventListener("load", () => {
   statPanel({
     title: "Overall success rate",
-    statQuery: `
-      SELECT mean("successful") AS value
-      FROM "build"
-      WHERE __time_filter__
-    `,
-    backgroundQuery: `
-      SELECT mean("successful") AS value
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY __time_group_sparse__
-    `,
+    statQuery: {
+      table: "builds",
+      columns: ["avg(successful)"],
+    },
+    backgroundQuery: {
+      table: "builds",
+      columns: ["avg(successful)"],
+      interval: "sparse",
+    },
     valueTransform: (value) => value * 100,
     valueFormat: (value) => `${formatNumber(value)}%`,
     elementSelector: "#overall-success",
@@ -489,17 +436,15 @@ window.addEventListener("load", () => {
 
   statPanel({
     title: "Overall average duration",
-    statQuery: `
-      SELECT mean("duration_ms") AS value
-      FROM "build"
-      WHERE __time_filter__
-    `,
-    backgroundQuery: `
-      SELECT mean("duration_ms") AS value
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY __time_group_sparse__
-    `,
+    statQuery: {
+      table: "builds",
+      columns: ["avg(duration_ms)"],
+    },
+    backgroundQuery: {
+      table: "builds",
+      columns: ["avg(duration_ms)"],
+      interval: "sparse",
+    },
     valueTransform: (value) => value / 1000 / 60,
     valueFormat: (value) => `${formatNumber(value)} min`,
     elementSelector: "#overall-duration",
@@ -507,33 +452,28 @@ window.addEventListener("load", () => {
 
   tablePanel({
     title: "Statistics by pipeline",
-    query: `
-      SELECT count("commit") AS "count", mean("duration_ms") AS "duration_ms", mean("successful") AS "successful"
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY "name"
-    `,
+    query: {
+      table: "builds",
+      columns: ["count(commit)", "avg(duration_ms)", "avg(successful)"],
+      groupBy: ["name"],
+    },
     values: [
       {
-        name: "count",
         columnName: "Count",
         transform: (value) => value,
         format: (value) => value,
       },
       {
-        name: "duration_ms",
         columnName: "Duration",
         transform: (value) => value / 1000 / 60,
         format: (value) => `${formatNumber(value)} min`,
       },
       {
-        name: "successful",
         columnName: "Success",
         transform: (value) => value * 100,
         format: (value) => `${formatNumber(value)}%`,
       },
     ],
-    labelTag: "name",
     labelColumnName: "Pipeline",
     elementSelector: "#stats-by-pipeline",
   });
@@ -541,30 +481,28 @@ window.addEventListener("load", () => {
   graphPanel({
     title: "Duration",
     height: 410,
-    query: `
-      SELECT mean("duration_ms") AS value
-      FROM "build"
-      WHERE __time_filter__
-      GROUP BY __time_group_detailed__, "name"
-    `,
+    query: {
+      table: "builds",
+      columns: ["avg(duration_ms)"],
+      groupBy: ["name"],
+      interval: "detailed",
+    },
     valueTransform: (value) => value / 1000 / 60,
     valueFormat: (value) => `${formatNumber(value)} min`,
-    labelTag: "name",
     elementSelector: "#duration",
   });
 
   graphPanel({
     title: "Attempts",
     height: 220,
-    query: `
-      SELECT mean("builds") AS value
-      FROM "commit"
-      WHERE __time_filter__
-      GROUP BY __time_group_detailed__, "build_name"
-    `,
+    query: {
+      table: "commits",
+      columns: ["avg(builds)"],
+      groupBy: ["build_name"],
+      interval: "detailed",
+    },
     valueTransform: (value) => (value == null ? 0 : value),
     valueFormat: (value) => formatNumber(value),
-    labelTag: "build_name",
     elementSelector: "#attempts",
   });
 });

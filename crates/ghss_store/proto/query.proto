@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package ghss.store;
+
+enum AggregateFunction {
+	AVG = 0;
+	COUNT = 1;
+}
+
+message Column {
+	string name = 1;
+	AggregateFunction agg_func = 2;
+}
+
+message TotalAggregatesRequest {
+	string repository_id = 1;
+	string table = 2;
+	repeated Column columns = 3;
+	int64 since = 4;
+	int64 until = 5;
+	repeated string group_by = 6;
+}
+
+message TotalAggregatesReply {
+	message Row {
+		repeated double values = 1;
+		repeated string groups = 2;
+	}
+	repeated Row rows = 1;
+}
+
+enum IntervalType {
+	SPARSE = 0;
+	DETAILED = 1;
+}
+
+message IntervalAggregatesRequest {
+	string repository_id = 1;
+	string table = 2;
+	repeated Column columns = 3;
+	int64 since = 4;
+	int64 until = 5;
+	repeated string group_by = 6;
+	IntervalType interval = 7;
+}
+
+message IntervalAggregatesReply {
+	message Row {
+		repeated double values = 1;
+		repeated string groups = 2;
+		int64 timestamp = 3;
+	}
+	repeated Row rows = 1;
+}
+
+service Query {
+	rpc GetTotalAggregates (TotalAggregatesRequest) returns (TotalAggregatesReply);
+	rpc GetIntervalAggregates (IntervalAggregatesRequest) returns (IntervalAggregatesReply);
+}

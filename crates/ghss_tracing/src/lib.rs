@@ -1,11 +1,9 @@
+pub mod tonic;
+
+#[cfg(not(debug_assertions))]
+use std::str::FromStr;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::prelude::*;
-
-pub use tracing::{
-    debug, debug_span, error, error_span, field, field::Empty as EmptyField, info, info_span,
-    instrument, span::Span, trace, trace_span, warn, warn_span,
-};
-pub use tracing_futures::Instrument;
 
 pub struct Config {
     pub honeycomb_api_key: String,
@@ -37,12 +35,24 @@ pub fn setup(config: Config) {
 }
 
 #[cfg(debug_assertions)]
-pub fn register_tracing_root() {}
+pub fn register_new_tracing_root() {}
+
+#[cfg(debug_assertions)]
+pub fn register_tracing_root(_trace_id: &str, _parent_span_id: &str) {}
 
 #[cfg(not(debug_assertions))]
-pub fn register_tracing_root() {
+pub fn register_new_tracing_root() {
     tracing_honeycomb::register_dist_tracing_root(tracing_honeycomb::TraceId::generate(), None)
         .expect("register tracing root");
+}
+
+#[cfg(not(debug_assertions))]
+pub fn register_tracing_root(trace_id: &str, parent_span_id: &str) {
+    tracing_honeycomb::register_dist_tracing_root(
+        tracing_honeycomb::TraceId::from_str(trace_id).expect("parse traceid"),
+        Some(tracing_honeycomb::SpanId::from_str(parent_span_id).expect("parse spanid")),
+    )
+    .expect("register tracing root");
 }
 
 #[cfg(debug_assertions)]
@@ -55,3 +65,6 @@ pub async fn flush() {
     // It provides Client::flush() but this is not exposed by tracing-honeycomb.
     tokio::time::delay_for(std::time::Duration::from_secs(5)).await;
 }
+
+pub const HEADER_TRACE_ID: &str = "x-b3-traceid";
+pub const HEADER_PARENT_SPAN_ID: &str = "x-b3-parentspanid";

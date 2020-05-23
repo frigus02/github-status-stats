@@ -8,8 +8,12 @@ mod token;
 
 use bytes::Bytes;
 use config::with_config;
-use ghss_models::{influxdb_name, influxdb_name_unsafe, influxdb_read_user_unsafe, Build};
-use ghss_tracing::{error, info, info_span, register_tracing_root, Instrument};
+use ghss_store_client::{
+    query_client::QueryClient, store_client::StoreClient, AggregateFunction, BuildSource, Hook,
+    IntervalAggregatesRequest, IntervalType, RecordHookRequest, TotalAggregatesRequest,
+};
+use ghss_tracing::register_new_tracing_root;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -19,6 +23,8 @@ use templates::{
     with_templates, DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess,
 };
 use token::{optional_token, OptionalToken};
+use tracing::{error, info, info_span};
+use tracing_futures::Instrument;
 use warp::{
     http::{Response, StatusCode, Uri},
     hyper::{self, header, service::Service, Body, Request},
@@ -113,60 +119,229 @@ async fn dashboard_route(
     Ok(reply)
 }
 
+#[derive(Debug)]
+enum ApiQueryAggregateFunction {
+    Avg,
+    Count,
+}
+
+impl From<ApiQueryAggregateFunction> for AggregateFunction {
+    fn from(function: ApiQueryAggregateFunction) -> Self {
+        match function {
+            ApiQueryAggregateFunction::Avg => Self::Avg,
+            ApiQueryAggregateFunction::Count => Self::Count,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ApiQueryColumn {
+    name: String,
+    agg_func: ApiQueryAggregateFunction,
+}
+
+impl From<ApiQueryColumn> for ghss_store_client::Column {
+    fn from(aggregate: ApiQueryColumn) -> Self {
+        Self {
+            name: aggregate.name,
+            agg_func: AggregateFunction::from(aggregate.agg_func) as i32,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ApiQueryIntervalType {
+    Sparse,
+    Detailed,
+}
+
+impl From<ApiQueryIntervalType> for IntervalType {
+    fn from(interval: ApiQueryIntervalType) -> Self {
+        match interval {
+            ApiQueryIntervalType::Sparse => Self::Sparse,
+            ApiQueryIntervalType::Detailed => Self::Detailed,
+        }
+    }
+}
+
+struct VecApiQueryAggregateVisitor;
+
+impl<'de> serde::de::Visitor<'de> for VecApiQueryAggregateVisitor {
+    type Value = Vec<ApiQueryColumn>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a comma separated list of aggregate functions and columns")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        let re = Regex::new(r"(avg|count)\(([A-Za-z0-9_]+)\)").unwrap();
+        v.split(',')
+            .filter(|part| !part.is_empty())
+            .map(|part| {
+                re.captures(part)
+                    .ok_or_else(|| E::custom("invalid aggregate value"))
+                    .map(|cap| ApiQueryColumn {
+                        name: cap[2].into(),
+                        agg_func: match &cap[1] {
+                            "avg" => ApiQueryAggregateFunction::Avg,
+                            "count" => ApiQueryAggregateFunction::Count,
+                            _ => panic!("invalid aggregate function"),
+                        },
+                    })
+            })
+            .collect()
+    }
+}
+
+fn deserialize_api_query_aggregates<'de, D>(
+    deserializer: D,
+) -> Result<Vec<ApiQueryColumn>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer.deserialize_str(VecApiQueryAggregateVisitor)
+}
+
+struct OptionVecStringVisitor;
+
+impl<'de> serde::de::Visitor<'de> for OptionVecStringVisitor {
+    type Value = Option<Vec<String>>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("null or a comma separated list of strings")
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(self)
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Some(
+            v.split(',')
+                .filter(|part| !part.is_empty())
+                .map(|part| part.into())
+                .collect(),
+        ))
+    }
+}
+
+fn deserialize_option_strings<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer.deserialize_option(OptionVecStringVisitor)
+}
+
 #[derive(Debug, Deserialize)]
 struct ApiQueryParams {
     repository: i32,
-    query: String,
+    table: String,
+    #[serde(deserialize_with = "deserialize_api_query_aggregates")]
+    columns: Vec<ApiQueryColumn>,
+    since: i64,
+    until: i64,
+    #[serde(default, deserialize_with = "deserialize_option_strings")]
+    group_by: Option<Vec<String>>,
+    interval: Option<ApiQueryIntervalType>,
+}
+
+#[derive(Debug, Serialize)]
+struct ApiQueryResponseSeries {
+    tags: Vec<String>,
+    values: Vec<Option<Vec<f64>>>,
 }
 
 #[derive(Debug, Serialize)]
 struct ApiQueryResponse {
-    pub tags: Option<HashMap<String, String>>,
-    pub columns: Vec<String>,
-    pub values: Vec<Vec<Option<ghss_influxdb::FieldValue>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timestamps: Option<Vec<i64>>,
+    series: Vec<ApiQueryResponseSeries>,
 }
 
 async fn api_query_route(
     params: ApiQueryParams,
     token: OptionalToken,
-    config: Config,
+    mut client: QueryClient<ghss_store_client::Channel>,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         OptionalToken::Some(user)
             if user.repositories.iter().any(|r| r.id == params.repository) =>
         {
-            let influxdb_db = influxdb_name_unsafe(params.repository);
-            let res: Result<Vec<ApiQueryResponse>, Box<dyn std::error::Error>> = async {
-                let client = ghss_influxdb::Client::new(
-                    &config.influxdb_base_url,
-                    &influxdb_db,
-                    &influxdb_read_user_unsafe(params.repository),
-                    &config.influxdb_read_password.unsecure(),
-                )?;
-                let res = client
-                    .query(&params.query)
-                    .await?
-                    .into_single_result()?
-                    .into_series()?
-                    .into_iter()
-                    .map(|s| ApiQueryResponse {
-                        tags: s.tags,
-                        columns: s.columns,
-                        values: s.values,
-                    })
-                    .collect();
-                Ok(res)
+            let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
+                let response = match params.interval {
+                    Some(interval) => {
+                        let request = ghss_tracing::tonic::request(IntervalAggregatesRequest {
+                            repository_id: params.repository.to_string(),
+                            table: params.table,
+                            columns: params.columns.into_iter().map(|c| c.into()).collect(),
+                            since: params.since,
+                            until: params.until,
+                            group_by: params.group_by.unwrap_or_default(),
+                            interval: IntervalType::from(interval) as i32,
+                        });
+                        let response = client.get_interval_aggregates(request).await?.into_inner();
+                        let mut timestamps = Vec::new();
+                        let mut series = HashMap::new();
+                        for row in response.rows {
+                            if timestamps.last() != Some(&row.timestamp) {
+                                timestamps.push(row.timestamp);
+                            }
+
+                            let values: &mut Vec<Option<Vec<f64>>> =
+                                series.entry(row.groups).or_default();
+                            values.resize(timestamps.len() - 1, None);
+                            values.push(Some(row.values));
+                        }
+
+                        ApiQueryResponse {
+                            timestamps: Some(timestamps),
+                            series: series
+                                .into_iter()
+                                .map(|(tags, values)| ApiQueryResponseSeries { tags, values })
+                                .collect(),
+                        }
+                    }
+                    None => {
+                        let request = ghss_tracing::tonic::request(TotalAggregatesRequest {
+                            repository_id: params.repository.to_string(),
+                            table: params.table,
+                            columns: params.columns.into_iter().map(|c| c.into()).collect(),
+                            since: params.since,
+                            until: params.until,
+                            group_by: params.group_by.unwrap_or_default(),
+                        });
+                        let response = client.get_total_aggregates(request).await?.into_inner();
+                        let mut series = HashMap::new();
+                        for row in response.rows {
+                            series.insert(row.groups, vec![Some(row.values)]);
+                        }
+
+                        ApiQueryResponse {
+                            timestamps: None,
+                            series: series
+                                .into_iter()
+                                .map(|(tags, values)| ApiQueryResponseSeries { tags, values })
+                                .collect(),
+                        }
+                    }
+                };
+                Ok(response)
             }
             .await;
             match res {
                 Ok(res) => Box::new(warp::reply::json(&res)),
                 Err(err) => {
-                    error!(
-                        influxdb.db = %influxdb_db,
-                        influxdb.query = %params.query,
-                        err = %err,
-                        "influxdb query failed",
-                    );
+                    error!(err = %err, "query failed");
                     Box::new(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }
@@ -222,6 +397,7 @@ async fn hooks_route(
     event: String,
     body: Bytes,
     config: Config,
+    mut client: StoreClient<ghss_store_client::Channel>,
 ) -> Result<impl warp::Reply, Infallible> {
     let res: Result<(), Box<dyn std::error::Error>> = async {
         let payload = github_hooks::deserialize(
@@ -234,45 +410,32 @@ async fn hooks_route(
         info!("Hook: {:?}", payload);
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
-                let influxdb_db = influxdb_name(&check_run.repository);
-                let client = ghss_influxdb::Client::new(
-                    &config.influxdb_base_url,
-                    &influxdb_db,
-                    &config.influxdb_admin_username,
-                    &config.influxdb_admin_password.unsecure(),
-                )?;
-                client
-                    .write(vec![
-                        ghss_models::Hook {
-                            time: check_run.check_run.started_at,
-                            r#type: ghss_models::HookType::CheckRun,
-                            commit_sha: check_run.check_run.head_sha.clone(),
-                        }
-                        .into(),
-                        Build::from(check_run.check_run).into(),
-                    ])
-                    .await?
+                let request = ghss_tracing::tonic::request(RecordHookRequest {
+                    repository_id: check_run.repository.id.to_string(),
+                    hook: Some(Hook {
+                        r#type: BuildSource::CheckRun as i32,
+                        commit: check_run.check_run.head_sha.clone(),
+                        timestamp: check_run.check_run.started_at.timestamp_millis(),
+                    }),
+                    build: Some(check_run.check_run.into()),
+                });
+                let _response = client.record_hook(request).await?;
             }
             github_hooks::Payload::GitHubAppAuthorization(_auth) => {}
             github_hooks::Payload::Installation => {}
             github_hooks::Payload::InstallationRepositories => {}
             github_hooks::Payload::Ping(_ping) => {}
             github_hooks::Payload::Status(status) => {
-                let influxdb_db = influxdb_name(&status.repository);
-                let client = ghss_influxdb::Client::new(
-                    &config.influxdb_base_url,
-                    &influxdb_db,
-                    &config.influxdb_admin_username,
-                    &config.influxdb_admin_password.unsecure(),
-                )?;
-                client
-                    .write(vec![ghss_models::Hook {
-                        time: status.created_at,
-                        r#type: ghss_models::HookType::Status,
-                        commit_sha: status.sha,
-                    }
-                    .into()])
-                    .await?
+                let request = ghss_tracing::tonic::request(RecordHookRequest {
+                    repository_id: status.repository.id.to_string(),
+                    hook: Some(Hook {
+                        r#type: BuildSource::Status as i32,
+                        commit: status.sha,
+                        timestamp: status.created_at.timestamp_millis(),
+                    }),
+                    build: None,
+                });
+                let _response = client.record_hook(request).await?;
             }
         };
 
@@ -313,12 +476,27 @@ pub fn path_from_state(state: String) -> String {
     result.unwrap_or_else(|_| "/".to_owned())
 }
 
+pub fn with_store_client(
+    client: StoreClient<ghss_store_client::Channel>,
+) -> impl Filter<Extract = (StoreClient<ghss_store_client::Channel>,), Error = Infallible> + Clone {
+    warp::any().map(move || client.clone())
+}
+
+pub fn with_query_client(
+    client: QueryClient<ghss_store_client::Channel>,
+) -> impl Filter<Extract = (QueryClient<ghss_store_client::Channel>,), Error = Infallible> + Clone {
+    warp::any().map(move || client.clone())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::load();
     let config = Arc::new(config);
     let templates = templates::load();
     let templates = Arc::new(templates);
+
+    let store_client = StoreClient::connect(config.store_url.clone()).await?;
+    let query_client = QueryClient::connect(config.store_url.clone()).await?;
 
     ghss_tracing::setup(ghss_tracing::Config {
         honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
@@ -359,7 +537,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.cookie_name,
             config.token_secret.unsecure().into(),
         ))
-        .and(with_config(config.clone()))
+        .and(with_query_client(query_client))
         .and_then(api_query_route);
 
     let setup_authorized = warp::get()
@@ -379,6 +557,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::header("X-GitHub-Event"))
         .and(warp::body::bytes())
         .and(with_config(config.clone()))
+        .and(with_store_client(store_client))
         .and_then(hooks_route);
 
     let routes = index
@@ -406,15 +585,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .get(header::USER_AGENT)
                             .map(|v| v.to_str().expect("user agent to string"))
                             .unwrap_or(""),
-                        user_id = ghss_tracing::EmptyField,
-                        status = ghss_tracing::EmptyField,
-                        duration_ms = ghss_tracing::EmptyField,
+                        user_id = tracing::field::Empty,
+                        status = tracing::field::Empty,
+                        duration_ms = tracing::field::Empty,
                     );
                     {
                         // TODO: This seems weird. Need to understand why that's
                         // necessary or how to do it better.
                         let _guard = span.enter();
-                        register_tracing_root();
+                        register_new_tracing_root();
                     }
 
                     let started = std::time::Instant::now();

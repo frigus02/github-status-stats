@@ -2,15 +2,6 @@
 
 ## Prerequisites
 
-- Generate secret for InfluxDB with random passwords.
-
-  ```sh
-  kubectl create secret generic ghss-influxdb \
-      --from-literal admin_username=admin \
-      --from-literal admin_password=$(openssl rand -base64 32) \
-      --from-literal read_password=$(openssl rand -base64 32)
-  ```
-
 - Create secret for communication with GitHub.
 
   1. Go to your GitHub app's settings page (e.g. https://github.com/settings/apps/status-stats).
@@ -56,8 +47,7 @@ See [scripts/build.sh](../scripts/build.sh) for detailed steps.
 - [Deploy NGINX Ingress controller](https://kubernetes.github.io/ingress-nginx/deploy/).
 
   ```sh
-  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/nginx-0.29.0/deploy/static/mandatory.yaml
-  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/nginx-0.29.0/deploy/static/provider/cloud-generic.yaml
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-0.32.0/deploy/static/provider/cloud/deploy.yaml
   ```
 
 - Create localhost ingress for website.
