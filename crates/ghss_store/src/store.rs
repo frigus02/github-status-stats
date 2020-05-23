@@ -27,7 +27,7 @@ impl Store for SQLiteStore {
         &self,
         request: Request<RecordHookRequest>,
     ) -> Result<Response<RecordHookReply>, Status> {
-        info!("record hook");
+        info!("record_hook");
         let request = request.into_inner();
         let mut db = self.db_write(request.repository_id)?;
         let trx = db.transaction()?;
@@ -50,6 +50,7 @@ impl Store for SQLiteStore {
         &self,
         request: Request<HookedCommitsRequest>,
     ) -> Result<Response<HookedCommitsReply>, Status> {
+        info!("get_hooked_commits_since_last_import");
         let request = request.into_inner();
         let db = self.db_read(request.repository_id)?;
         let commits = db.get_hooked_commits_since_last_import(request.until)?;
