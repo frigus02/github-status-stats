@@ -11,7 +11,7 @@ ghss_tracing = { path = "../ghss_tracing" }
 prost = "0.6.1"
 rusqlite = { version = "0.23.1", features = ["bundled"] }
 secstr = "0.4.0"
-tokio = { version = "0.2.21", features = ["macros"] }
+tokio = { version = "0.2.21", features = ["macros", "signal"] }
 tonic = "0.2.1"
 tracing = "0.1.14"
 

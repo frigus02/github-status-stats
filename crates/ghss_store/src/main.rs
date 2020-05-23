@@ -1,4 +1,5 @@
 mod config;
+mod ctrlc;
 mod db;
 mod health;
 mod query;
@@ -83,7 +84,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(HealthServer::new(health_service))
         .add_service(StoreServer::new(store.clone()))
         .add_service(QueryServer::new(store))
-        .serve(([0, 0, 0, 0], 50051).into())
+        .serve_with_shutdown(([0, 0, 0, 0], 50051).into(), async {
+            ctrlc::ctrl_c().await;
+        })
         .await?;
 
     Ok(())
