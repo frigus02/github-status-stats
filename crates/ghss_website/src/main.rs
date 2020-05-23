@@ -271,14 +271,13 @@ struct ApiQueryResponse {
 async fn api_query_route(
     params: ApiQueryParams,
     token: OptionalToken,
-    config: Config,
+    mut client: QueryClient<ghss_store_client::Channel>,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         OptionalToken::Some(user)
             if user.repositories.iter().any(|r| r.id == params.repository) =>
         {
             let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
-                let mut client = QueryClient::connect(config.store_url.clone()).await?;
                 let response = match params.interval {
                     Some(interval) => {
                         let request = ghss_tracing::tonic::request(IntervalAggregatesRequest {
@@ -398,6 +397,7 @@ async fn hooks_route(
     event: String,
     body: Bytes,
     config: Config,
+    mut client: StoreClient<ghss_store_client::Channel>,
 ) -> Result<impl warp::Reply, Infallible> {
     let res: Result<(), Box<dyn std::error::Error>> = async {
         let payload = github_hooks::deserialize(
@@ -410,7 +410,6 @@ async fn hooks_route(
         info!("Hook: {:?}", payload);
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
-                let mut client = StoreClient::connect(config.store_url.clone()).await?;
                 let request = ghss_tracing::tonic::request(RecordHookRequest {
                     repository_id: check_run.repository.id.to_string(),
                     hook: Some(Hook {
@@ -427,7 +426,6 @@ async fn hooks_route(
             github_hooks::Payload::InstallationRepositories => {}
             github_hooks::Payload::Ping(_ping) => {}
             github_hooks::Payload::Status(status) => {
-                let mut client = StoreClient::connect(config.store_url.clone()).await?;
                 let request = ghss_tracing::tonic::request(RecordHookRequest {
                     repository_id: status.repository.id.to_string(),
                     hook: Some(Hook {
@@ -478,12 +476,27 @@ pub fn path_from_state(state: String) -> String {
     result.unwrap_or_else(|_| "/".to_owned())
 }
 
+pub fn with_store_client(
+    client: StoreClient<ghss_store_client::Channel>,
+) -> impl Filter<Extract = (StoreClient<ghss_store_client::Channel>,), Error = Infallible> + Clone {
+    warp::any().map(move || client.clone())
+}
+
+pub fn with_query_client(
+    client: QueryClient<ghss_store_client::Channel>,
+) -> impl Filter<Extract = (QueryClient<ghss_store_client::Channel>,), Error = Infallible> + Clone {
+    warp::any().map(move || client.clone())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::load();
     let config = Arc::new(config);
     let templates = templates::load();
     let templates = Arc::new(templates);
+
+    let store_client = StoreClient::connect(config.store_url.clone()).await?;
+    let query_client = QueryClient::connect(config.store_url.clone()).await?;
 
     ghss_tracing::setup(ghss_tracing::Config {
         honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
@@ -524,7 +537,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.cookie_name,
             config.token_secret.unsecure().into(),
         ))
-        .and(with_config(config.clone()))
+        .and(with_query_client(query_client))
         .and_then(api_query_route);
 
     let setup_authorized = warp::get()
@@ -544,6 +557,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::header("X-GitHub-Event"))
         .and(warp::body::bytes())
         .and(with_config(config.clone()))
+        .and(with_store_client(store_client))
         .and_then(hooks_route);
 
     let routes = index
