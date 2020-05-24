@@ -69,7 +69,9 @@ const prepareData = (raw, valueTransform) => {
   const data = [];
   data.push(raw.timestamps.map((t) => t / 1000));
   for (const series of raw.series) {
-    data.push(series.values.map((v) => valueTransform(v[0])));
+    data.push(
+      series.values.map((v) => (v === null ? null : valueTransform(v[0])))
+    );
   }
 
   return data;

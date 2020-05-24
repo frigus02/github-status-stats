@@ -302,6 +302,9 @@ async fn api_query_route(
                             values.resize(timestamps.len() - 1, None);
                             values.push(Some(row.values));
                         }
+                        for values in series.values_mut() {
+                            values.resize(timestamps.len(), None);
+                        }
 
                         ApiQueryResponse {
                             timestamps: Some(timestamps),
