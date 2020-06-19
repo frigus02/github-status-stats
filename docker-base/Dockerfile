@@ -1,4 +1,4 @@
-FROM rust:1.43.1
+FROM rust:1.44.1
 
 ARG CARGO_FLAGS=--release
 ARG CARGO_MODE=release
