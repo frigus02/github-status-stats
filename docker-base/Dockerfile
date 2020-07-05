@@ -65,5 +65,5 @@ RUN cargo clippy $CARGO_FLAGS && \
 
 # Build
 COPY . .
-RUN cargo clippy $CARGO_FLAGS --frozen -- -Dwarnings && \
+RUN cargo clippy $CARGO_FLAGS -- -Dwarnings && \
     cargo build $CARGO_FLAGS
