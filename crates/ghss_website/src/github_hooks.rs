@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use ghss_github::{CheckRunEvent, GitHubAppAuthorizationEvent, PingEvent, StatusEvent};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, Mac, NewMac};
 use secstr::SecStr;
 use sha1::Sha1;
 
@@ -18,8 +18,8 @@ pub enum Payload {
 
 fn validate_signature(signature: String, body: &Bytes, secret: &[u8]) -> Result<(), BoxError> {
     let mut mac = Hmac::<Sha1>::new_varkey(secret).expect("HMAC can take key of any size");
-    mac.input(body);
-    let result = SecStr::from(format!("sha1={:x}", mac.result().code()));
+    mac.update(body);
+    let result = SecStr::from(format!("sha1={:x}", mac.finalize().into_bytes()));
     if result == SecStr::from(signature) {
         Ok(())
     } else {
