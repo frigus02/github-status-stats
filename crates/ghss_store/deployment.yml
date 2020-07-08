@@ -46,4 +46,4 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: ghss-store-rwo-10g
+            claimName: ghss-store-rwx-10g
