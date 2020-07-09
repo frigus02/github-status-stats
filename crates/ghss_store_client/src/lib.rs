@@ -1,8 +1,26 @@
 use ghss_github::{CheckRun, CheckRunConclusion};
+use opentelemetry::api::{Context, SpanKind, TraceContextExt, Tracer};
 use std::convert::TryInto;
-pub use tonic::{transport::channel::Channel, Code, Response, Status};
+pub use tonic::{transport::channel::Channel, Code, Request, Response, Status};
 
 tonic::include_proto!("ghss.store");
+
+pub fn request_context(span_name: &str) -> Context {
+    let tracer = opentelemetry::global::tracer("store_client");
+    let span = tracer
+        .span_builder(span_name)
+        .with_kind(SpanKind::Client)
+        .start(&tracer);
+    Context::current_with_span(span)
+}
+
+pub fn request<T>(message: T, cx: &Context) -> Request<T> {
+    let mut request = Request::new(message);
+    opentelemetry::global::get_http_text_propagator(|propagator| {
+        propagator.inject_context(cx, request.metadata_mut())
+    });
+    request
+}
 
 impl From<CheckRun> for Build {
     fn from(check_run: CheckRun) -> Self {
