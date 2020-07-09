@@ -1,10 +1,10 @@
 use super::page_links;
+use opentelemetry::api::{Context, FutureExt, Key, SpanKind, TraceContextExt, Tracer};
 use reqwest::header::{ACCEPT, LINK};
 use reqwest::{Client, Request, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::error::Error;
-use tracing::info;
 
 struct Response<T> {
     data: T,
@@ -18,8 +18,20 @@ async fn call_api<T: DeserializeOwned>(
     client: &Client,
     request: Request,
 ) -> Result<Response<T>, Box<dyn Error>> {
-    info!(request.method = %request.method(), request.url = %request.url(), "github request");
-    let res = client.execute(request).await?.error_for_status()?;
+    let tracer = opentelemetry::global::tracer("github");
+    let span = tracer
+        .span_builder("github request")
+        .with_kind(SpanKind::Client)
+        .with_attributes(vec![
+            Key::new("request.method").string(request.method().as_str()),
+            Key::new("request.url").string(request.url().as_str()),
+        ])
+        .start(&tracer);
+    let res = client
+        .execute(request)
+        .with_context(Context::current_with_span(span))
+        .await?
+        .error_for_status()?;
     let next_page_url = match res.headers().get(LINK) {
         Some(value) => {
             if let Some(url) = page_links::parse(value.to_str()?).next {
