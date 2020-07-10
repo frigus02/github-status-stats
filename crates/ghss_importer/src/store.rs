@@ -3,7 +3,7 @@ use ghss_store_client::{store_client::StoreClient, Channel};
 use ghss_store_client::{
     Build, Commit, HookedCommitsReply, HookedCommitsRequest, ImportRequest, Response, Status,
 };
-use tracing::info;
+use opentelemetry::api::{FutureExt, Key, TraceContextExt};
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -27,27 +27,40 @@ impl<'client> RepositoryImporter<'client> {
         builds: Vec<Build>,
         commits: Vec<Commit>,
     ) -> Result<(), BoxError> {
-        info!(points_count = builds.len() + commits.len(), "write points");
-        let request = ghss_tracing::tonic::request(ImportRequest {
-            repository_id: self.repository_id.clone(),
-            builds,
-            commits,
-            timestamp: self.timestamp.timestamp_millis(),
-        });
-        let _response = self.client.import(request).await?;
+        let request_cx = ghss_store_client::request_context("import");
+        request_cx
+            .span()
+            .set_attribute(Key::new("import.builds").u64(builds.len() as u64));
+        request_cx
+            .span()
+            .set_attribute(Key::new("import.commits").u64(commits.len() as u64));
+        let request = ghss_store_client::request(
+            ImportRequest {
+                repository_id: self.repository_id.clone(),
+                builds,
+                commits,
+                timestamp: self.timestamp.timestamp_millis(),
+            },
+            &request_cx,
+        );
+        let _response = self.client.import(request).with_context(request_cx).await?;
         Ok(())
     }
 
     pub async fn get_hooked_commits_since_last_import(
         &mut self,
     ) -> Result<Response<HookedCommitsReply>, Status> {
+        let request_cx = ghss_store_client::request_context("get_hooked_commits_since_last_import");
+        let request = ghss_store_client::request(
+            HookedCommitsRequest {
+                repository_id: self.repository_id.clone(),
+                until: self.timestamp.timestamp_millis(),
+            },
+            &request_cx,
+        );
         self.client
-            .get_hooked_commits_since_last_import(ghss_tracing::tonic::request(
-                HookedCommitsRequest {
-                    repository_id: self.repository_id.clone(),
-                    until: self.timestamp.timestamp_millis(),
-                },
-            ))
+            .get_hooked_commits_since_last_import(request)
+            .with_context(request_cx)
             .await
     }
 }
