@@ -1,5 +1,5 @@
 use ghss_github::{CheckRun, CheckRunConclusion};
-use opentelemetry::api::{Context, SpanKind, TraceContextExt, Tracer};
+use opentelemetry::api::{Context, Key, SpanKind, TraceContextExt, Tracer};
 use std::convert::TryInto;
 pub use tonic::{transport::channel::Channel, Code, Request, Response, Status};
 
@@ -10,6 +10,7 @@ pub fn request_context(span_name: &str) -> Context {
     let span = tracer
         .span_builder(span_name)
         .with_kind(SpanKind::Client)
+        .with_attributes(vec![Key::new("rpc.system").string("grpc")])
         .start(&tracer);
     Context::current_with_span(span)
 }

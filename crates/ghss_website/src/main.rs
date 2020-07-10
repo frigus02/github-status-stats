@@ -280,8 +280,9 @@ async fn api_query_route(
             let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
                 let response = match params.interval {
                     Some(interval) => {
-                        let request_cx =
-                            ghss_store_client::request_context("get_interval_aggregates");
+                        let request_cx = ghss_store_client::request_context(
+                            "ghss.store.Query/GetIntervalAggregates",
+                        );
                         let request = ghss_store_client::request(
                             IntervalAggregatesRequest {
                                 repository_id: params.repository.to_string(),
@@ -324,7 +325,9 @@ async fn api_query_route(
                         }
                     }
                     None => {
-                        let request_cx = ghss_store_client::request_context("get_total_aggregates");
+                        let request_cx = ghss_store_client::request_context(
+                            "ghss.store.Query/GetTotalAggregates",
+                        );
                         let request = ghss_store_client::request(
                             TotalAggregatesRequest {
                                 repository_id: params.repository.to_string(),
@@ -361,10 +364,9 @@ async fn api_query_route(
             match res {
                 Ok(res) => Box::new(warp::reply::json(&res)),
                 Err(err) => {
-                    let cx = Context::current();
-                    cx.span().add_event(
-                        "query failed".into(),
-                        vec![Key::new("error.message").string(err.to_string())],
+                    Context::current().span().add_event(
+                        "error".into(),
+                        vec![Key::new("error.message").string(format!("query failed: {:?}", err))],
                     );
                     Box::new(StatusCode::INTERNAL_SERVER_ERROR)
                 }
@@ -433,12 +435,12 @@ async fn hooks_route(
         )?;
 
         cx.span().add_event(
-            "hook".into(),
-            vec![Key::new("payload").string(format!("{:?}", payload))],
+            "log".into(),
+            vec![Key::new("log.message").string(format!("hook payload: {:?}", payload))],
         );
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
-                let request_cx = ghss_store_client::request_context("record_hook");
+                let request_cx = ghss_store_client::request_context("ghss.store.Store/RecordHook");
                 let request = ghss_store_client::request(
                     RecordHookRequest {
                         repository_id: check_run.repository.id.to_string(),
@@ -458,7 +460,7 @@ async fn hooks_route(
             github_hooks::Payload::InstallationRepositories => {}
             github_hooks::Payload::Ping(_ping) => {}
             github_hooks::Payload::Status(status) => {
-                let request_cx = ghss_store_client::request_context("record_hook");
+                let request_cx = ghss_store_client::request_context("ghss.store.Store/RecordHook");
                 let request = ghss_store_client::request(
                     RecordHookRequest {
                         repository_id: status.repository.id.to_string(),
@@ -483,8 +485,8 @@ async fn hooks_route(
         Ok(_) => Ok(StatusCode::OK),
         Err(err) => {
             cx.span().add_event(
-                "hook failed".into(),
-                vec![Key::new("error.message").string(err.to_string())],
+                "error".into(),
+                vec![Key::new("error.message").string(format!("hook failed: {:?}", err))],
             );
             Ok(StatusCode::INTERNAL_SERVER_ERROR)
         }
@@ -648,12 +650,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 async move {
                     let tracer = opentelemetry::global::tracer("website");
                     let span = tracer
-                        .span_builder("request")
+                        .span_builder(&format!("HTTP {}", req.method().as_str()))
                         .with_kind(SpanKind::Server)
                         .with_attributes(vec![
-                            Key::new("method").string(req.method().as_str()),
-                            Key::new("path").string(req.uri().path()),
-                            Key::new("user_agent").string(
+                            Key::new("http.method").string(req.method().as_str()),
+                            Key::new("http.target")
+                                .string(req.uri().path_and_query().map_or("/", |p| p.as_str())),
+                            Key::new("http.user_agent").string(
                                 req.headers()
                                     .get(header::USER_AGENT)
                                     .map(|v| v.to_str().expect("user agent should be a string"))
@@ -663,26 +666,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .start(&tracer);
                     let cx = Context::current_with_span(span);
 
-                    //let started = std::time::Instant::now();
                     let res = warp_svc.call(req).with_context(cx.clone()).await;
-                    //let duration_ms = (std::time::Instant::now() - started).as_millis();
-                    //span.record("duration_ms", &duration_ms.to_string().as_str());
 
+                    use opentelemetry::api::StatusCode;
+                    let span = cx.span();
                     match res.as_ref() {
                         Ok(res) => {
-                            cx.span().set_attribute(
-                                Key::new("status").u64(res.status().as_u16().into()),
+                            span.set_attribute(
+                                Key::new("http.status_code").u64(res.status().as_u16().into()),
                             );
+                            let code = match res.status().as_u16() {
+                                200..=399 => StatusCode::OK,
+                                401 => StatusCode::Unauthenticated,
+                                403 => StatusCode::PermissionDenied,
+                                404 => StatusCode::NotFound,
+                                400 | 402 | 405..=499 => StatusCode::InvalidArgument,
+                                500..=599 => StatusCode::Internal,
+                                _ => StatusCode::Unknown,
+                            };
+                            span.set_status(code, "".into());
                         }
                         Err(err) => {
-                            let span = cx.span();
-                            span.set_status(
-                                opentelemetry::api::StatusCode::Internal,
-                                err.to_string(),
-                            );
+                            span.set_status(StatusCode::Internal, err.to_string());
                             span.add_event(
-                                "request failed".into(),
-                                vec![Key::new("error.message").string(err.to_string())],
+                                "error".into(),
+                                vec![Key::new("error.message")
+                                    .string(format!("request failed: {:?}", err))],
                             );
                         }
                     };

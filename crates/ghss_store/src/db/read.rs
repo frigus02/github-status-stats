@@ -125,7 +125,7 @@ impl DB {
 
         Context::current()
             .span()
-            .add_event("sql".into(), vec![Key::new("sql").string(sql.clone())]);
+            .add_event("log".into(), vec![Key::new("sql").string(sql.clone())]);
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = if is_grouped {
@@ -208,7 +208,7 @@ impl DB {
 
         Context::current()
             .span()
-            .add_event("sql".into(), vec![Key::new("sql").string(sql.clone())]);
+            .add_event("log".into(), vec![Key::new("sql").string(sql.clone())]);
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt

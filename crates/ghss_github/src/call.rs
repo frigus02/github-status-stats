@@ -1,5 +1,5 @@
 use super::page_links;
-use opentelemetry::api::{Context, FutureExt, Key, SpanKind, TraceContextExt, Tracer};
+use opentelemetry::api::{Context, FutureExt, Key, SpanKind, StatusCode, TraceContextExt, Tracer};
 use reqwest::header::{ACCEPT, LINK};
 use reqwest::{Client, Request, Url};
 use serde::de::DeserializeOwned;
@@ -23,15 +23,39 @@ async fn call_api<T: DeserializeOwned>(
         .span_builder("github request")
         .with_kind(SpanKind::Client)
         .with_attributes(vec![
-            Key::new("request.method").string(request.method().as_str()),
-            Key::new("request.url").string(request.url().as_str()),
+            Key::new("http.method").string(request.method().as_str()),
+            Key::new("http.url").string(request.url().as_str()),
         ])
         .start(&tracer);
-    let res = client
-        .execute(request)
-        .with_context(Context::current_with_span(span))
-        .await?
-        .error_for_status()?;
+    let cx = Context::current_with_span(span);
+
+    let res = client.execute(request).with_context(cx.clone()).await;
+
+    let span = cx.span();
+    match res.as_ref() {
+        Ok(res) => {
+            span.set_attribute(Key::new("http.status_code").u64(res.status().as_u16().into()));
+            let code = match res.status().as_u16() {
+                200..=399 => StatusCode::OK,
+                401 => StatusCode::Unauthenticated,
+                403 => StatusCode::PermissionDenied,
+                404 => StatusCode::NotFound,
+                400 | 402 | 405..=499 => StatusCode::InvalidArgument,
+                500..=599 => StatusCode::Internal,
+                _ => StatusCode::Unknown,
+            };
+            span.set_status(code, "".into());
+        }
+        Err(err) => {
+            span.set_status(StatusCode::Internal, err.to_string());
+            span.add_event(
+                "error".into(),
+                vec![Key::new("error.message").string(format!("request failed: {:?}", err))],
+            );
+        }
+    };
+
+    let res = res?.error_for_status()?;
     let next_page_url = match res.headers().get(LINK) {
         Some(value) => {
             if let Some(url) = page_links::parse(value.to_str()?).next {

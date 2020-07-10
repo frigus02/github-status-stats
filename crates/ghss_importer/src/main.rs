@@ -55,8 +55,9 @@ async fn import_repository(
         }
         Err(status) => {
             span.add_event(
-                "failed getting commits".into(),
-                vec![Key::new("error.message").string(status.to_string())],
+                "error".into(),
+                vec![Key::new("error.message")
+                    .string(format!("failed getting commits: {:?}", status))],
             );
         }
     }
@@ -159,8 +160,8 @@ async fn main() -> Result<(), BoxError> {
             let span = cx.span();
             span.set_status(StatusCode::Internal, err.to_string());
             span.add_event(
-                "import failed".into(),
-                vec![Key::new("error.message").string(err.to_string())],
+                "error".into(),
+                vec![Key::new("error.message").string(format!("import failed: {:?}", err))],
             );
             Err(format!(
                 "Import {:032x} failed",

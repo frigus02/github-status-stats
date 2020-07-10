@@ -107,14 +107,15 @@ pub fn optional_token(
             match user {
                 Ok(user) => {
                     cx.span()
-                        .set_attribute(Key::new("user_id").string(user.id.as_str()));
+                        .set_attribute(Key::new("enduser.id").string(user.id.as_str()));
                     OptionalToken::Some(user)
                 }
                 Err(err) if err.to_string() == "ExpiredSignature" => OptionalToken::Expired,
                 Err(err) => {
                     cx.span().add_event(
-                        "token validation failed".into(),
-                        vec![Key::new("error.message").string(err.to_string())],
+                        "error".into(),
+                        vec![Key::new("error.message")
+                            .string(format!("token validation failed: {:?}", err))],
                     );
                     OptionalToken::None
                 }

@@ -27,7 +27,7 @@ impl<'client> RepositoryImporter<'client> {
         builds: Vec<Build>,
         commits: Vec<Commit>,
     ) -> Result<(), BoxError> {
-        let request_cx = ghss_store_client::request_context("import");
+        let request_cx = ghss_store_client::request_context("ghss.store.Store/Import");
         request_cx
             .span()
             .set_attribute(Key::new("import.builds").u64(builds.len() as u64));
@@ -50,7 +50,7 @@ impl<'client> RepositoryImporter<'client> {
     pub async fn get_hooked_commits_since_last_import(
         &mut self,
     ) -> Result<Response<HookedCommitsReply>, Status> {
-        let request_cx = ghss_store_client::request_context("get_hooked_commits_since_last_import");
+        let request_cx = ghss_store_client::request_context("ghss.store.Store/GetHookedCommitsSinceLastImport");
         let request = ghss_store_client::request(
             HookedCommitsRequest {
                 repository_id: self.repository_id.clone(),
