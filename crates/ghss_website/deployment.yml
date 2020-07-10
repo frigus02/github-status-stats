@@ -40,16 +40,8 @@ spec:
                 secretKeyRef:
                   name: ghss-website
                   key: TOKEN_SECRET
-            - name: HONEYCOMB_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ghss-honeycomb
-                  key: API_KEY
-            - name: HONEYCOMB_DATASET
-              valueFrom:
-                secretKeyRef:
-                  name: ghss-honeycomb
-                  key: DATASET
+            - name: OTEL_AGENT_ENDPOINT
+              value: http://ghss-otel-collector:6831
           ports:
             - containerPort: 8888
           readinessProbe:

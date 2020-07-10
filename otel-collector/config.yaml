@@ -1,0 +1,29 @@
+receivers:
+  jaeger:
+    protocols:
+      thrift_compact:
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 100
+    spike_limit_mib: 10
+  batch:
+    send_batch_size: 50
+    timeout: 2s
+  queued_retry:
+    backoff_delay: 5s
+    num_workers: 2
+    queue_size: 10
+exporters:
+  honeycomb:
+    api_key: d094b22087e7f159329e0d940638c79e
+    dataset: github-status-stats
+extensions:
+  health_check:
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [jaeger]
+      processors: [memory_limiter, batch, queued_retry]
+      exporters: [honeycomb]

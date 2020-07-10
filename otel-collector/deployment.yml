@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghss-otel-collector
+spec:
+  selector:
+    matchLabels:
+      app: ghss-otel-collector
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ghss-otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.5.0
+          ports:
+            - containerPort: 6831 # Jaeger agent (thrift compact)
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+          volumeMounts:
+            - mountPath: /etc/otel
+              name: config
+      volumes:
+        - name: config
+          configMap:
+            name: ghss-otel-collector
