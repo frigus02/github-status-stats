@@ -4,16 +4,15 @@ mod db;
 mod health;
 mod query;
 mod store;
+mod telemetry_service;
 
 use health::{HealthServer, HealthService};
-use opentelemetry::api::{Provider, TraceContextPropagator};
+use opentelemetry::api::TraceContextPropagator;
 use proto::query_server::QueryServer;
 use proto::store_server::StoreServer;
 use std::convert::From;
+use telemetry_service::TelemetryServiceExt;
 use tonic::{transport::Server, Code, Status};
-use tracing::info_span;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
-use tracing_subscriber::layer::SubscriberExt;
 
 pub(crate) mod proto {
     tonic::include_proto!("ghss.store");
@@ -73,11 +72,7 @@ fn init_tracer(agent_endpoint: Option<&str>) -> Result<(), Box<dyn std::error::E
                 .build()
         }
     };
-
-    let tracer = provider.get_tracer("store");
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-    let subscriber = tracing_subscriber::Registry::default().with(telemetry);
-    tracing::subscriber::set_global_default(subscriber)?;
+    opentelemetry::global::set_provider(provider);
 
     let propagator = TraceContextPropagator::new();
     opentelemetry::global::set_http_text_propagator(propagator);
@@ -97,17 +92,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     Server::builder()
-        .trace_fn(|headers| {
-            let cx = opentelemetry::global::get_http_text_propagator(|propagator| {
-                propagator.extract(headers)
-            });
-            let span = info_span!("request");
-            span.set_parent(&cx);
-            span
-        })
-        .add_service(HealthServer::new(health_service))
-        .add_service(StoreServer::new(store.clone()))
-        .add_service(QueryServer::new(store))
+        .add_service(HealthServer::new(health_service).with_telemetry())
+        .add_service(StoreServer::new(store.clone()).with_telemetry())
+        .add_service(QueryServer::new(store).with_telemetry())
         .serve_with_shutdown(([0, 0, 0, 0], 50051).into(), async {
             ctrlc::ctrl_c().await;
         })

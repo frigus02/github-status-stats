@@ -4,7 +4,6 @@ use crate::proto::{
 };
 use crate::SQLiteStore;
 use tonic::{Code, Request, Response, Status};
-use tracing::info;
 
 #[tonic::async_trait]
 impl Store for SQLiteStore {
@@ -12,7 +11,6 @@ impl Store for SQLiteStore {
         &self,
         request: Request<ImportRequest>,
     ) -> Result<Response<ImportReply>, Status> {
-        info!("import");
         let request = request.into_inner();
         let mut db = self.db_write(request.repository_id)?;
         let trx = db.transaction()?;
@@ -27,7 +25,6 @@ impl Store for SQLiteStore {
         &self,
         request: Request<RecordHookRequest>,
     ) -> Result<Response<RecordHookReply>, Status> {
-        info!("record_hook");
         let request = request.into_inner();
         let mut db = self.db_write(request.repository_id)?;
         let trx = db.transaction()?;
@@ -50,7 +47,6 @@ impl Store for SQLiteStore {
         &self,
         request: Request<HookedCommitsRequest>,
     ) -> Result<Response<HookedCommitsReply>, Status> {
-        info!("get_hooked_commits_since_last_import");
         let request = request.into_inner();
         let db = self.db_read(request.repository_id)?;
         let commits = db.get_hooked_commits_since_last_import(request.until)?;

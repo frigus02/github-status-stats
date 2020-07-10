@@ -3,8 +3,8 @@ use crate::proto::{
     interval_aggregates_reply, total_aggregates_reply, AggregateFunction, Column, HookedCommit,
     IntervalAggregatesReply, IntervalType, TotalAggregatesReply,
 };
+use opentelemetry::api::{Context, Key, TraceContextExt};
 use rusqlite::{params, Connection, OpenFlags};
-use tracing::info;
 
 pub struct DB {
     conn: Connection,
@@ -122,7 +122,10 @@ impl DB {
         let projection = create_projection(columns, group_by.clone());
         let is_grouped = !group_by.is_empty();
         let sql = create_aggregate_query_sql(projection, table, from, to, group_by, None);
-        info!(sql = %sql, "get_total_aggregates");
+
+        Context::current()
+            .span()
+            .add_event("sql".into(), vec![Key::new("sql").string(sql.clone())]);
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = if is_grouped {
@@ -202,7 +205,10 @@ impl DB {
 
         let sql =
             create_aggregate_query_sql(projection, table, from, to, group_by, Some("interval"));
-        info!(sql = %sql, "get_interval_aggregates");
+
+        Context::current()
+            .span()
+            .add_event("sql".into(), vec![Key::new("sql").string(sql.clone())]);
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt

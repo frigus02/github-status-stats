@@ -5,15 +5,14 @@ authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+hyper = "0.13.6"
 opentelemetry = { version = "0.6.0", features = ["http"] }
 opentelemetry-jaeger = "0.5.0"
 prost = "0.6.1"
 rusqlite = { version = "0.23.1", features = ["bundled"] }
 tokio = { version = "0.2.21", features = ["macros", "signal"] }
 tonic = "0.2.2"
-tracing = "0.1.16"
-tracing-opentelemetry = "0.5.0"
-tracing-subscriber = "0.2.7"
+tower = "0.3.1"
 
 [build-dependencies]
 tonic-build = "0.2.2"
