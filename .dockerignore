@@ -1,6 +1,6 @@
 /.github/
 /docs/
-/influxdb/
+/otel-collector/
 /scripts/
 /target/
 .env

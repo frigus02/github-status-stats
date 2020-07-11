@@ -19,7 +19,7 @@ spec:
             - name: DATABASE_DIRECTORY
               value: /var/lib/store
             - name: OTEL_AGENT_ENDPOINT
-              value: http://ghss-otel-collector:6831
+              value: ghss-otel-collector:6831
           ports:
             - containerPort: 50051
           readinessProbe:
