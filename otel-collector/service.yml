@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ghss-otel-collector
+spec:
+  type: ClusterIP
+  ports:
+    - name: jaeger
+      protocol: UDP
+      port: 6831
+      targetPort: 6831
+  selector:
+    app: ghss-otel-collector

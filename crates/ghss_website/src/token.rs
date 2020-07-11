@@ -1,12 +1,13 @@
 use super::github_queries::{get_github_user, GitHubUser};
+use ghss_tracing::error_event;
 use jsonwebtoken::{
     decode, encode, errors::Error as TokenError, Algorithm, DecodingKey, EncodingKey, Header,
     Validation,
 };
+use opentelemetry::api::{Context, Key, TraceContextExt};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::time::SystemTime;
-use tracing::error;
 use warp::Filter;
 
 type BoxError = Box<dyn std::error::Error>;
@@ -103,14 +104,16 @@ pub fn optional_token(
     warp::cookie::optional(cookie_name).map(move |raw_token: Option<String>| match raw_token {
         Some(raw_token) => {
             let user = validate(&raw_token, token_secret.as_slice());
+            let cx = Context::current();
             match user {
                 Ok(user) => {
-                    tracing::Span::current().record("user_id", &user.id.as_str());
+                    cx.span()
+                        .set_attribute(Key::new("enduser.id").string(user.id.as_str()));
                     OptionalToken::Some(user)
                 }
                 Err(err) if err.to_string() == "ExpiredSignature" => OptionalToken::Expired,
                 Err(err) => {
-                    error!(error = %err, "token validation failed");
+                    error_event(format!("token validation failed: {:?}", err));
                     OptionalToken::None
                 }
             }

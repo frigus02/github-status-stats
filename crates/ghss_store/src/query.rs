@@ -4,7 +4,6 @@ use crate::proto::{
 };
 use crate::SQLiteStore;
 use tonic::{Request, Response, Status};
-use tracing::info;
 
 #[tonic::async_trait]
 impl Query for SQLiteStore {
@@ -12,7 +11,6 @@ impl Query for SQLiteStore {
         &self,
         request: Request<TotalAggregatesRequest>,
     ) -> Result<Response<TotalAggregatesReply>, Status> {
-        info!("get_total_aggregates");
         let request = request.into_inner();
         let db = self.db_read(request.repository_id)?;
         Ok(Response::new(db.get_total_aggregates(
@@ -28,7 +26,6 @@ impl Query for SQLiteStore {
         &self,
         request: Request<IntervalAggregatesRequest>,
     ) -> Result<Response<IntervalAggregatesReply>, Status> {
-        info!("get_interval_aggregates");
         let request = request.into_inner();
         let interval = request.interval();
         let db = self.db_read(request.repository_id)?;

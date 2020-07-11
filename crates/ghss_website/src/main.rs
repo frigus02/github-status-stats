@@ -9,10 +9,11 @@ mod token;
 use bytes::Bytes;
 use config::with_config;
 use ghss_store_client::{
-    query_client::QueryClient, store_client::StoreClient, AggregateFunction, BuildSource, Hook,
-    IntervalAggregatesRequest, IntervalType, RecordHookRequest, TotalAggregatesRequest,
+    AggregateFunction, BuildSource, Hook, IntervalAggregatesRequest, IntervalType, QueryClient,
+    RecordHookRequest, StoreClient, TotalAggregatesRequest,
 };
-use ghss_tracing::register_new_tracing_root;
+use ghss_tracing::{error_event, init_tracer, log_event};
+use opentelemetry::api::{Context, FutureExt, Key, SpanKind, TraceContextExt, Tracer};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -23,8 +24,6 @@ use templates::{
     with_templates, DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess,
 };
 use token::{optional_token, OptionalToken};
-use tracing::{error, info, info_span};
-use tracing_futures::Instrument;
 use warp::{
     http::{Response, StatusCode, Uri},
     hyper::{self, header, service::Service, Body, Request},
@@ -271,7 +270,7 @@ struct ApiQueryResponse {
 async fn api_query_route(
     params: ApiQueryParams,
     token: OptionalToken,
-    mut client: QueryClient<ghss_store_client::Channel>,
+    mut client: QueryClient,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         OptionalToken::Some(user)
@@ -280,16 +279,18 @@ async fn api_query_route(
             let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
                 let response = match params.interval {
                     Some(interval) => {
-                        let request = ghss_tracing::tonic::request(IntervalAggregatesRequest {
-                            repository_id: params.repository.to_string(),
-                            table: params.table,
-                            columns: params.columns.into_iter().map(|c| c.into()).collect(),
-                            since: params.since,
-                            until: params.until,
-                            group_by: params.group_by.unwrap_or_default(),
-                            interval: IntervalType::from(interval) as i32,
-                        });
-                        let response = client.get_interval_aggregates(request).await?.into_inner();
+                        let response = client
+                            .get_interval_aggregates(IntervalAggregatesRequest {
+                                repository_id: params.repository.to_string(),
+                                table: params.table,
+                                columns: params.columns.into_iter().map(|c| c.into()).collect(),
+                                since: params.since,
+                                until: params.until,
+                                group_by: params.group_by.unwrap_or_default(),
+                                interval: IntervalType::from(interval) as i32,
+                            })
+                            .await?
+                            .into_inner();
                         let mut timestamps = Vec::new();
                         let mut series = HashMap::new();
                         for row in response.rows {
@@ -315,15 +316,17 @@ async fn api_query_route(
                         }
                     }
                     None => {
-                        let request = ghss_tracing::tonic::request(TotalAggregatesRequest {
-                            repository_id: params.repository.to_string(),
-                            table: params.table,
-                            columns: params.columns.into_iter().map(|c| c.into()).collect(),
-                            since: params.since,
-                            until: params.until,
-                            group_by: params.group_by.unwrap_or_default(),
-                        });
-                        let response = client.get_total_aggregates(request).await?.into_inner();
+                        let response = client
+                            .get_total_aggregates(TotalAggregatesRequest {
+                                repository_id: params.repository.to_string(),
+                                table: params.table,
+                                columns: params.columns.into_iter().map(|c| c.into()).collect(),
+                                since: params.since,
+                                until: params.until,
+                                group_by: params.group_by.unwrap_or_default(),
+                            })
+                            .await?
+                            .into_inner();
                         let mut series = HashMap::new();
                         for row in response.rows {
                             series.insert(row.groups, vec![Some(row.values)]);
@@ -344,7 +347,7 @@ async fn api_query_route(
             match res {
                 Ok(res) => Box::new(warp::reply::json(&res)),
                 Err(err) => {
-                    error!(error = %err, "query failed");
+                    error_event(format!("query failed: {:?}", err));
                     Box::new(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }
@@ -400,7 +403,7 @@ async fn hooks_route(
     event: String,
     body: Bytes,
     config: Config,
-    mut client: StoreClient<ghss_store_client::Channel>,
+    mut client: StoreClient,
 ) -> Result<impl warp::Reply, Infallible> {
     let res: Result<(), Box<dyn std::error::Error>> = async {
         let payload = github_hooks::deserialize(
@@ -410,35 +413,38 @@ async fn hooks_route(
             &config.gh_webhook_secret.unsecure(),
         )?;
 
-        info!("Hook: {:?}", payload);
+        log_event(format!("hook payload: {:?}", payload));
+
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
-                let request = ghss_tracing::tonic::request(RecordHookRequest {
-                    repository_id: check_run.repository.id.to_string(),
-                    hook: Some(Hook {
-                        r#type: BuildSource::CheckRun as i32,
-                        commit: check_run.check_run.head_sha.clone(),
-                        timestamp: check_run.check_run.started_at.timestamp_millis(),
-                    }),
-                    build: Some(check_run.check_run.into()),
-                });
-                let _response = client.record_hook(request).await?;
+                let _response = client
+                    .record_hook(RecordHookRequest {
+                        repository_id: check_run.repository.id.to_string(),
+                        hook: Some(Hook {
+                            r#type: BuildSource::CheckRun as i32,
+                            commit: check_run.check_run.head_sha.clone(),
+                            timestamp: check_run.check_run.started_at.timestamp_millis(),
+                        }),
+                        build: Some(check_run.check_run.into()),
+                    })
+                    .await?;
             }
             github_hooks::Payload::GitHubAppAuthorization(_auth) => {}
             github_hooks::Payload::Installation => {}
             github_hooks::Payload::InstallationRepositories => {}
             github_hooks::Payload::Ping(_ping) => {}
             github_hooks::Payload::Status(status) => {
-                let request = ghss_tracing::tonic::request(RecordHookRequest {
-                    repository_id: status.repository.id.to_string(),
-                    hook: Some(Hook {
-                        r#type: BuildSource::Status as i32,
-                        commit: status.sha,
-                        timestamp: status.created_at.timestamp_millis(),
-                    }),
-                    build: None,
-                });
-                let _response = client.record_hook(request).await?;
+                let _response = client
+                    .record_hook(RecordHookRequest {
+                        repository_id: status.repository.id.to_string(),
+                        hook: Some(Hook {
+                            r#type: BuildSource::Status as i32,
+                            commit: status.sha,
+                            timestamp: status.created_at.timestamp_millis(),
+                        }),
+                        build: None,
+                    })
+                    .await?;
             }
         };
 
@@ -449,7 +455,7 @@ async fn hooks_route(
     match res {
         Ok(_) => Ok(StatusCode::OK),
         Err(err) => {
-            error!(error = %err, "hook failed");
+            error_event(format!("hook failed: {:?}", err));
             Ok(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -480,14 +486,14 @@ pub fn path_from_state(state: String) -> String {
 }
 
 pub fn with_store_client(
-    client: StoreClient<ghss_store_client::Channel>,
-) -> impl Filter<Extract = (StoreClient<ghss_store_client::Channel>,), Error = Infallible> + Clone {
+    client: StoreClient,
+) -> impl Filter<Extract = (StoreClient,), Error = Infallible> + Clone {
     warp::any().map(move || client.clone())
 }
 
 pub fn with_query_client(
-    client: QueryClient<ghss_store_client::Channel>,
-) -> impl Filter<Extract = (QueryClient<ghss_store_client::Channel>,), Error = Infallible> + Clone {
+    client: QueryClient,
+) -> impl Filter<Extract = (QueryClient,), Error = Infallible> + Clone {
     warp::any().map(move || client.clone())
 }
 
@@ -501,11 +507,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let store_client = StoreClient::connect(config.store_url.clone()).await?;
     let query_client = QueryClient::connect(config.store_url.clone()).await?;
 
-    ghss_tracing::setup(ghss_tracing::Config {
-        honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
-        honeycomb_dataset: config.honeycomb_dataset.clone(),
-        service_name: "website",
-    });
+    init_tracer("website", config.otel_agent_endpoint.as_deref())?;
 
     let index = warp::get()
         .and(warp::path::end())
@@ -579,40 +581,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let svc = hyper::service::service_fn(move |req: Request<Body>| {
                 let mut warp_svc = warp_svc.clone();
                 async move {
-                    let span = info_span!(
-                        "request",
-                        method = req.method().as_str(),
-                        path = req.uri().path(),
-                        user_agent = req
-                            .headers()
-                            .get(header::USER_AGENT)
-                            .map(|v| v.to_str().expect("user agent to string"))
-                            .unwrap_or(""),
-                        user_id = tracing::field::Empty,
-                        status = tracing::field::Empty,
-                        duration_ms = tracing::field::Empty,
-                    );
-                    {
-                        // TODO: This seems weird. Need to understand why that's
-                        // necessary or how to do it better.
-                        let _guard = span.enter();
-                        register_new_tracing_root();
-                    }
+                    let tracer = opentelemetry::global::tracer("website");
+                    let span = tracer
+                        .span_builder(&format!("HTTP {}", req.method().as_str()))
+                        .with_kind(SpanKind::Server)
+                        .with_attributes(vec![
+                            Key::new("http.method").string(req.method().as_str()),
+                            Key::new("http.target")
+                                .string(req.uri().path_and_query().map_or("/", |p| p.as_str())),
+                            Key::new("http.user_agent").string(
+                                req.headers()
+                                    .get(header::USER_AGENT)
+                                    .map(|v| v.to_str().expect("user agent should be a string"))
+                                    .unwrap_or(""),
+                            ),
+                        ])
+                        .start(&tracer);
+                    let cx = Context::current_with_span(span);
 
-                    let started = std::time::Instant::now();
-                    let res = warp_svc.call(req).instrument(span.clone()).await;
-                    let duration_ms = (std::time::Instant::now() - started).as_millis();
+                    let res = warp_svc.call(req).with_context(cx.clone()).await;
 
-                    span.record("duration_ms", &duration_ms.to_string().as_str());
-
-                    let _guard = span.enter();
+                    use opentelemetry::api::StatusCode;
+                    let span = cx.span();
                     match res.as_ref() {
                         Ok(res) => {
-                            span.record("status", &res.status().as_str());
-                            info!("request finished");
+                            span.set_attribute(
+                                Key::new("http.status_code").u64(res.status().as_u16().into()),
+                            );
+                            let code = match res.status().as_u16() {
+                                200..=399 => StatusCode::OK,
+                                401 => StatusCode::Unauthenticated,
+                                403 => StatusCode::PermissionDenied,
+                                404 => StatusCode::NotFound,
+                                400 | 402 | 405..=499 => StatusCode::InvalidArgument,
+                                500..=599 => StatusCode::Internal,
+                                _ => StatusCode::Unknown,
+                            };
+                            span.set_status(code, "".into());
                         }
                         Err(err) => {
-                            error!(error = %err, "request failed");
+                            span.set_status(StatusCode::Internal, err.to_string());
+                            span.set_attribute(Key::new("error").string(err.to_string()));
                         }
                     };
 

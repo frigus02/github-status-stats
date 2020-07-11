@@ -21,16 +21,8 @@ spec:
                       key: PRIVATE_KEY
                 - name: STORE_URL
                   value: http://ghss-store:50051
-                - name: HONEYCOMB_API_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: ghss-honeycomb
-                      key: API_KEY
-                - name: HONEYCOMB_DATASET
-                  valueFrom:
-                    secretKeyRef:
-                      name: ghss-honeycomb
-                      key: DATASET
+                - name: OTEL_AGENT_ENDPOINT
+                  value: ghss-otel-collector:6831
               resources:
                 requests:
                   cpu: 50m

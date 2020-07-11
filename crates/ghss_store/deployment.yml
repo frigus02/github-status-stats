@@ -18,16 +18,8 @@ spec:
           env:
             - name: DATABASE_DIRECTORY
               value: /var/lib/store
-            - name: HONEYCOMB_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ghss-honeycomb
-                  key: API_KEY
-            - name: HONEYCOMB_DATASET
-              valueFrom:
-                secretKeyRef:
-                  name: ghss-honeycomb
-                  key: DATASET
+            - name: OTEL_AGENT_ENDPOINT
+              value: ghss-otel-collector:6831
           ports:
             - containerPort: 50051
           readinessProbe:

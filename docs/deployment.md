@@ -24,14 +24,6 @@
       --from-literal TOKEN_SECRET=$(openssl rand -hex 20)
   ```
 
-- Create secret for Honeycomb.io.
-
-  ```sh
-  kubectl create secret generic ghss-honeycomb \
-      --from-literal API_KEY=<api key> \
-      --from-literal DATASET=<dataset name>
-  ```
-
 ## Deploy new version
 
 A basic deployment works using:

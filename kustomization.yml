@@ -8,5 +8,11 @@ resources:
 - crates/ghss_website/deployment.yml
 - crates/ghss_website/ingress.yml
 - crates/ghss_website/service.yml
+- otel-collector/deployment.yml
+- otel-collector/service.yml
+configMapGenerator:
+- files:
+  - config.yaml=otel-collector/config.yaml
+  name: ghss-otel-collector
 commonLabels:
   group: github-status-stats

@@ -1,20 +1,19 @@
 use chrono::{DateTime, Utc};
-use ghss_store_client::{store_client::StoreClient, Channel};
+use ghss_store_client::StoreClient;
 use ghss_store_client::{
     Build, Commit, HookedCommitsReply, HookedCommitsRequest, ImportRequest, Response, Status,
 };
-use tracing::info;
 
 type BoxError = Box<dyn std::error::Error>;
 
 pub struct RepositoryImporter<'client> {
-    client: &'client mut StoreClient<Channel>,
+    client: &'client mut StoreClient,
     repository_id: String,
     timestamp: DateTime<Utc>,
 }
 
 impl<'client> RepositoryImporter<'client> {
-    pub fn new(client: &'client mut StoreClient<Channel>, repository_id: String) -> Self {
+    pub fn new(client: &'client mut StoreClient, repository_id: String) -> Self {
         Self {
             client,
             repository_id,
@@ -27,14 +26,15 @@ impl<'client> RepositoryImporter<'client> {
         builds: Vec<Build>,
         commits: Vec<Commit>,
     ) -> Result<(), BoxError> {
-        info!(points_count = builds.len() + commits.len(), "write points");
-        let request = ghss_tracing::tonic::request(ImportRequest {
-            repository_id: self.repository_id.clone(),
-            builds,
-            commits,
-            timestamp: self.timestamp.timestamp_millis(),
-        });
-        let _response = self.client.import(request).await?;
+        let _response = self
+            .client
+            .import(ImportRequest {
+                repository_id: self.repository_id.clone(),
+                builds,
+                commits,
+                timestamp: self.timestamp.timestamp_millis(),
+            })
+            .await?;
         Ok(())
     }
 
@@ -42,12 +42,10 @@ impl<'client> RepositoryImporter<'client> {
         &mut self,
     ) -> Result<Response<HookedCommitsReply>, Status> {
         self.client
-            .get_hooked_commits_since_last_import(ghss_tracing::tonic::request(
-                HookedCommitsRequest {
-                    repository_id: self.repository_id.clone(),
-                    until: self.timestamp.timestamp_millis(),
-                },
-            ))
+            .get_hooked_commits_since_last_import(HookedCommitsRequest {
+                repository_id: self.repository_id.clone(),
+                until: self.timestamp.timestamp_millis(),
+            })
             .await
     }
 }

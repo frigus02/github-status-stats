@@ -4,14 +4,15 @@ mod db;
 mod health;
 mod query;
 mod store;
+mod telemetry_service;
 
-use ghss_tracing::{register_new_tracing_root, register_tracing_root};
+use ghss_tracing::init_tracer;
 use health::{HealthServer, HealthService};
 use proto::query_server::QueryServer;
 use proto::store_server::StoreServer;
 use std::convert::From;
+use telemetry_service::TelemetryServiceExt;
 use tonic::{transport::Server, Code, Status};
-use tracing::info_span;
 
 pub(crate) mod proto {
     tonic::include_proto!("ghss.store");
@@ -48,11 +49,7 @@ impl SQLiteStore {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::load();
 
-    ghss_tracing::setup(ghss_tracing::Config {
-        honeycomb_api_key: config.honeycomb_api_key.unsecure().to_owned(),
-        honeycomb_dataset: config.honeycomb_dataset.clone(),
-        service_name: "store",
-    });
+    init_tracer("store", config.otel_agent_endpoint.as_deref())?;
 
     let health_service = HealthService::default();
     let store = SQLiteStore {
@@ -60,30 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     Server::builder()
-        .trace_fn(|headers| {
-            let span = info_span!("request");
-            {
-                // TODO: This seems weird. Need to understand why that's
-                // necessary or how to do it better.
-                let _guard = span.enter();
-                match (
-                    headers.get(ghss_tracing::HEADER_TRACE_ID),
-                    headers.get(ghss_tracing::HEADER_PARENT_SPAN_ID),
-                ) {
-                    (Some(trace_id), Some(parent_span_id)) => {
-                        register_tracing_root(
-                            trace_id.to_str().unwrap(),
-                            parent_span_id.to_str().unwrap(),
-                        );
-                    }
-                    _ => register_new_tracing_root(),
-                };
-            }
-            span
-        })
-        .add_service(HealthServer::new(health_service))
-        .add_service(StoreServer::new(store.clone()))
-        .add_service(QueryServer::new(store))
+        .add_service(HealthServer::new(health_service).with_telemetry())
+        .add_service(StoreServer::new(store.clone()).with_telemetry())
+        .add_service(QueryServer::new(store).with_telemetry())
         .serve_with_shutdown(([0, 0, 0, 0], 50051).into(), async {
             ctrlc::ctrl_c().await;
         })
