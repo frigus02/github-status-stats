@@ -3,7 +3,7 @@ use crate::proto::{
     interval_aggregates_reply, total_aggregates_reply, AggregateFunction, Column, HookedCommit,
     IntervalAggregatesReply, IntervalType, TotalAggregatesReply,
 };
-use opentelemetry::api::{Context, Key, TraceContextExt};
+use ghss_tracing::log_event;
 use rusqlite::{params, Connection, OpenFlags};
 
 pub struct DB {
@@ -123,9 +123,7 @@ impl DB {
         let is_grouped = !group_by.is_empty();
         let sql = create_aggregate_query_sql(projection, table, from, to, group_by, None);
 
-        Context::current()
-            .span()
-            .add_event("log".into(), vec![Key::new("sql").string(sql.clone())]);
+        log_event(format!("sql: {}", sql));
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = if is_grouped {
@@ -206,9 +204,7 @@ impl DB {
         let sql =
             create_aggregate_query_sql(projection, table, from, to, group_by, Some("interval"));
 
-        Context::current()
-            .span()
-            .add_event("log".into(), vec![Key::new("sql").string(sql.clone())]);
+        log_event(format!("sql: {}", sql));
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt

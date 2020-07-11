@@ -1,4 +1,5 @@
 use super::github_queries::{get_github_user, GitHubUser};
+use ghss_tracing::error_event;
 use jsonwebtoken::{
     decode, encode, errors::Error as TokenError, Algorithm, DecodingKey, EncodingKey, Header,
     Validation,
@@ -112,11 +113,7 @@ pub fn optional_token(
                 }
                 Err(err) if err.to_string() == "ExpiredSignature" => OptionalToken::Expired,
                 Err(err) => {
-                    cx.span().add_event(
-                        "error".into(),
-                        vec![Key::new("error.message")
-                            .string(format!("token validation failed: {:?}", err))],
-                    );
+                    error_event(format!("token validation failed: {:?}", err));
                     OptionalToken::None
                 }
             }

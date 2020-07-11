@@ -48,10 +48,7 @@ async fn call_api<T: DeserializeOwned>(
         }
         Err(err) => {
             span.set_status(StatusCode::Internal, err.to_string());
-            span.add_event(
-                "error".into(),
-                vec![Key::new("error.message").string(format!("request failed: {:?}", err))],
-            );
+            span.set_attribute(Key::new("error").string(err.to_string()));
         }
     };
 

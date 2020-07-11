@@ -1,4 +1,4 @@
-use opentelemetry::api::TraceContextPropagator;
+use opentelemetry::api::{Context, Key, TraceContextExt, TraceContextPropagator};
 
 pub fn init_tracer(
     service_name: &'static str,
@@ -36,4 +36,17 @@ pub fn init_tracer(
     opentelemetry::global::set_http_text_propagator(propagator);
 
     Ok(())
+}
+
+pub fn log_event(message: String) {
+    Context::current()
+        .span()
+        .add_event("log".into(), vec![Key::new("log.message").string(message)]);
+}
+
+pub fn error_event(message: String) {
+    Context::current().span().add_event(
+        "error".into(),
+        vec![Key::new("error.message").string(message)],
+    );
 }

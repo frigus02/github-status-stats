@@ -7,7 +7,7 @@ use config::Config;
 use ghss_github::{Client, Repository};
 use ghss_store_client::store_client::StoreClient;
 use ghss_store_client::Code;
-use ghss_tracing::init_tracer;
+use ghss_tracing::{init_tracer, log_event};
 use opentelemetry::api::{Context, FutureExt, Key, StatusCode, TraceContextExt, Tracer};
 use store::RepositoryImporter;
 
@@ -18,18 +18,12 @@ async fn import_repository(
     store_client: &mut StoreClient<ghss_store_client::Channel>,
     repository: &Repository,
 ) -> Result<(), BoxError> {
-    let cx = Context::current();
-    let span = cx.span();
-
     let mut importer = RepositoryImporter::new(store_client, repository.id.to_string());
 
     let commits_since = importer.get_hooked_commits_since_last_import().await;
     match commits_since {
         Ok(commits_since) => {
-            span.add_event(
-                "log".into(),
-                vec![Key::new("log.message").string("found last import; importing since then")],
-            );
+            log_event("found last import; importing since then".into());
             let commit_shas: Vec<String> = commits_since
                 .into_inner()
                 .commits
@@ -43,21 +37,12 @@ async fn import_repository(
             }
         }
         Err(status) if status.code() == Code::FailedPrecondition => {
-            span.add_event(
-                "log".into(),
-                vec![Key::new("log.message")
-                    .string("first import; setup db and perform initial import")],
-            );
-
+            log_event("first import; setup db and perform initial import".into());
             let (builds, commits) = get_most_recent_builds(&gh_inst_client, &repository).await?;
             importer.import(builds, commits).await?;
         }
         Err(status) => {
-            span.add_event(
-                "error".into(),
-                vec![Key::new("error.message")
-                    .string(format!("failed getting commits: {:?}", status))],
-            );
+            return Err(status.into());
         }
     }
 
@@ -83,9 +68,15 @@ async fn import_installation(
                 Key::new("repository.full_name").string(repository.full_name.clone()),
             ])
             .start(&tracer);
-        import_repository(&gh_inst_client, store_client, &repository)
-            .with_context(Context::current_with_span(span))
-            .await?;
+        let cx = Context::current_with_span(span);
+        let res = import_repository(&gh_inst_client, store_client, &repository)
+            .with_context(cx.clone())
+            .await;
+        if let Err(err) = res {
+            let span = cx.span();
+            span.set_status(StatusCode::Internal, err.to_string());
+            span.set_attribute(Key::new("error").string(err.to_string()));
+        }
     }
     Ok(())
 }
@@ -100,9 +91,15 @@ async fn import(config: Config) -> Result<(), BoxError> {
             .span_builder("installation")
             .with_attributes(vec![Key::new("installation.id").i64(installation.id.into())])
             .start(&tracer);
-        import_installation(&gh_app_client, &mut store_client, installation.id)
-            .with_context(Context::current_with_span(span))
-            .await?;
+        let cx = Context::current_with_span(span);
+        let res = import_installation(&gh_app_client, &mut store_client, installation.id)
+            .with_context(cx.clone())
+            .await;
+        if let Err(err) = res {
+            let span = cx.span();
+            span.set_status(StatusCode::Internal, err.to_string());
+            span.set_attribute(Key::new("error").string(err.to_string()));
+        }
     }
 
     Ok(())
@@ -123,10 +120,7 @@ async fn main() -> Result<(), BoxError> {
         Err(err) => {
             let span = cx.span();
             span.set_status(StatusCode::Internal, err.to_string());
-            span.add_event(
-                "error".into(),
-                vec![Key::new("error.message").string(format!("import failed: {:?}", err))],
-            );
+            span.set_attribute(Key::new("error").string(err.to_string()));
             Err(format!(
                 "Import {:032x} failed",
                 span.span_context().trace_id().to_u128()

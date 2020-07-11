@@ -12,7 +12,7 @@ use ghss_store_client::{
     query_client::QueryClient, store_client::StoreClient, AggregateFunction, BuildSource, Hook,
     IntervalAggregatesRequest, IntervalType, RecordHookRequest, TotalAggregatesRequest,
 };
-use ghss_tracing::init_tracer;
+use ghss_tracing::{error_event, init_tracer, log_event};
 use opentelemetry::api::{Context, FutureExt, Key, SpanKind, TraceContextExt, Tracer};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -363,10 +363,7 @@ async fn api_query_route(
             match res {
                 Ok(res) => Box::new(warp::reply::json(&res)),
                 Err(err) => {
-                    Context::current().span().add_event(
-                        "error".into(),
-                        vec![Key::new("error.message").string(format!("query failed: {:?}", err))],
-                    );
+                    error_event(format!("query failed: {:?}", err));
                     Box::new(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }
@@ -424,7 +421,6 @@ async fn hooks_route(
     config: Config,
     mut client: StoreClient<ghss_store_client::Channel>,
 ) -> Result<impl warp::Reply, Infallible> {
-    let cx = Context::current();
     let res: Result<(), Box<dyn std::error::Error>> = async {
         let payload = github_hooks::deserialize(
             signature,
@@ -433,10 +429,8 @@ async fn hooks_route(
             &config.gh_webhook_secret.unsecure(),
         )?;
 
-        cx.span().add_event(
-            "log".into(),
-            vec![Key::new("log.message").string(format!("hook payload: {:?}", payload))],
-        );
+        log_event(format!("hook payload: {:?}", payload));
+
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
                 let request_cx = ghss_store_client::request_context("ghss.store.Store/RecordHook");
@@ -483,10 +477,7 @@ async fn hooks_route(
     match res {
         Ok(_) => Ok(StatusCode::OK),
         Err(err) => {
-            cx.span().add_event(
-                "error".into(),
-                vec![Key::new("error.message").string(format!("hook failed: {:?}", err))],
-            );
+            error_event(format!("hook failed: {:?}", err));
             Ok(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -652,11 +643,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         Err(err) => {
                             span.set_status(StatusCode::Internal, err.to_string());
-                            span.add_event(
-                                "error".into(),
-                                vec![Key::new("error.message")
-                                    .string(format!("request failed: {:?}", err))],
-                            );
+                            span.set_attribute(Key::new("error").string(err.to_string()));
                         }
                     };
 
