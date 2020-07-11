@@ -7,9 +7,8 @@ use config::Config;
 use ghss_github::{Client, Repository};
 use ghss_store_client::store_client::StoreClient;
 use ghss_store_client::Code;
-use opentelemetry::api::{
-    Context, FutureExt, Key, StatusCode, TraceContextExt, TraceContextPropagator, Tracer,
-};
+use ghss_tracing::init_tracer;
+use opentelemetry::api::{Context, FutureExt, Key, StatusCode, TraceContextExt, Tracer};
 use store::RepositoryImporter;
 
 type BoxError = Box<dyn std::error::Error>;
@@ -109,46 +108,11 @@ async fn import(config: Config) -> Result<(), BoxError> {
     Ok(())
 }
 
-fn init_tracer(agent_endpoint: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    let provider = match agent_endpoint {
-        Some(agent_endpoint) => {
-            let exporter = opentelemetry_jaeger::Exporter::builder()
-                .with_agent_endpoint(agent_endpoint.parse().unwrap())
-                .with_process(opentelemetry_jaeger::Process {
-                    service_name: "importer".to_string(),
-                    tags: vec![],
-                })
-                .init()?;
-            let batch = opentelemetry::sdk::BatchSpanProcessor::builder(
-                exporter,
-                tokio::spawn,
-                tokio::time::interval,
-            )
-            .build();
-            opentelemetry::sdk::Provider::builder()
-                .with_batch_exporter(batch)
-                .build()
-        }
-        None => {
-            let exporter = opentelemetry::exporter::trace::stdout::Builder::default().init();
-            opentelemetry::sdk::Provider::builder()
-                .with_simple_exporter(exporter)
-                .build()
-        }
-    };
-    opentelemetry::global::set_provider(provider);
-
-    let propagator = TraceContextPropagator::new();
-    opentelemetry::global::set_http_text_propagator(propagator);
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
     let config = config::load();
 
-    init_tracer(config.otel_agent_endpoint.as_deref())?;
+    init_tracer("importer", config.otel_agent_endpoint.as_deref())?;
 
     let tracer = opentelemetry::global::tracer("importer");
     let span = tracer.start("import");

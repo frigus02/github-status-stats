@@ -1,0 +1,10 @@
+[package]
+name = "ghss_tracing"
+version = "0.1.0"
+authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+opentelemetry = "0.6.0"
+opentelemetry-jaeger = "0.5.0"
+tokio = "0.2.21"

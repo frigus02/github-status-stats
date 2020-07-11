@@ -12,9 +12,8 @@ use ghss_store_client::{
     query_client::QueryClient, store_client::StoreClient, AggregateFunction, BuildSource, Hook,
     IntervalAggregatesRequest, IntervalType, RecordHookRequest, TotalAggregatesRequest,
 };
-use opentelemetry::api::{
-    Context, FutureExt, Key, SpanKind, TraceContextExt, TraceContextPropagator, Tracer,
-};
+use ghss_tracing::init_tracer;
+use opentelemetry::api::{Context, FutureExt, Key, SpanKind, TraceContextExt, Tracer};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -529,41 +528,6 @@ pub fn with_query_client(
     warp::any().map(move || client.clone())
 }
 
-fn init_tracer(agent_endpoint: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    let provider = match agent_endpoint {
-        Some(agent_endpoint) => {
-            let exporter = opentelemetry_jaeger::Exporter::builder()
-                .with_agent_endpoint(agent_endpoint.parse().unwrap())
-                .with_process(opentelemetry_jaeger::Process {
-                    service_name: "website".to_string(),
-                    tags: vec![],
-                })
-                .init()?;
-            let batch = opentelemetry::sdk::BatchSpanProcessor::builder(
-                exporter,
-                tokio::spawn,
-                tokio::time::interval,
-            )
-            .build();
-            opentelemetry::sdk::Provider::builder()
-                .with_batch_exporter(batch)
-                .build()
-        }
-        None => {
-            let exporter = opentelemetry::exporter::trace::stdout::Builder::default().init();
-            opentelemetry::sdk::Provider::builder()
-                .with_simple_exporter(exporter)
-                .build()
-        }
-    };
-    opentelemetry::global::set_provider(provider);
-
-    let propagator = TraceContextPropagator::new();
-    opentelemetry::global::set_http_text_propagator(propagator);
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::load();
@@ -574,7 +538,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let store_client = StoreClient::connect(config.store_url.clone()).await?;
     let query_client = QueryClient::connect(config.store_url.clone()).await?;
 
-    init_tracer(config.otel_agent_endpoint.as_deref())?;
+    init_tracer("website", config.otel_agent_endpoint.as_deref())?;
 
     let index = warp::get()
         .and(warp::path::end())

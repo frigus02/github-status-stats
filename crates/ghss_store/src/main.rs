@@ -6,8 +6,8 @@ mod query;
 mod store;
 mod telemetry_service;
 
+use ghss_tracing::init_tracer;
 use health::{HealthServer, HealthService};
-use opentelemetry::api::TraceContextPropagator;
 use proto::query_server::QueryServer;
 use proto::store_server::StoreServer;
 use std::convert::From;
@@ -45,46 +45,11 @@ impl SQLiteStore {
     }
 }
 
-fn init_tracer(agent_endpoint: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    let provider = match agent_endpoint {
-        Some(agent_endpoint) => {
-            let exporter = opentelemetry_jaeger::Exporter::builder()
-                .with_agent_endpoint(agent_endpoint.parse().unwrap())
-                .with_process(opentelemetry_jaeger::Process {
-                    service_name: "store".to_string(),
-                    tags: vec![],
-                })
-                .init()?;
-            let batch = opentelemetry::sdk::BatchSpanProcessor::builder(
-                exporter,
-                tokio::spawn,
-                tokio::time::interval,
-            )
-            .build();
-            opentelemetry::sdk::Provider::builder()
-                .with_batch_exporter(batch)
-                .build()
-        }
-        None => {
-            let exporter = opentelemetry::exporter::trace::stdout::Builder::default().init();
-            opentelemetry::sdk::Provider::builder()
-                .with_simple_exporter(exporter)
-                .build()
-        }
-    };
-    opentelemetry::global::set_provider(provider);
-
-    let propagator = TraceContextPropagator::new();
-    opentelemetry::global::set_http_text_propagator(propagator);
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::load();
 
-    init_tracer(config.otel_agent_endpoint.as_deref())?;
+    init_tracer("store", config.otel_agent_endpoint.as_deref())?;
 
     let health_service = HealthService::default();
     let store = SQLiteStore {
