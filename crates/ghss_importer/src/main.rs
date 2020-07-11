@@ -5,7 +5,7 @@ mod store;
 use build::{get_builds_from_commit_shas, get_most_recent_builds};
 use config::Config;
 use ghss_github::{Client, Repository};
-use ghss_store_client::store_client::StoreClient;
+use ghss_store_client::StoreClient;
 use ghss_store_client::Code;
 use ghss_tracing::{init_tracer, log_event};
 use opentelemetry::api::{Context, FutureExt, Key, StatusCode, TraceContextExt, Tracer};
@@ -15,7 +15,7 @@ type BoxError = Box<dyn std::error::Error>;
 
 async fn import_repository(
     gh_inst_client: &Client,
-    store_client: &mut StoreClient<ghss_store_client::Channel>,
+    store_client: &mut StoreClient,
     repository: &Repository,
 ) -> Result<(), BoxError> {
     let mut importer = RepositoryImporter::new(store_client, repository.id.to_string());
@@ -51,7 +51,7 @@ async fn import_repository(
 
 async fn import_installation(
     gh_app_client: &Client,
-    store_client: &mut StoreClient<ghss_store_client::Channel>,
+    store_client: &mut StoreClient,
     installation_id: i32,
 ) -> Result<(), BoxError> {
     let tracer = opentelemetry::global::tracer("importer");

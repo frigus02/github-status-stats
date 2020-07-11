@@ -9,8 +9,8 @@ mod token;
 use bytes::Bytes;
 use config::with_config;
 use ghss_store_client::{
-    query_client::QueryClient, store_client::StoreClient, AggregateFunction, BuildSource, Hook,
-    IntervalAggregatesRequest, IntervalType, RecordHookRequest, TotalAggregatesRequest,
+    AggregateFunction, BuildSource, Hook, IntervalAggregatesRequest, IntervalType, QueryClient,
+    RecordHookRequest, StoreClient, TotalAggregatesRequest,
 };
 use ghss_tracing::{error_event, init_tracer, log_event};
 use opentelemetry::api::{Context, FutureExt, Key, SpanKind, TraceContextExt, Tracer};
@@ -270,7 +270,7 @@ struct ApiQueryResponse {
 async fn api_query_route(
     params: ApiQueryParams,
     token: OptionalToken,
-    mut client: QueryClient<ghss_store_client::Channel>,
+    mut client: QueryClient,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
     let reply: Box<dyn warp::Reply> = match token {
         OptionalToken::Some(user)
@@ -279,11 +279,8 @@ async fn api_query_route(
             let res: Result<ApiQueryResponse, Box<dyn std::error::Error>> = async {
                 let response = match params.interval {
                     Some(interval) => {
-                        let request_cx = ghss_store_client::request_context(
-                            "ghss.store.Query/GetIntervalAggregates",
-                        );
-                        let request = ghss_store_client::request(
-                            IntervalAggregatesRequest {
+                        let response = client
+                            .get_interval_aggregates(IntervalAggregatesRequest {
                                 repository_id: params.repository.to_string(),
                                 table: params.table,
                                 columns: params.columns.into_iter().map(|c| c.into()).collect(),
@@ -291,12 +288,7 @@ async fn api_query_route(
                                 until: params.until,
                                 group_by: params.group_by.unwrap_or_default(),
                                 interval: IntervalType::from(interval) as i32,
-                            },
-                            &request_cx,
-                        );
-                        let response = client
-                            .get_interval_aggregates(request)
-                            .with_context(request_cx)
+                            })
                             .await?
                             .into_inner();
                         let mut timestamps = Vec::new();
@@ -324,23 +316,15 @@ async fn api_query_route(
                         }
                     }
                     None => {
-                        let request_cx = ghss_store_client::request_context(
-                            "ghss.store.Query/GetTotalAggregates",
-                        );
-                        let request = ghss_store_client::request(
-                            TotalAggregatesRequest {
+                        let response = client
+                            .get_total_aggregates(TotalAggregatesRequest {
                                 repository_id: params.repository.to_string(),
                                 table: params.table,
                                 columns: params.columns.into_iter().map(|c| c.into()).collect(),
                                 since: params.since,
                                 until: params.until,
                                 group_by: params.group_by.unwrap_or_default(),
-                            },
-                            &request_cx,
-                        );
-                        let response = client
-                            .get_total_aggregates(request)
-                            .with_context(request_cx)
+                            })
                             .await?
                             .into_inner();
                         let mut series = HashMap::new();
@@ -419,7 +403,7 @@ async fn hooks_route(
     event: String,
     body: Bytes,
     config: Config,
-    mut client: StoreClient<ghss_store_client::Channel>,
+    mut client: StoreClient,
 ) -> Result<impl warp::Reply, Infallible> {
     let res: Result<(), Box<dyn std::error::Error>> = async {
         let payload = github_hooks::deserialize(
@@ -433,9 +417,8 @@ async fn hooks_route(
 
         match payload {
             github_hooks::Payload::CheckRun(check_run) => {
-                let request_cx = ghss_store_client::request_context("ghss.store.Store/RecordHook");
-                let request = ghss_store_client::request(
-                    RecordHookRequest {
+                let _response = client
+                    .record_hook(RecordHookRequest {
                         repository_id: check_run.repository.id.to_string(),
                         hook: Some(Hook {
                             r#type: BuildSource::CheckRun as i32,
@@ -443,19 +426,16 @@ async fn hooks_route(
                             timestamp: check_run.check_run.started_at.timestamp_millis(),
                         }),
                         build: Some(check_run.check_run.into()),
-                    },
-                    &request_cx,
-                );
-                let _response = client.record_hook(request).with_context(request_cx).await?;
+                    })
+                    .await?;
             }
             github_hooks::Payload::GitHubAppAuthorization(_auth) => {}
             github_hooks::Payload::Installation => {}
             github_hooks::Payload::InstallationRepositories => {}
             github_hooks::Payload::Ping(_ping) => {}
             github_hooks::Payload::Status(status) => {
-                let request_cx = ghss_store_client::request_context("ghss.store.Store/RecordHook");
-                let request = ghss_store_client::request(
-                    RecordHookRequest {
+                let _response = client
+                    .record_hook(RecordHookRequest {
                         repository_id: status.repository.id.to_string(),
                         hook: Some(Hook {
                             r#type: BuildSource::Status as i32,
@@ -463,10 +443,8 @@ async fn hooks_route(
                             timestamp: status.created_at.timestamp_millis(),
                         }),
                         build: None,
-                    },
-                    &request_cx,
-                );
-                let _response = client.record_hook(request).with_context(request_cx).await?;
+                    })
+                    .await?;
             }
         };
 
@@ -508,14 +486,14 @@ pub fn path_from_state(state: String) -> String {
 }
 
 pub fn with_store_client(
-    client: StoreClient<ghss_store_client::Channel>,
-) -> impl Filter<Extract = (StoreClient<ghss_store_client::Channel>,), Error = Infallible> + Clone {
+    client: StoreClient,
+) -> impl Filter<Extract = (StoreClient,), Error = Infallible> + Clone {
     warp::any().map(move || client.clone())
 }
 
 pub fn with_query_client(
-    client: QueryClient<ghss_store_client::Channel>,
-) -> impl Filter<Extract = (QueryClient<ghss_store_client::Channel>,), Error = Infallible> + Clone {
+    client: QueryClient,
+) -> impl Filter<Extract = (QueryClient,), Error = Infallible> + Clone {
     warp::any().map(move || client.clone())
 }
 
