@@ -4,7 +4,8 @@ use reqwest::header::{ACCEPT, LINK};
 use reqwest::{Client, Request, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::error::Error;
+
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 struct Response<T> {
     data: T,
@@ -17,7 +18,7 @@ pub const ANTIOPE_PREVIEW: &str = "application/vnd.github.antiope-preview+json";
 async fn call_api<T: DeserializeOwned>(
     client: &Client,
     request: Request,
-) -> Result<Response<T>, Box<dyn Error>> {
+) -> Result<Response<T>, BoxError> {
     let tracer = opentelemetry::global::tracer("github");
     let span = tracer
         .span_builder("github request")
@@ -71,7 +72,7 @@ async fn call_api<T: DeserializeOwned>(
     })
 }
 
-pub async fn get<T: DeserializeOwned>(client: &Client, url: Url) -> Result<T, Box<dyn Error>> {
+pub async fn get<T: DeserializeOwned>(client: &Client, url: Url) -> Result<T, BoxError> {
     let result = call_api::<T>(client, client.get(url).build()?).await?;
     Ok(result.data)
 }
@@ -80,7 +81,7 @@ pub async fn post<B: Serialize + ?Sized, T: DeserializeOwned>(
     client: &Client,
     url: Url,
     body: &B,
-) -> Result<T, Box<dyn Error>> {
+) -> Result<T, BoxError> {
     let result = call_api::<T>(client, client.post(url).json(body).build()?).await?;
     Ok(result.data)
 }
@@ -89,15 +90,12 @@ pub async fn post_preview<T: DeserializeOwned>(
     client: &Client,
     url: Url,
     preview: &str,
-) -> Result<T, Box<dyn Error>> {
+) -> Result<T, BoxError> {
     let result = call_api::<T>(client, client.post(url).header(ACCEPT, preview).build()?).await?;
     Ok(result.data)
 }
 
-pub async fn get_paged<T: DeserializeOwned>(
-    client: &Client,
-    url: Url,
-) -> Result<Vec<T>, Box<dyn Error>> {
+pub async fn get_paged<T: DeserializeOwned>(client: &Client, url: Url) -> Result<Vec<T>, BoxError> {
     let mut items = Vec::new();
 
     let mut next_page_url = Some(url);
@@ -114,7 +112,7 @@ pub async fn get_paged_preview<T: DeserializeOwned>(
     client: &Client,
     url: Url,
     preview: &str,
-) -> Result<Vec<T>, Box<dyn Error>> {
+) -> Result<Vec<T>, BoxError> {
     let mut items = Vec::new();
 
     let mut next_page_url = Some(url);

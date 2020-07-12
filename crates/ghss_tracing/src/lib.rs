@@ -1,9 +1,11 @@
 use opentelemetry::api::{Context, Key, TraceContextExt, TraceContextPropagator};
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 pub fn init_tracer(
     service_name: &'static str,
     agent_endpoint: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), BoxError> {
     let provider = match agent_endpoint {
         Some(agent_endpoint) => {
             let exporter = opentelemetry_jaeger::Exporter::builder()

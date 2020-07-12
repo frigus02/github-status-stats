@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use ghss_github::{CheckRunEvent, GitHubAppAuthorizationEvent, PingEvent, StatusEvent};
 use hmac::{Hmac, Mac, NewMac};
 use secstr::SecStr;
@@ -16,7 +15,11 @@ pub enum Payload {
     Status(Box<StatusEvent>),
 }
 
-fn validate_signature(signature: String, body: &Bytes, secret: &[u8]) -> Result<(), BoxError> {
+fn validate_signature(
+    signature: impl Into<Vec<u8>>,
+    body: &[u8],
+    secret: &[u8],
+) -> Result<(), BoxError> {
     let mut mac = Hmac::<Sha1>::new_varkey(secret).expect("HMAC can take key of any size");
     mac.update(body);
     let result = SecStr::from(format!("sha1={:x}", mac.finalize().into_bytes()));
@@ -28,25 +31,25 @@ fn validate_signature(signature: String, body: &Bytes, secret: &[u8]) -> Result<
 }
 
 pub fn deserialize(
-    signature: String,
-    event: String,
-    body: Bytes,
+    signature: impl Into<Vec<u8>>,
+    event: &str,
+    body: &[u8],
     secret: &[u8],
 ) -> Result<Payload, BoxError> {
-    validate_signature(signature, &body, secret)?;
+    validate_signature(signature, body, secret)?;
 
-    match event.as_str() {
-        "check_run" => Ok(serde_json::from_slice::<CheckRunEvent>(&body)
+    match event {
+        "check_run" => Ok(serde_json::from_slice::<CheckRunEvent>(body)
             .map(|data| Payload::CheckRun(Box::new(data)))?),
         "github_app_authorization" => {
-            Ok(serde_json::from_slice::<GitHubAppAuthorizationEvent>(&body)
+            Ok(serde_json::from_slice::<GitHubAppAuthorizationEvent>(body)
                 .map(|data| Payload::GitHubAppAuthorization(Box::new(data)))?)
         }
         "ping" => {
-            Ok(serde_json::from_slice::<PingEvent>(&body)
+            Ok(serde_json::from_slice::<PingEvent>(body)
                 .map(|data| Payload::Ping(Box::new(data)))?)
         }
-        "status" => Ok(serde_json::from_slice::<StatusEvent>(&body)
+        "status" => Ok(serde_json::from_slice::<StatusEvent>(body)
             .map(|data| Payload::Status(Box::new(data)))?),
         "installation" => Ok(Payload::Installation),
         // integration_installation is deprecated; replaced by installation
