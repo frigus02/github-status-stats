@@ -10,7 +10,7 @@ edition = "2018"
 ghss_github = { path = "../ghss_github" }
 opentelemetry = { version = "0.6.0", features = ["tonic"] }
 prost = "0.6.1"
-tonic = "0.2.2"
+tonic = "0.3.0"
 
 [build-dependencies]
 tonic-build = "0.3.0"
