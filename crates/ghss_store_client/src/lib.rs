@@ -1,5 +1,7 @@
 use ghss_github::{CheckRun, CheckRunConclusion};
-use opentelemetry::api::{Context, FutureExt, Key, SpanKind, StatusCode, TraceContextExt, Tracer};
+use opentelemetry::api::{
+    Carrier, Context, FutureExt, Key, SpanKind, StatusCode, TraceContextExt, Tracer,
+};
 pub use proto::*;
 use std::convert::TryInto;
 use tonic::{transport::channel::Channel, Request};
@@ -7,6 +9,21 @@ pub use tonic::{Code, Response, Status};
 
 mod proto {
     tonic::include_proto!("ghss.store");
+}
+
+struct TonicMetadataMapCarrier<'a>(&'a mut tonic::metadata::MetadataMap);
+impl<'a> Carrier for TonicMetadataMapCarrier<'a> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|metadata| metadata.to_str().ok())
+    }
+
+    fn set(&mut self, key: &str, value: String) {
+        if let Ok(key) = tonic::metadata::MetadataKey::from_bytes(key.to_lowercase().as_bytes()) {
+            if let Ok(val) = tonic::metadata::MetadataValue::from_str(&value) {
+                self.0.insert(key, val);
+            }
+        }
+    }
 }
 
 macro_rules! client_method {
@@ -25,7 +42,8 @@ macro_rules! client_method {
             let cx = Context::current_with_span(span);
             let mut request = Request::new(message);
             opentelemetry::global::get_http_text_propagator(|propagator| {
-                propagator.inject_context(&cx, request.metadata_mut())
+                propagator
+                    .inject_context(&cx, &mut TonicMetadataMapCarrier(request.metadata_mut()));
             });
             let res = self.inner.$func(request).with_context(cx.clone()).await;
             if let Err(err) = res.as_ref() {
