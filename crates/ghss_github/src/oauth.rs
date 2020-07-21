@@ -2,7 +2,7 @@ use super::USER_AGENT;
 use reqwest::{Client, Url};
 use serde::Deserialize;
 
-type BoxError = Box<dyn std::error::Error>;
+type BoxError = Box<dyn std::error::Error + Sync + Send>;
 
 #[derive(Deserialize)]
 pub struct AuthCodeQuery {

@@ -5,7 +5,7 @@ use super::{BASE_URL, USER_AGENT};
 use chrono::{DateTime, FixedOffset};
 use std::collections::HashMap;
 
-type BoxError = Box<dyn std::error::Error>;
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct Client {
     client: reqwest::Client,

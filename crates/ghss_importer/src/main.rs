@@ -11,7 +11,7 @@ use ghss_tracing::{init_tracer, log_event};
 use opentelemetry::api::{Context, FutureExt, Key, StatusCode, TraceContextExt, Tracer};
 use store::RepositoryImporter;
 
-type BoxError = Box<dyn std::error::Error>;
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 async fn import_repository(
     gh_inst_client: &Client,

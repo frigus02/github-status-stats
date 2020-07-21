@@ -46,7 +46,7 @@ impl SQLiteStore {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = config::load();
 
     init_tracer("store", config.otel_agent_endpoint.as_deref())?;

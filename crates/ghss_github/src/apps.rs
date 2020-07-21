@@ -1,7 +1,8 @@
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::time::SystemTime;
+
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims<'a> {
@@ -10,7 +11,7 @@ struct Claims<'a> {
     iss: &'a str,
 }
 
-pub fn generate_jwt(app_id: &str, private_key_pem: &str) -> Result<String, Box<dyn Error>> {
+pub fn generate_jwt(app_id: &str, private_key_pem: &str) -> Result<String, BoxError> {
     let header = Header::new(Algorithm::RS256);
 
     // To guard against time difference between this machine and the GitHub

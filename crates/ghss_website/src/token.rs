@@ -6,11 +6,10 @@ use jsonwebtoken::{
 };
 use opentelemetry::api::{Context, Key, TraceContextExt};
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
 use std::time::SystemTime;
-use warp::Filter;
+use tide::Request;
 
-type BoxError = Box<dyn std::error::Error>;
+type BoxError = Box<dyn std::error::Error + Sync + Send>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepositoryClaim {
@@ -97,17 +96,18 @@ pub enum OptionalToken {
     None,
 }
 
-pub fn optional_token(
+pub fn optional_token<T>(
+    req: &Request<T>,
     cookie_name: &'static str,
     token_secret: Vec<u8>,
-) -> impl Filter<Extract = (OptionalToken,), Error = Infallible> + Clone {
-    warp::cookie::optional(cookie_name).map(move |raw_token: Option<String>| match raw_token {
+) -> OptionalToken {
+    match req.cookie(cookie_name) {
         Some(raw_token) => {
-            let user = validate(&raw_token, token_secret.as_slice());
-            let cx = Context::current();
+            let user = validate(raw_token.value(), token_secret.as_slice());
             match user {
                 Ok(user) => {
-                    cx.span()
+                    Context::current()
+                        .span()
                         .set_attribute(Key::new("enduser.id").string(user.id.as_str()));
                     OptionalToken::Some(user)
                 }
@@ -119,5 +119,5 @@ pub fn optional_token(
             }
         }
         None => OptionalToken::None,
-    })
+    }
 }

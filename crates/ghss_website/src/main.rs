@@ -1,13 +1,12 @@
 mod config;
-mod cookie;
 mod ctrlc;
 mod github_hooks;
 mod github_queries;
+mod serve_file;
 mod templates;
 mod token;
 
-use bytes::Bytes;
-use config::with_config;
+use futures::{future::FutureExt as _, select};
 use ghss_store_client::{
     AggregateFunction, BuildSource, Hook, IntervalAggregatesRequest, IntervalType, QueryClient,
     RecordHookRequest, StoreClient, TotalAggregatesRequest,
@@ -16,29 +15,33 @@ use ghss_tracing::{error_event, init_tracer, log_event};
 use opentelemetry::api::{Context, FutureExt, Key, SpanKind, TraceContextExt, Tracer};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serve_file::RouteExt;
 use std::collections::HashMap;
-use std::convert::Infallible;
-use std::convert::TryFrom;
-use std::sync::Arc;
-use templates::{
-    with_templates, DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess,
+use std::future::Future;
+use std::pin::Pin;
+use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
+use tide::{
+    http::{cookies::SameSite, headers, Cookie, Url},
+    Body, Next, Redirect, Request, Response, StatusCode,
 };
-use token::{optional_token, OptionalToken};
-use warp::{
-    http::{Response, StatusCode, Uri},
-    hyper::{self, header, service::Service, Body, Request},
-    Filter,
-};
+use token::OptionalToken;
 
-type Config = Arc<config::Config>;
-type Templates = Arc<templates::Templates<'static>>;
+struct State {
+    config: config::Config,
+    templates: templates::Templates<'static>,
+    store_client: StoreClient,
+    query_client: QueryClient,
+}
 
-async fn index_route(
-    token: OptionalToken,
-    templates: Templates,
-    config: Config,
-) -> Result<impl warp::Reply, Infallible> {
-    let reply: Box<dyn warp::Reply> = match token {
+async fn handle_index(req: Request<State>) -> tide::Result<Response> {
+    let state = req.state();
+    let config = &state.config;
+    let templates = &state.templates;
+    let res: Response = match token::optional_token(
+        &req,
+        config.cookie_name,
+        config.token_secret.unsecure().into(),
+    ) {
         OptionalToken::Some(user) => {
             let data = IndexTemplate::LoggedIn {
                 user: user.name,
@@ -53,15 +56,14 @@ async fn index_route(
                     None,
                 ),
             };
-            let render = templates.render_index(&data);
-            Box::new(warp::reply::html(render))
+            let mut res: Response = templates.render_index(&data).into();
+            res.set_content_type(tide::http::mime::HTML);
+            res
         }
         OptionalToken::Expired => {
             let login_url =
                 ghss_github::oauth::login_url(&config.gh_client_id, &config.gh_redirect_uri, None);
-            Box::new(warp::redirect::temporary(
-                Uri::try_from(login_url).expect("Url to Uri"),
-            ))
+            Redirect::temporary(login_url).into()
         }
         OptionalToken::None => {
             let data = IndexTemplate::Anonymous {
@@ -71,23 +73,27 @@ async fn index_route(
                     None,
                 ),
             };
-            let render = templates.render_index(&data);
-            Box::new(warp::reply::html(render))
+            let mut res: Response = templates.render_index(&data).into();
+            res.set_content_type(tide::http::mime::HTML);
+            res
         }
     };
 
-    Ok(reply)
+    Ok(res)
 }
 
-async fn dashboard_route(
-    owner: String,
-    repo: String,
-    token: OptionalToken,
-    templates: Templates,
-    config: Config,
-) -> Result<Box<dyn warp::Reply>, Infallible> {
+async fn handle_dashboard(req: Request<State>) -> tide::Result<Response> {
+    let state = req.state();
+    let config = &state.config;
+    let templates = &state.templates;
+    let owner: String = req.param("owner")?;
+    let repo: String = req.param("repo")?;
     let name = format!("{}/{}", owner, repo);
-    let reply: Box<dyn warp::Reply> = match token {
+    let res: Response = match token::optional_token(
+        &req,
+        config.cookie_name,
+        config.token_secret.unsecure().into(),
+    ) {
         OptionalToken::Some(user) => {
             let data = match user.repositories.into_iter().find(|r| r.name == name) {
                 Some(repo) => DashboardData::Data {
@@ -97,12 +103,15 @@ async fn dashboard_route(
                     message: "Not found".to_string(),
                 },
             };
-            let render = templates.render_dashboard(&DashboardTemplate {
-                user: user.name,
-                repository_name: name,
-                data,
-            });
-            Box::new(warp::reply::html(render))
+            let mut res: Response = templates
+                .render_dashboard(&DashboardTemplate {
+                    user: user.name,
+                    repository_name: name,
+                    data,
+                })
+                .into();
+            res.set_content_type(tide::http::mime::HTML);
+            res
         }
         OptionalToken::Expired | OptionalToken::None => {
             let login_url = ghss_github::oauth::login_url(
@@ -110,12 +119,10 @@ async fn dashboard_route(
                 &config.gh_redirect_uri,
                 Some(path_to_state(format!("/d/{}/{}", owner, repo))),
             );
-            Box::new(warp::redirect::temporary(
-                Uri::try_from(login_url).expect("Url to Uri"),
-            ))
+            Redirect::temporary(login_url).into()
         }
     };
-    Ok(reply)
+    Ok(res)
 }
 
 #[derive(Debug)]
@@ -267,12 +274,16 @@ struct ApiQueryResponse {
     series: Vec<ApiQueryResponseSeries>,
 }
 
-async fn api_query_route(
-    params: ApiQueryParams,
-    token: OptionalToken,
-    mut client: QueryClient,
-) -> Result<Box<dyn warp::Reply>, Infallible> {
-    let reply: Box<dyn warp::Reply> = match token {
+async fn handle_api_query(req: Request<State>) -> tide::Result<Response> {
+    let state = req.state();
+    let config = &state.config;
+    let mut client = state.query_client.clone();
+    let params: ApiQueryParams = req.query()?;
+    let res: Response = match token::optional_token(
+        &req,
+        config.cookie_name,
+        config.token_secret.unsecure().into(),
+    ) {
         OptionalToken::Some(user)
             if user.repositories.iter().any(|r| r.id == params.repository) =>
         {
@@ -345,22 +356,22 @@ async fn api_query_route(
             }
             .await;
             match res {
-                Ok(res) => Box::new(warp::reply::json(&res)),
+                Ok(res) => Body::from_json(&res)?.into(),
                 Err(err) => {
                     error_event(format!("query failed: {:?}", err));
-                    Box::new(StatusCode::INTERNAL_SERVER_ERROR)
+                    Response::from_res(StatusCode::InternalServerError)
                 }
             }
         }
-        _ => Box::new(StatusCode::UNAUTHORIZED),
+        _ => Response::from_res(StatusCode::Unauthorized),
     };
-    Ok(reply)
+    Ok(res)
 }
 
-async fn setup_authorized_route(
-    info: ghss_github::oauth::AuthCodeQuery,
-    config: Config,
-) -> Result<Box<dyn warp::Reply>, Infallible> {
+async fn handle_setup_authorized(req: Request<State>) -> tide::Result<Response> {
+    let state = req.state();
+    let config = &state.config;
+    let info: ghss_github::oauth::AuthCodeQuery = req.query()?;
     let token = async {
         let github_token = ghss_github::oauth::exchange_code(
             &config.gh_client_id,
@@ -373,43 +384,50 @@ async fn setup_authorized_route(
     }
     .await;
 
-    match token {
+    let res = match token {
         Ok(token) => {
             let redirect_path = info.state.map_or("/".to_owned(), path_from_state);
-            Ok(Box::new(
-                Response::builder()
-                    .status(StatusCode::TEMPORARY_REDIRECT)
-                    .header("location", redirect_path)
-                    .header("set-cookie", cookie::set(config.cookie_name, &token))
-                    .body(Body::empty())
-                    .unwrap(),
-            ))
+            let mut res: Response = Redirect::temporary(redirect_path).into();
+            res.insert_cookie(
+                Cookie::build(config.cookie_name, token)
+                    .path("/")
+                    .max_age(time::Duration::days(30))
+                    .same_site(SameSite::Lax)
+                    .secure(true)
+                    .http_only(true)
+                    .finish(),
+            );
+            res
         }
-        Err(_) => Ok(Box::new(StatusCode::INTERNAL_SERVER_ERROR)),
-    }
+        Err(_) => Response::from_res(StatusCode::InternalServerError),
+    };
+    Ok(res)
 }
 
-async fn logout_route(config: Config) -> Result<impl warp::Reply, Infallible> {
-    Ok(Response::builder()
-        .status(StatusCode::TEMPORARY_REDIRECT)
-        .header("location", "/")
-        .header("set-cookie", cookie::remove(config.cookie_name))
-        .body(Body::empty())
-        .unwrap())
+async fn handle_logout(req: Request<State>) -> tide::Result<Response> {
+    let state = req.state();
+    let config = &state.config;
+    let mut res: Response = Redirect::temporary("/").into();
+    res.remove_cookie(Cookie::new(config.cookie_name, ""));
+    Ok(res)
 }
 
-async fn hooks_route(
-    signature: String,
-    event: String,
-    body: Bytes,
-    config: Config,
-    mut client: StoreClient,
-) -> Result<impl warp::Reply, Infallible> {
+async fn handle_hooks(mut req: Request<State>) -> tide::Result<Response> {
+    let body = req.body_bytes().await?;
+    let state = req.state();
+    let config = &state.config;
+    let mut client = state.store_client.clone();
+    let signature = req.header("X-Hub-Signature").ok_or_else(|| {
+        tide::Error::from_str(StatusCode::BadRequest, "X-Hub-Signature header required")
+    })?;
+    let event = req.header("X-GitHub-Event").ok_or_else(|| {
+        tide::Error::from_str(StatusCode::BadRequest, "X-GitHub-Event header required")
+    })?;
     let res: Result<(), Box<dyn std::error::Error>> = async {
         let payload = github_hooks::deserialize(
-            signature,
-            event,
-            body,
+            signature.as_str(),
+            event.as_str(),
+            &body,
             &config.gh_webhook_secret.unsecure(),
         )?;
 
@@ -452,13 +470,14 @@ async fn hooks_route(
     }
     .await;
 
-    match res {
-        Ok(_) => Ok(StatusCode::OK),
+    let res = match res {
+        Ok(_) => Response::from_res(StatusCode::Ok),
         Err(err) => {
             error_event(format!("hook failed: {:?}", err));
-            Ok(StatusCode::INTERNAL_SERVER_ERROR)
+            Response::from_res(StatusCode::InternalServerError)
         }
-    }
+    };
+    Ok(res)
 }
 
 pub fn path_to_state(path: String) -> String {
@@ -468,176 +487,102 @@ pub fn path_to_state(path: String) -> String {
 pub fn path_from_state(state: String) -> String {
     let result: Result<String, Box<dyn std::error::Error>> = base64::decode(state)
         .map_err(|err| err.into())
-        .and_then(|bytes| Ok(Uri::try_from(bytes.as_slice())?))
-        .and_then(|uri| {
-            if uri.scheme().is_some() {
+        .and_then(|bytes| Ok(Url::parse(std::str::from_utf8(&bytes)?)?))
+        .and_then(|url| {
+            if !url.scheme().is_empty() {
                 return Err("only path allowed but found scheme".into());
             }
-            if uri.authority().is_some() {
+            if url.has_authority() {
                 return Err("only path allowed but found authority".into());
             }
 
-            Ok(uri
-                .path_and_query()
-                .ok_or("path required but not found")?
-                .to_string())
+            Ok(url.path().to_string())
         });
     result.unwrap_or_else(|_| "/".to_owned())
 }
 
-pub fn with_store_client(
-    client: StoreClient,
-) -> impl Filter<Extract = (StoreClient,), Error = Infallible> + Clone {
-    warp::any().map(move || client.clone())
-}
+fn tracing_middleware<'a>(
+    req: Request<State>,
+    next: Next<'a, State>,
+) -> Pin<Box<dyn Future<Output = tide::Result> + Send + 'a>> {
+    Box::pin(async {
+        let tracer = opentelemetry::global::tracer("website");
+        let span = tracer
+            .span_builder(&format!("HTTP {}", req.method().as_ref()))
+            .with_kind(SpanKind::Server)
+            .with_attributes(vec![
+                Key::new("http.method").string(req.method().as_ref()),
+                Key::new("http.target").string(req.url().as_ref()),
+                Key::new("http.user_agent").string(
+                    req.header(headers::USER_AGENT)
+                        .map(|v| v.as_str())
+                        .unwrap_or(""),
+                ),
+            ])
+            .start(&tracer);
+        let cx = Context::current_with_span(span);
 
-pub fn with_query_client(
-    client: QueryClient,
-) -> impl Filter<Extract = (QueryClient,), Error = Infallible> + Clone {
-    warp::any().map(move || client.clone())
+        let res = next.run(req).with_context(cx.clone()).await;
+
+        let (http_status, status_text) = match res.as_ref() {
+            Ok(res) => (res.status(), "".into()),
+            Err(err) => (err.status(), err.to_string()),
+        };
+        let http_status_code = u16::from(http_status);
+        let span = cx.span();
+        span.set_attribute(Key::new("http.status_code").u64(http_status_code.into()));
+        use opentelemetry::api::StatusCode;
+        let telemetry_status = match http_status_code {
+            200..=399 => StatusCode::OK,
+            401 => StatusCode::Unauthenticated,
+            403 => StatusCode::PermissionDenied,
+            404 => StatusCode::NotFound,
+            400 | 402 | 405..=499 => StatusCode::InvalidArgument,
+            500..=599 => StatusCode::Internal,
+            _ => StatusCode::Unknown,
+        };
+        span.set_status(telemetry_status, status_text);
+
+        res
+    })
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = config::load();
-    let config = Arc::new(config);
     let templates = templates::load();
-    let templates = Arc::new(templates);
 
     let store_client = StoreClient::connect(config.store_url.clone()).await?;
     let query_client = QueryClient::connect(config.store_url.clone()).await?;
 
     init_tracer("website", config.otel_agent_endpoint.as_deref())?;
 
-    let index = warp::get()
-        .and(warp::path::end())
-        .and(optional_token(
-            config.cookie_name,
-            config.token_secret.unsecure().into(),
-        ))
-        .and(with_templates(templates.clone()))
-        .and(with_config(config.clone()))
-        .and_then(index_route);
+    let state = State {
+        config,
+        templates,
+        store_client,
+        query_client,
+    };
 
-    let favicon = warp::get()
-        .and(warp::path!("favicon.ico"))
-        .and(warp::fs::file("static/favicon.ico"));
+    let mut app = tide::with_state(state);
+    app.at("/").get(handle_index);
+    app.at("/favicon.ico").serve_file("static/favicon.ico");
+    app.at("/static").serve_dir("static")?;
+    app.at("/d/:owner/:repo").get(handle_dashboard);
+    app.at("/api/query").get(handle_api_query);
+    app.at("/setup/authorized").get(handle_setup_authorized);
+    app.at("/logout").get(handle_logout);
+    app.at("/hooks").post(handle_hooks);
 
-    let static_files = warp::path!("static" / ..).and(warp::fs::dir("static"));
+    app.middleware(tracing_middleware);
 
-    let dashboard = warp::get()
-        .and(warp::path!("d" / String / String))
-        .and(optional_token(
-            config.cookie_name,
-            config.token_secret.unsecure().into(),
-        ))
-        .and(with_templates(templates.clone()))
-        .and(with_config(config.clone()))
-        .and_then(dashboard_route);
-
-    let api_query = warp::get()
-        .and(warp::path!("api" / "query"))
-        .and(warp::query())
-        .and(optional_token(
-            config.cookie_name,
-            config.token_secret.unsecure().into(),
-        ))
-        .and(with_query_client(query_client))
-        .and_then(api_query_route);
-
-    let setup_authorized = warp::get()
-        .and(warp::path!("setup" / "authorized"))
-        .and(warp::query::<ghss_github::oauth::AuthCodeQuery>())
-        .and(with_config(config.clone()))
-        .and_then(setup_authorized_route);
-
-    let logout = warp::get()
-        .and(warp::path!("logout"))
-        .and(with_config(config.clone()))
-        .and_then(logout_route);
-
-    let hooks = warp::post()
-        .and(warp::path!("hooks"))
-        .and(warp::header("X-Hub-Signature"))
-        .and(warp::header("X-GitHub-Event"))
-        .and(warp::body::bytes())
-        .and(with_config(config.clone()))
-        .and(with_store_client(store_client))
-        .and_then(hooks_route);
-
-    let routes = index
-        .or(favicon)
-        .or(static_files)
-        .or(dashboard)
-        .or(api_query)
-        .or(setup_authorized)
-        .or(hooks)
-        .or(logout);
-
-    let warp_svc = warp::service(routes);
-    let make_svc = hyper::service::make_service_fn(move |_| {
-        let warp_svc = warp_svc.clone();
-        async move {
-            let svc = hyper::service::service_fn(move |req: Request<Body>| {
-                let mut warp_svc = warp_svc.clone();
-                async move {
-                    let tracer = opentelemetry::global::tracer("website");
-                    let span = tracer
-                        .span_builder(&format!("HTTP {}", req.method().as_str()))
-                        .with_kind(SpanKind::Server)
-                        .with_attributes(vec![
-                            Key::new("http.method").string(req.method().as_str()),
-                            Key::new("http.target")
-                                .string(req.uri().path_and_query().map_or("/", |p| p.as_str())),
-                            Key::new("http.user_agent").string(
-                                req.headers()
-                                    .get(header::USER_AGENT)
-                                    .map(|v| v.to_str().expect("user agent should be a string"))
-                                    .unwrap_or(""),
-                            ),
-                        ])
-                        .start(&tracer);
-                    let cx = Context::current_with_span(span);
-
-                    let res = warp_svc.call(req).with_context(cx.clone()).await;
-
-                    use opentelemetry::api::StatusCode;
-                    let span = cx.span();
-                    match res.as_ref() {
-                        Ok(res) => {
-                            span.set_attribute(
-                                Key::new("http.status_code").u64(res.status().as_u16().into()),
-                            );
-                            let code = match res.status().as_u16() {
-                                200..=399 => StatusCode::OK,
-                                401 => StatusCode::Unauthenticated,
-                                403 => StatusCode::PermissionDenied,
-                                404 => StatusCode::NotFound,
-                                400 | 402 | 405..=499 => StatusCode::InvalidArgument,
-                                500..=599 => StatusCode::Internal,
-                                _ => StatusCode::Unknown,
-                            };
-                            span.set_status(code, "".into());
-                        }
-                        Err(err) => {
-                            span.set_status(StatusCode::Internal, err.to_string());
-                            span.set_attribute(Key::new("error").string(err.to_string()));
-                        }
-                    };
-
-                    res
-                }
-            });
-            Ok::<_, Infallible>(svc)
-        }
-    });
-
-    hyper::Server::bind(&([0, 0, 0, 0], 8888).into())
-        .serve(make_svc)
-        .with_graceful_shutdown(async {
-            ctrlc::ctrl_c().await;
-        })
-        .await?;
-
+    let res = select! {
+        res = app.listen("0.0.0.0:8888").fuse() => res,
+        () = ctrlc::ctrl_c().fuse() => {
+            println!("Received Ctrl+C. Shutting down...");
+            Ok(())
+        },
+    };
+    res?;
     Ok(())
 }

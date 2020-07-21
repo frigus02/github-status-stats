@@ -6,7 +6,7 @@ use ghss_store_client::{Build, BuildSource, Commit};
 use itertools::Itertools;
 use std::convert::TryInto;
 
-type BoxError = Box<dyn std::error::Error>;
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 fn statuses_to_build(statuses: Vec<CommitStatus>, commit: String) -> Build {
     let mut iter = statuses.into_iter();

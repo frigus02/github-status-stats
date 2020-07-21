@@ -1,7 +1,7 @@
 use futures::future::join_all;
 use ghss_github::{Client, Installation, Repository, User};
 
-type BoxError = Box<dyn std::error::Error>;
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct GitHubUser {
     pub user: User,

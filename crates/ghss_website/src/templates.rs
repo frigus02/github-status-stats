@@ -1,8 +1,5 @@
 use handlebars::Handlebars;
 use serde::Serialize;
-use std::convert::Infallible;
-use std::sync::Arc;
-use warp::Filter;
 
 #[derive(Serialize)]
 pub struct RepositoryAccess {
@@ -63,10 +60,4 @@ pub fn load() -> Templates<'static> {
         .expect("register dashboard");
 
     Templates { hb }
-}
-
-pub fn with_templates(
-    config: Arc<Templates<'static>>,
-) -> impl Filter<Extract = (Arc<Templates<'static>>,), Error = Infallible> + Clone {
-    warp::any().map(move || config.clone())
 }

@@ -1,7 +1,4 @@
 use secstr::{SecStr, SecUtf8};
-use std::convert::Infallible;
-use std::sync::Arc;
-use warp::Filter;
 
 pub struct Config {
     pub host: String,
@@ -37,10 +34,4 @@ pub fn load() -> Config {
         token_secret: SecStr::from(env("TOKEN_SECRET")),
         otel_agent_endpoint: option_env("OTEL_AGENT_ENDPOINT"),
     }
-}
-
-pub fn with_config(
-    config: Arc<Config>,
-) -> impl Filter<Extract = (Arc<Config>,), Error = Infallible> + Clone {
-    warp::any().map(move || config.clone())
 }
