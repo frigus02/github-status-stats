@@ -4,7 +4,7 @@ use ghss_store_client::{
     Build, Commit, HookedCommitsReply, HookedCommitsRequest, ImportRequest, Response, Status,
 };
 
-type BoxError = Box<dyn std::error::Error>;
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct RepositoryImporter<'client> {
     client: &'client mut StoreClient,
