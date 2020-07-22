@@ -10,7 +10,7 @@ hyper = "0.13.7"
 opentelemetry = { version = "0.6.0", features = ["http"] }
 prost = "0.6.1"
 rusqlite = { version = "0.23.1", features = ["bundled"] }
-tokio = { version = "0.2.21", features = ["macros", "signal"] }
+tokio = { version = "0.2.22", features = ["macros", "signal"] }
 tonic = "0.3.0"
 tower = "0.3.1"
 
