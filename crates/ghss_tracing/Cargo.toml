@@ -7,4 +7,4 @@ edition = "2018"
 [dependencies]
 opentelemetry = "0.6.0"
 opentelemetry-jaeger = "0.5.0"
-tokio = "0.2.21"
+tokio = "0.2.22"
