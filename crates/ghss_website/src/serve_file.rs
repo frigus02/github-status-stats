@@ -1,28 +1,18 @@
-use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
-use tide::{Body, Endpoint, Request, Response, Result, Route};
+use tide::{utils::async_trait, Body, Endpoint, Request, Response, Result, Route};
 
 struct ServeFile {
     path: PathBuf,
 }
 
+#[async_trait]
 impl<State> Endpoint<State> for ServeFile
 where
     State: Clone + Send + Sync + 'static,
 {
-    fn call<'life0, 'async_trait>(
-        &'life0 self,
-        _req: Request<State>,
-    ) -> Pin<Box<dyn Future<Output = Result> + Send + 'async_trait>>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async move {
-            let res: Response = Body::from_file(&self.path).await?.into();
-            Ok(res)
-        })
+    async fn call<'a>(&'a self, _req: Request<State>) -> Result {
+        let res: Response = Body::from_file(&self.path).await?.into();
+        Ok(res)
     }
 }
 
