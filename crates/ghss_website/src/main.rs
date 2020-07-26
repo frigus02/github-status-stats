@@ -19,6 +19,7 @@ use serve_file::RouteExt;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
 use tide::{
     http::{cookies::SameSite, headers, Cookie, Url},
@@ -26,9 +27,10 @@ use tide::{
 };
 use token::OptionalToken;
 
+#[derive(Clone)]
 struct State {
-    config: config::Config,
-    templates: templates::Templates<'static>,
+    config: Arc<config::Config>,
+    templates: Arc<templates::Templates<'static>>,
     store_client: StoreClient,
     query_client: QueryClient,
 }
@@ -56,9 +58,10 @@ async fn handle_index(req: Request<State>) -> tide::Result<Response> {
                     None,
                 ),
             };
-            let mut res: Response = templates.render_index(&data).into();
-            res.set_content_type(tide::http::mime::HTML);
-            res
+            Response::builder(200)
+                .body(templates.render_index(&data))
+                .content_type(tide::http::mime::HTML)
+                .build()
         }
         OptionalToken::Expired => {
             let login_url =
@@ -73,9 +76,10 @@ async fn handle_index(req: Request<State>) -> tide::Result<Response> {
                     None,
                 ),
             };
-            let mut res: Response = templates.render_index(&data).into();
-            res.set_content_type(tide::http::mime::HTML);
-            res
+            Response::builder(200)
+                .body(templates.render_index(&data))
+                .content_type(tide::http::mime::HTML)
+                .build()
         }
     };
 
@@ -524,11 +528,7 @@ fn tracing_middleware<'a>(
 
         let res = next.run(req).with_context(cx.clone()).await;
 
-        let (http_status, status_text) = match res.as_ref() {
-            Ok(res) => (res.status(), "".into()),
-            Err(err) => (err.status(), err.to_string()),
-        };
-        let http_status_code = u16::from(http_status);
+        let http_status_code = u16::from(res.status());
         let span = cx.span();
         span.set_attribute(Key::new("http.status_code").u64(http_status_code.into()));
         use opentelemetry::api::StatusCode;
@@ -541,9 +541,14 @@ fn tracing_middleware<'a>(
             500..=599 => StatusCode::Internal,
             _ => StatusCode::Unknown,
         };
-        span.set_status(telemetry_status, status_text);
+        span.set_status(
+            telemetry_status,
+            res.error()
+                .map(|err| err.to_string())
+                .unwrap_or_else(|| "".to_owned()),
+        );
 
-        res
+        Ok(res)
     })
 }
 
@@ -558,8 +563,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     init_tracer("website", config.otel_agent_endpoint.as_deref())?;
 
     let state = State {
-        config,
-        templates,
+        config: Arc::new(config),
+        templates: Arc::new(templates),
         store_client,
         query_client,
     };
