@@ -3,6 +3,7 @@ mod ctrlc;
 mod github_hooks;
 mod github_queries;
 mod serve_file;
+mod telemetry_middleware;
 mod templates;
 mod token;
 
@@ -12,23 +13,23 @@ use ghss_store_client::{
     RecordHookRequest, StoreClient, TotalAggregatesRequest,
 };
 use ghss_tracing::{error_event, init_tracer, log_event};
-use opentelemetry::api::{Context, FutureExt, Key, SpanKind, TraceContextExt, Tracer};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serve_file::RouteExt;
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
+use std::sync::Arc;
+use telemetry_middleware::TelemetryMiddleware;
 use templates::{DashboardData, DashboardTemplate, IndexTemplate, RepositoryAccess};
 use tide::{
-    http::{cookies::SameSite, headers, Cookie, Url},
-    Body, Next, Redirect, Request, Response, StatusCode,
+    http::{cookies::SameSite, Cookie, Url},
+    Body, Redirect, Request, Response, StatusCode,
 };
 use token::OptionalToken;
 
+#[derive(Clone)]
 struct State {
-    config: config::Config,
-    templates: templates::Templates<'static>,
+    config: Arc<config::Config>,
+    templates: Arc<templates::Templates<'static>>,
     store_client: StoreClient,
     query_client: QueryClient,
 }
@@ -56,9 +57,10 @@ async fn handle_index(req: Request<State>) -> tide::Result<Response> {
                     None,
                 ),
             };
-            let mut res: Response = templates.render_index(&data).into();
-            res.set_content_type(tide::http::mime::HTML);
-            res
+            Response::builder(200)
+                .body(templates.render_index(&data))
+                .content_type(tide::http::mime::HTML)
+                .build()
         }
         OptionalToken::Expired => {
             let login_url =
@@ -73,9 +75,10 @@ async fn handle_index(req: Request<State>) -> tide::Result<Response> {
                     None,
                 ),
             };
-            let mut res: Response = templates.render_index(&data).into();
-            res.set_content_type(tide::http::mime::HTML);
-            res
+            Response::builder(200)
+                .body(templates.render_index(&data))
+                .content_type(tide::http::mime::HTML)
+                .build()
         }
     };
 
@@ -501,52 +504,6 @@ pub fn path_from_state(state: String) -> String {
     result.unwrap_or_else(|_| "/".to_owned())
 }
 
-fn tracing_middleware<'a>(
-    req: Request<State>,
-    next: Next<'a, State>,
-) -> Pin<Box<dyn Future<Output = tide::Result> + Send + 'a>> {
-    Box::pin(async {
-        let tracer = opentelemetry::global::tracer("website");
-        let span = tracer
-            .span_builder(&format!("HTTP {}", req.method().as_ref()))
-            .with_kind(SpanKind::Server)
-            .with_attributes(vec![
-                Key::new("http.method").string(req.method().as_ref()),
-                Key::new("http.target").string(req.url().as_ref()),
-                Key::new("http.user_agent").string(
-                    req.header(headers::USER_AGENT)
-                        .map(|v| v.as_str())
-                        .unwrap_or(""),
-                ),
-            ])
-            .start(&tracer);
-        let cx = Context::current_with_span(span);
-
-        let res = next.run(req).with_context(cx.clone()).await;
-
-        let (http_status, status_text) = match res.as_ref() {
-            Ok(res) => (res.status(), "".into()),
-            Err(err) => (err.status(), err.to_string()),
-        };
-        let http_status_code = u16::from(http_status);
-        let span = cx.span();
-        span.set_attribute(Key::new("http.status_code").u64(http_status_code.into()));
-        use opentelemetry::api::StatusCode;
-        let telemetry_status = match http_status_code {
-            200..=399 => StatusCode::OK,
-            401 => StatusCode::Unauthenticated,
-            403 => StatusCode::PermissionDenied,
-            404 => StatusCode::NotFound,
-            400 | 402 | 405..=499 => StatusCode::InvalidArgument,
-            500..=599 => StatusCode::Internal,
-            _ => StatusCode::Unknown,
-        };
-        span.set_status(telemetry_status, status_text);
-
-        res
-    })
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = config::load();
@@ -558,8 +515,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     init_tracer("website", config.otel_agent_endpoint.as_deref())?;
 
     let state = State {
-        config,
-        templates,
+        config: Arc::new(config),
+        templates: Arc::new(templates),
         store_client,
         query_client,
     };
@@ -574,7 +531,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     app.at("/logout").get(handle_logout);
     app.at("/hooks").post(handle_hooks);
 
-    app.middleware(tracing_middleware);
+    app.middleware(TelemetryMiddleware {});
 
     let res = select! {
         res = app.listen("0.0.0.0:8888").fuse() => res,
