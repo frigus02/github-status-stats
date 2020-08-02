@@ -1,6 +1,8 @@
 use opentelemetry::api::{Context, Key, TraceContextExt, TraceContextPropagator};
+use std::error::Error;
+use std::fmt;
 
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
+type BoxError = Box<dyn Error + Send + Sync>;
 
 pub fn init_tracer(
     service_name: &'static str,
@@ -46,9 +48,23 @@ pub fn log_event(message: String) {
         .add_event("log".into(), vec![Key::new("log.message").string(message)]);
 }
 
-pub fn error_event(message: String) {
-    Context::current().span().add_event(
-        "error".into(),
-        vec![Key::new("error.message").string(message)],
-    );
+#[derive(Debug)]
+struct Exception<'a, 'b> {
+    message: &'a str,
+    inner: &'b dyn Error,
+}
+
+impl<'a, 'b> fmt::Display for Exception<'a, 'b> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.message, self.inner)
+    }
+}
+
+impl<'a, 'b> Error for Exception<'a, 'b> {}
+
+pub fn error_event(message: &str, err: &dyn Error) {
+    Context::current().span().record_exception(&Exception {
+        message,
+        inner: err,
+    });
 }

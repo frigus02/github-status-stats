@@ -113,7 +113,7 @@ pub fn optional_token<T>(
                 }
                 Err(err) if err.to_string() == "ExpiredSignature" => OptionalToken::Expired,
                 Err(err) => {
-                    error_event(format!("token validation failed: {:?}", err));
+                    error_event("token validation failed", &err);
                     OptionalToken::None
                 }
             }
