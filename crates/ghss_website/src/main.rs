@@ -362,11 +362,11 @@ async fn handle_api_query(req: Request<State>) -> tide::Result<Response> {
                 Ok(res) => Body::from_json(&res)?.into(),
                 Err(err) => {
                     error_event(format!("query failed: {:?}", err));
-                    Response::from_res(StatusCode::InternalServerError)
+                    StatusCode::InternalServerError.into()
                 }
             }
         }
-        _ => Response::from_res(StatusCode::Unauthorized),
+        _ => StatusCode::Unauthorized.into(),
     };
     Ok(res)
 }
@@ -402,7 +402,7 @@ async fn handle_setup_authorized(req: Request<State>) -> tide::Result<Response> 
             );
             res
         }
-        Err(_) => Response::from_res(StatusCode::InternalServerError),
+        Err(_) => StatusCode::InternalServerError.into(),
     };
     Ok(res)
 }
@@ -474,10 +474,10 @@ async fn handle_hooks(mut req: Request<State>) -> tide::Result<Response> {
     .await;
 
     let res = match res {
-        Ok(_) => Response::from_res(StatusCode::Ok),
+        Ok(_) => StatusCode::Ok.into(),
         Err(err) => {
             error_event(format!("hook failed: {:?}", err));
-            Response::from_res(StatusCode::InternalServerError)
+            StatusCode::InternalServerError.into()
         }
     };
     Ok(res)
@@ -531,7 +531,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     app.at("/logout").get(handle_logout);
     app.at("/hooks").post(handle_hooks);
 
-    app.middleware(TelemetryMiddleware {});
+    app.with(TelemetryMiddleware {});
 
     let res = select! {
         res = app.listen("0.0.0.0:8888").fuse() => res,
