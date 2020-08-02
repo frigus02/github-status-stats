@@ -361,7 +361,7 @@ async fn handle_api_query(req: Request<State>) -> tide::Result<Response> {
             match res {
                 Ok(res) => Body::from_json(&res)?.into(),
                 Err(err) => {
-                    error_event(format!("query failed: {:?}", err));
+                    error_event("query failed", err.as_ref());
                     StatusCode::InternalServerError.into()
                 }
             }
@@ -476,7 +476,7 @@ async fn handle_hooks(mut req: Request<State>) -> tide::Result<Response> {
     let res = match res {
         Ok(_) => StatusCode::Ok.into(),
         Err(err) => {
-            error_event(format!("hook failed: {:?}", err));
+            error_event("hook failed", err.as_ref());
             StatusCode::InternalServerError.into()
         }
     };
