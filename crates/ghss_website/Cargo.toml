@@ -13,7 +13,7 @@ futures = "0.3.5"
 ghss_github = { path = "../ghss_github" }
 ghss_store_client = { path = "../ghss_store_client" }
 ghss_tracing = { path = "../ghss_tracing" }
-handlebars = "3.3.0"
+handlebars = "3.4.0"
 hmac = "0.9.0"
 jsonwebtoken = "7.2.0"
 opentelemetry = "0.7.0"
