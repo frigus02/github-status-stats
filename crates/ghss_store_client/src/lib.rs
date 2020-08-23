@@ -1,6 +1,6 @@
 use ghss_github::{CheckRun, CheckRunConclusion};
 use opentelemetry::api::{
-    Carrier, Context, FutureExt, Key, SpanKind, StatusCode, TraceContextExt, Tracer,
+    Context, Extractor, FutureExt, Injector, Key, SpanKind, StatusCode, TraceContextExt, Tracer,
 };
 pub use proto::*;
 use std::convert::TryInto;
@@ -12,17 +12,18 @@ mod proto {
 }
 
 struct TonicMetadataMapCarrier<'a>(&'a mut tonic::metadata::MetadataMap);
-impl<'a> Carrier for TonicMetadataMapCarrier<'a> {
-    fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(key).and_then(|metadata| metadata.to_str().ok())
-    }
-
+impl<'a> Injector for TonicMetadataMapCarrier<'a> {
     fn set(&mut self, key: &str, value: String) {
         if let Ok(key) = tonic::metadata::MetadataKey::from_bytes(key.to_lowercase().as_bytes()) {
             if let Ok(val) = tonic::metadata::MetadataValue::from_str(&value) {
                 self.0.insert(key, val);
             }
         }
+    }
+}
+impl<'a> Extractor for TonicMetadataMapCarrier<'a> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|metadata| metadata.to_str().ok())
     }
 }
 
