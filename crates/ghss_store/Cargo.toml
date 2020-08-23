@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 ghss_tracing = { path = "../ghss_tracing" }
 hyper = "0.13.7"
-opentelemetry = { version = "0.7.0", features = ["http"] }
+opentelemetry = { version = "0.8.0", features = ["http"] }
 prost = "0.6.1"
 rusqlite = { version = "0.24.0", features = ["bundled"] }
 tokio = { version = "0.2.22", features = ["macros", "signal"] }
