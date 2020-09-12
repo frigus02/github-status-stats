@@ -24,4 +24,4 @@ serde_json = "1.0.57"
 sha-1 = "0.9.1"
 tokio = { version = "0.2.22", features = ["macros", "signal"] }
 tide = "0.13.0"
-time = "0.2.18"
+time = "0.2.19"
